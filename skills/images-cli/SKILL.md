@@ -1,6 +1,6 @@
 ---
 name: images-cli
-description: Process images with this project's `pnpm images` CLI, which runs Sharp (resize, crop, convert, compress, responsive width variants, watermark, metadata, every Sharp operation) and Upscayl AI upscaling on the GPU. Use when asked to resize, convert, compress, optimise, crop, watermark, inspect, upscale, denoise, descreen or de-JPEG images in this repository, or to generate srcset variants or an image manifest.
+description: Process images with this project's `pnpm images` CLI, which runs Sharp (resize, crop, convert, compress, responsive width variants, watermark, metadata, every Sharp operation) and Upscayl AI upscaling on the GPU. Use when asked to resize, convert, compress, optimise, crop, watermark, inspect, upscale, denoise, descreen or de-JPEG images in this repository, or to generate responsive images, srcset variants or an image manifest.
 ---
 
 # Images CLI
