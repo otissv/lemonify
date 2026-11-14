@@ -1,11 +1,20 @@
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { parseArgs } from 'node:util'
 import type { z } from 'zod'
 
 import { ImageOptionsError } from '../../src/lib/images/errors.ts'
 import { parseWithSchema } from '../../src/lib/images/validation.ts'
 
-export const PROGRAM = 'pnpm images'
+/** The package.json bin name, used when the CLI is started through the linked bin. */
+export const BIN_NAME = 'lemonify-images'
+const SCRIPT_NAME = 'pnpm images'
+
+/** How the user started the CLI, for help text: the global bin or the package script. */
+export const PROGRAM =
+  path.basename(process.argv[1] ?? '', '.js') === BIN_NAME
+    ? BIN_NAME
+    : SCRIPT_NAME
 export const JOB_FLAG = '--job'
 export const JSON_FLAG = '--json'
 const STDIN_FD = 0

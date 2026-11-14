@@ -2,6 +2,9 @@
   "name": "lemonify",
   "private": true,
   "type": "module",
+  "bin": {
+    "lemonify-images": "scripts/images/lemonify-images.js"
+  },
   "scripts": {
     "dev": "vite dev --port 3000",
     "generate-routes": "vite build",

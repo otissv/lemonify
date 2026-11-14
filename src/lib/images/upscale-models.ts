@@ -27,8 +27,15 @@ export const OPENCOMIC_MODELS_URL =
 export const UPSCAYL_MODELS_URL =
   'https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/'
 
-/** Project-relative folder that holds the downloaded model files. */
-export const MODELS_ROOT = '.tools/upscayl-models'
+/**
+ * The project's folder for downloaded model files, anchored to this file
+ * so the CLI uses one copy whichever folder it is started from.
+ */
+export const MODELS_ROOT = path.resolve(
+  import.meta.dirname,
+  '../../..',
+  '.tools/upscayl-models',
+)
 
 export const DEFAULT_UPSCALE_MODEL = '4x_NMKD-Siax_200k'
 
