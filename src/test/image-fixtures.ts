@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import sharp from 'sharp'
 
-import type { ImageFormat } from '@/lib/images/options.ts'
+type FixtureFormat = 'jpeg' | 'png' | 'webp' | 'avif' | 'gif' | 'tiff'
 
 export interface FixtureImage {
   width: number
   height: number
-  format?: ImageFormat
+  format?: FixtureFormat
   quality?: number
   noise?: boolean
   orientation?: number

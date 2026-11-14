@@ -35,14 +35,14 @@ describe('variantPath', () => {
   const sourceRoot = path.resolve('/photos')
   const destination = path.resolve('/out')
 
-  it('names a variant <name>-<width>.<format> in the destination', () => {
+  it('names a variant <name>-<width><extension> in the destination', () => {
     expect(
       variantPath({
         sourceFile: path.join(sourceRoot, 'beach.jpg'),
         sourceRoot,
         destination,
         width: 640,
-        format: 'avif',
+        extension: '.avif',
       }),
     ).toBe(path.join(destination, 'beach-640.avif'))
   })
@@ -54,7 +54,7 @@ describe('variantPath', () => {
         sourceRoot,
         destination,
         width: 1280,
-        format: 'webp',
+        extension: '.webp',
       }),
     ).toBe(path.join(destination, '2026', 'summer', 'beach-1280.webp'))
   })
@@ -66,7 +66,7 @@ describe('variantPath', () => {
         sourceRoot,
         destination,
         width: 480,
-        format: 'jpeg',
+        extension: '.jpeg',
       }),
     ).toBe(path.join(destination, 'team.photo.v2-480.jpeg'))
   })

@@ -3,34 +3,21 @@ import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 
 import { ImageSourceError } from './errors.ts'
-import type { ImageFormat } from './options.ts'
-
-const EXTENSION_FORMATS: Readonly<Record<string, ImageFormat>> = {
-  '.webp': 'webp',
-  '.avif': 'avif',
-  '.jpg': 'jpeg',
-  '.jpeg': 'jpeg',
-  '.png': 'png',
-}
-
-export const SUPPORTED_EXTENSIONS: readonly string[] =
-  Object.keys(EXTENSION_FORMATS)
 
 export interface SourceOptions {
   recursive: boolean
   /** A folder to skip while walking, such as a destination inside the source. */
   exclude?: string
-  /** Lower-case extensions to accept instead of the resize/compress formats. */
-  extensions?: readonly string[]
+  /** Lower-case file extensions to accept, such as `.jpg`. */
+  extensions: readonly string[]
 }
 
 function isSupported(file: string, options: SourceOptions): boolean {
-  if (!options.extensions) return formatForFile(file) !== undefined
   return options.extensions.includes(path.extname(file).toLowerCase())
 }
 
 function describeExtensions(options: SourceOptions): string {
-  return (options.extensions ?? SUPPORTED_EXTENSIONS).join(', ')
+  return options.extensions.join(', ')
 }
 
 export interface ImageSources {
@@ -38,11 +25,6 @@ export interface ImageSources {
   root: string
   /** Absolute paths of the images to process, sorted. */
   files: string[]
-}
-
-/** The format a supported image file is encoded in, judged by its extension. */
-export function formatForFile(file: string): ImageFormat | undefined {
-  return EXTENSION_FORMATS[path.extname(file).toLowerCase()]
 }
 
 async function statOrUndefined(file: string): Promise<Stats | undefined> {

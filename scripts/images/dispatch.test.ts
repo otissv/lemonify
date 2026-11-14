@@ -31,7 +31,7 @@ describe('dispatch', () => {
   })
 
   it('leaves --help after a command to that command', () => {
-    expect(dispatch(COMMANDS, ['resize', '--help'])).toMatchObject({
+    expect(dispatch(COMMANDS, ['sharp', '--help'])).toMatchObject({
       kind: 'run',
       argv: ['--help'],
     })
@@ -66,8 +66,6 @@ describe('COMMANDS', () => {
     for (const command of COMMANDS) names.push(command.name)
     expect(names).toEqual([
       'sharp',
-      'resize',
-      'compress',
       'info',
       'upscale',
       'models',

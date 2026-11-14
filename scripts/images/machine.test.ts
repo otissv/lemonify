@@ -8,7 +8,7 @@ import { ImageOptionsError } from '../../src/lib/images/errors.ts'
 import { CliUsageError, runCli } from './cli.ts'
 import { COMMANDS } from './commands/index.ts'
 import { formatsCommand } from './commands/formats.ts'
-import { resizeCommand } from './commands/resize.ts'
+import { infoCommand } from './commands/info.ts'
 import { schemaCommand } from './commands/schema.ts'
 import { sharpCommand } from './commands/sharp.ts'
 import { dispatch } from './dispatch.ts'
@@ -87,11 +87,9 @@ describe('--job', () => {
   })
 
   it('reads the options object inline and fills in defaults', () => {
-    expect(
-      resizeCommand.resolve(['--job', '{"source":"in","destination":"out"}']),
-    ).toMatchObject({
+    expect(infoCommand.resolve(['--job', '{"source":"in"}'])).toEqual({
       kind: 'run',
-      options: { source: 'in', destination: 'out', format: 'webp' },
+      options: { source: 'in', stats: false, recursive: false },
     })
   })
 
@@ -115,23 +113,18 @@ describe('--job', () => {
   })
 
   it('rejects malformed JSON as a usage error', () => {
-    expect(() => resizeCommand.resolve(['--job', '{nope'])).toThrow(
-      CliUsageError,
-    )
+    expect(() => infoCommand.resolve(['--job', '{nope'])).toThrow(CliUsageError)
   })
 
   it('rejects mixing --job with other arguments', () => {
     expect(() =>
-      resizeCommand.resolve(['in', '--job', '{"source":"in"}']),
+      infoCommand.resolve(['in', '--job', '{"source":"in"}']),
     ).toThrow(CliUsageError)
   })
 
   it('validates the object against the command schema', () => {
     expect(() =>
-      resizeCommand.resolve([
-        '--job',
-        '{"source":"in","destination":"out","quality":0}',
-      ]),
+      infoCommand.resolve(['--job', '{"source":"in","stats":"yes"}']),
     ).toThrow(ImageOptionsError)
   })
 })
@@ -164,6 +157,54 @@ describe('sharp command flags', () => {
         recursive: false,
       },
     })
+  })
+
+  it('maps --widths and --manifest to variants', () => {
+    expect(
+      sharpCommand.parse([
+        '--input',
+        'photos',
+        '--output',
+        'out',
+        '--widths',
+        '320,640',
+        '--manifest',
+        'out/manifest.json',
+        '--format-options',
+        '{"webp":{"quality":78}}',
+      ]),
+    ).toMatchObject({
+      options: {
+        variants: { widths: [320, 640], manifest: 'out/manifest.json' },
+        formatOptions: { webp: { quality: 78 } },
+      },
+    })
+  })
+
+  it('maps --in-place without an output', () => {
+    expect(
+      sharpCommand.parse(['--input', 'photos', '--in-place', 'ifSmaller']),
+    ).toMatchObject({ options: { input: 'photos', inPlace: 'ifSmaller' } })
+  })
+
+  it('needs --widths for --manifest', () => {
+    expect(() =>
+      sharpCommand.parse([
+        '--input',
+        'a.png',
+        '--output',
+        'out',
+        '--manifest',
+        'm.json',
+      ]),
+    ).toThrow(CliUsageError)
+  })
+
+  it.each([
+    [['--input', 'a.png', '--output', 'out', '--widths', '10,x']],
+    [['--input', 'a.png', '--in-place', 'never']],
+  ])('rejects invalid values in %j', (argv) => {
+    expect(() => sharpCommand.parse(argv)).toThrow(ImageOptionsError)
   })
 
   it('keeps a single --input as a path', () => {

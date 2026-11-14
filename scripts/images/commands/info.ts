@@ -1,5 +1,5 @@
 import { displayPath } from '../../../src/lib/images/display-path.ts'
-import { parseWithSchema } from '../../../src/lib/images/options.ts'
+import { parseWithSchema } from '../../../src/lib/images/validation.ts'
 import {
   inspectImages,
   inspectOptionsSchema,

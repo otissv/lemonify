@@ -7,7 +7,7 @@ import {
   modelInstallState,
 } from '../../../src/lib/images/model-install.ts'
 import type { ModelInstallState } from '../../../src/lib/images/model-install.ts'
-import { parseWithSchema } from '../../../src/lib/images/options.ts'
+import { parseWithSchema } from '../../../src/lib/images/validation.ts'
 import {
   MODELS_ROOT,
   MODEL_CATEGORIES,

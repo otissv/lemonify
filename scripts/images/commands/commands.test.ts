@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 
 import { ImageOptionsError } from '../../../src/lib/images/errors.ts'
 import { CliUsageError } from '../cli.ts'
-import { compressCommand } from './compress.ts'
+import { infoCommand } from './info.ts'
 import { modelsCommand } from './models.ts'
-import { resizeCommand } from './resize.ts'
+import { sharpCommand } from './sharp.ts'
 import { upscaleCommand } from './upscale.ts'
 
 describe('upscale', () => {
@@ -125,7 +125,7 @@ describe('models', () => {
   })
 })
 
-describe.each([resizeCommand, compressCommand, upscaleCommand, modelsCommand])(
+describe.each([sharpCommand, infoCommand, upscaleCommand, modelsCommand])(
   '$name',
   (command) => {
     it.each([['--help'], ['-h']])('returns help for %s', (flag) => {

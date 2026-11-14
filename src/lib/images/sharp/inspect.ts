@@ -3,7 +3,7 @@ import sharp from 'sharp'
 import type { Metadata, Stats } from 'sharp'
 import { z } from 'zod'
 
-import { parseWithSchema } from '../options.ts'
+import { parseWithSchema } from '../validation.ts'
 import { collectSources } from '../sources.ts'
 import { readableExtensions } from './capabilities.ts'
 import { filePathSchema } from './common.ts'

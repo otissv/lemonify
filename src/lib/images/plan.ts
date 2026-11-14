@@ -1,13 +1,12 @@
 import path from 'node:path'
 
-import type { ImageFormat } from './options.ts'
-
 export interface VariantTarget {
   sourceFile: string
   sourceRoot: string
   destination: string
   width: number
-  format: ImageFormat
+  /** Output extension including the dot, such as `.webp`. */
+  extension: string
 }
 
 /**
@@ -31,14 +30,14 @@ export function planWidths(
   return widths.sort((a, b) => a - b)
 }
 
-/** `<destination>/<subfolders below sourceRoot>/<name>-<width>.<format>`. */
+/** `<destination>/<subfolders below sourceRoot>/<name>-<width><extension>`. */
 export function variantPath(target: VariantTarget): string {
   const { name, dir } = path.parse(target.sourceFile)
   const relativeDir = path.relative(target.sourceRoot, dir)
   return path.join(
     target.destination,
     relativeDir,
-    `${name}-${target.width}.${target.format}`,
+    `${name}-${target.width}${target.extension}`,
   )
 }
 

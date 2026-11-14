@@ -48,11 +48,17 @@ describe('runSharpJob', () => {
     const metadata = await sharp(output).metadata()
     expect(metadata).toMatchObject({ format: 'webp', width: 10, height: 20 })
     expect(results).toEqual([
-      expect.objectContaining({
+      {
         source: input,
-        output,
-        info: expect.objectContaining({ format: 'webp', width: 10 }),
-      }),
+        sourceBytes: expect.any(Number),
+        outputs: [
+          {
+            file: output,
+            written: true,
+            info: expect.objectContaining({ format: 'webp', width: 10 }),
+          },
+        ],
+      },
     ])
   })
 

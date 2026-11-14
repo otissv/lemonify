@@ -1,85 +1,28 @@
-import { mkdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import sharp from 'sharp'
-import type { OutputInfo, Sharp } from 'sharp'
-import { z } from 'zod'
 
-import { parseWithSchema } from '../options.ts'
-import { mirroredPath } from '../plan.ts'
-import { collectSources } from '../sources.ts'
-import { readableExtensions } from './capabilities.ts'
-import { filePathSchema, nonNegativeIntSchema } from './common.ts'
-import { SharpOperationError, SharpTargetError } from './errors.ts'
-import { sharpInputOptionsSchema } from './input-options.ts'
-import { applySharpOps, formatExtension, sharpOpSchema } from './ops.ts'
+import { createManifest, writeManifest } from '../manifest.ts'
+import type { ManifestSource } from '../manifest.ts'
+import { parseWithSchema } from '../validation.ts'
+import { planTasks } from './job-plan.ts'
+import type {
+  FileTask,
+  InPlaceTask,
+  SharpTask,
+  VariantTask,
+} from './job-plan.ts'
+import { sharpJobSchema } from './job-schema.ts'
+import type { SharpJob, SharpJobInput, SharpSettings } from './job-schema.ts'
+import {
+  writeFileTask,
+  writeInPlaceTask,
+  writeVariantTask,
+} from './job-write.ts'
+import type { SharpJobResult } from './job-write.ts'
 
-/** Process-wide Sharp settings (`sharp.concurrency()`, `sharp.cache()`, …) applied before the job runs. */
-export const sharpSettingsSchema = z.strictObject({
-  concurrency: nonNegativeIntSchema.optional(),
-  cache: z
-    .union([
-      z.boolean(),
-      z.strictObject({
-        memory: nonNegativeIntSchema.optional(),
-        files: nonNegativeIntSchema.optional(),
-        items: nonNegativeIntSchema.optional(),
-      }),
-    ])
-    .optional(),
-  simd: z.boolean().optional(),
-  block: z.array(z.string().min(1)).min(1).optional(),
-  unblock: z.array(z.string().min(1)).min(1).optional(),
-})
-type SharpSettings = z.infer<typeof sharpSettingsSchema>
-
-/**
- * A Sharp pipeline: read `input` (a file, a folder, several files to
- * `join`, or nothing when `options.create`/`options.text` generates the
- * image), apply `ops` in order, and write to `output`.
- */
-export const sharpJobSchema = z
-  .strictObject({
-    input: z.union([filePathSchema, z.array(filePathSchema).min(2)]).optional(),
-    output: filePathSchema,
-    options: sharpInputOptionsSchema.optional(),
-    ops: z.array(sharpOpSchema).default([]),
-    settings: sharpSettingsSchema.optional(),
-    recursive: z
-      .boolean()
-      .default(false)
-      .describe('When input is a folder, include subfolders'),
-  })
-  .superRefine((job, context) => {
-    const generated = job.options?.create ?? job.options?.text
-    const several = Array.isArray(job.input)
-    const problems: string[] = []
-    if (job.input === undefined && !generated)
-      problems.push('Provide input, or options.create / options.text')
-    if (job.input !== undefined && generated)
-      problems.push(
-        'input cannot be combined with options.create or options.text',
-      )
-    if (several && !job.options?.join)
-      problems.push('Several inputs need options.join')
-    if (!several && job.options?.join)
-      problems.push('options.join needs several inputs')
-    for (const message of problems)
-      context.addIssue({ code: 'custom', message })
-  })
-export type SharpJobInput = z.input<typeof sharpJobSchema>
-export type SharpJob = z.output<typeof sharpJobSchema>
-
-export interface SharpJobResult {
-  /** The input file, the joined files, or null for a generated image. */
-  source: string | string[] | null
-  output: string
-  info: OutputInfo
-}
-
-interface SharpTask {
-  source: string | string[] | null
-  output: string
-}
+export { sharpJobSchema, sharpSettingsSchema } from './job-schema.ts'
+export type { SharpJob, SharpJobInput } from './job-schema.ts'
+export type { SharpJobOutput, SharpJobResult } from './job-write.ts'
 
 function applySettings(settings: SharpSettings | undefined): void {
   if (!settings) return
@@ -91,76 +34,49 @@ function applySettings(settings: SharpSettings | undefined): void {
   if (settings.unblock) sharp.unblock({ operation: settings.unblock })
 }
 
-async function isDirectory(file: string): Promise<boolean> {
-  try {
-    return (await stat(file)).isDirectory()
-  } catch {
-    return false
+async function runVariants(
+  tasks: readonly VariantTask[],
+  job: SharpJob,
+  variants: NonNullable<SharpJob['variants']>,
+): Promise<SharpJobResult[]> {
+  const results: SharpJobResult[] = []
+  const entries: ManifestSource[] = []
+  for (const task of tasks) {
+    const { result, manifest } = await writeVariantTask(
+      task,
+      job,
+      variants.widths,
+    )
+    results.push(result)
+    entries.push(manifest)
   }
+  if (variants.manifest === undefined || tasks.length === 0) return results
+  const { root, destination } = tasks[0]
+  const manifest = createManifest(entries, root, destination)
+  await writeManifest(path.resolve(variants.manifest), manifest)
+  return results
 }
 
-async function planFolder(job: SharpJob, folder: string): Promise<SharpTask[]> {
-  const output = path.resolve(job.output)
-  const sources = await collectSources(folder, {
-    recursive: job.recursive,
-    exclude: output,
-    extensions: readableExtensions(),
-  })
-  const extension = formatExtension(job.ops)
-  const tasks: SharpTask[] = []
-  for (const source of sources.files) {
-    const mirrored = mirroredPath(source, sources.root, output)
-    const target = extension
-      ? path.join(
-          path.dirname(mirrored),
-          `${path.parse(mirrored).name}${extension}`,
-        )
-      : mirrored
-    if (target === source) throw new SharpTargetError(source)
-    tasks.push({ source, output: target })
+function splitTasks(tasks: readonly SharpTask[]): {
+  single: (FileTask | InPlaceTask)[]
+  variants: VariantTask[]
+} {
+  const single: (FileTask | InPlaceTask)[] = []
+  const variants: VariantTask[] = []
+  for (const task of tasks) {
+    if (task.kind === 'variants') variants.push(task)
+    else single.push(task)
   }
-  return tasks
+  return { single, variants }
 }
 
-async function planTasks(job: SharpJob): Promise<SharpTask[]> {
-  const output = path.resolve(job.output)
-  if (job.input === undefined) return [{ source: null, output }]
-  if (Array.isArray(job.input)) {
-    const sources: string[] = []
-    for (const file of job.input) sources.push(path.resolve(file))
-    return [{ source: sources, output }]
-  }
-  const source = path.resolve(job.input)
-  if (await isDirectory(source)) return planFolder(job, source)
-  return [{ source, output }]
-}
-
-function buildPipeline(task: SharpTask, job: SharpJob): Sharp {
-  const image =
-    task.source === null ? sharp(job.options) : sharp(task.source, job.options)
-  return applySharpOps(image, job.ops)
-}
-
-function describeSource(source: SharpTask['source']): string {
-  if (source === null) return 'the generated image'
-  return Array.isArray(source) ? source.join(', ') : source
-}
-
-async function runTask(
-  task: SharpTask,
+function runSingle(
+  task: FileTask | InPlaceTask,
   job: SharpJob,
 ): Promise<SharpJobResult> {
-  const image = buildPipeline(task, job)
-  await mkdir(path.dirname(task.output), { recursive: true })
-  try {
-    const info = await image.toFile(task.output)
-    return { source: task.source, output: task.output, info }
-  } catch (error) {
-    throw new SharpOperationError(
-      `Processing ${describeSource(task.source)} into ${task.output} failed`,
-      error,
-    )
-  }
+  return task.kind === 'file'
+    ? writeFileTask(task, job)
+    : writeInPlaceTask(task, job)
 }
 
 /** Validates and runs a Sharp job; folder inputs produce one result per image. */
@@ -169,8 +85,9 @@ export async function runSharpJob(
 ): Promise<SharpJobResult[]> {
   const job = parseWithSchema(sharpJobSchema, input)
   applySettings(job.settings)
-  const tasks = await planTasks(job)
+  const { single, variants } = splitTasks(await planTasks(job))
+  if (job.variants) return runVariants(variants, job, job.variants)
   const results: SharpJobResult[] = []
-  for (const task of tasks) results.push(await runTask(task, job))
+  for (const task of single) results.push(await runSingle(task, job))
   return results
 }

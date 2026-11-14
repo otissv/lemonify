@@ -10,6 +10,7 @@ import { applyGeometryOp, geometryOpSchemas } from './ops-geometry.ts'
 import type { GeometryOp } from './ops-geometry.ts'
 import { applyOutputOp, outputOpSchemas } from './ops-output.ts'
 import { FORMAT_EXTENSIONS } from './output-options.ts'
+import type { OutputFormat } from './output-options.ts'
 
 /**
  * One step of a Sharp pipeline: `{ "op": "<method>", ...arguments }`.
@@ -35,13 +36,25 @@ function namesOf(
 const GEOMETRY_OPS = namesOf(geometryOpSchemas)
 const FILTER_OPS = namesOf(filterOpSchemas)
 const COLOUR_OPS = namesOf(colourOpSchemas)
+const OUTPUT_OPS = namesOf(outputOpSchemas)
 
 export const SHARP_OP_NAMES: readonly string[] = [
   ...GEOMETRY_OPS,
   ...FILTER_OPS,
   ...COLOUR_OPS,
-  ...namesOf(outputOpSchemas),
+  ...OUTPUT_OPS,
 ]
+
+/**
+ * Which ops a call applies: `pixels` are the ops that change the image,
+ * `output` the ones that choose the format, metadata, tiles and timeout.
+ */
+export type SharpOpStage = 'all' | 'pixels' | 'output'
+
+function inStage(step: SharpOp, stage: SharpOpStage): boolean {
+  if (stage === 'all') return true
+  return OUTPUT_OPS.has(step.op) === (stage === 'output')
+}
 
 function isGeometryOp(step: SharpOp): step is GeometryOp {
   return GEOMETRY_OPS.has(step.op)
@@ -63,10 +76,15 @@ export function applySharpOp(image: Sharp, step: SharpOp): Sharp {
   return applyOutputOp(image, step)
 }
 
-/** Applies ops in order; an op Sharp rejects is reported as `ops[index] (name)`. */
-export function applySharpOps(image: Sharp, ops: readonly SharpOp[]): Sharp {
+/** Applies the ops of `stage` in order; an op Sharp rejects is reported as `ops[index] (name)`. */
+export function applySharpOps(
+  image: Sharp,
+  ops: readonly SharpOp[],
+  stage: SharpOpStage = 'all',
+): Sharp {
   let pipeline = image
   for (const [index, step] of ops.entries()) {
+    if (!inStage(step, stage)) continue
     try {
       pipeline = applySharpOp(pipeline, step)
     } catch (error) {
@@ -76,8 +94,17 @@ export function applySharpOps(image: Sharp, ops: readonly SharpOp[]): Sharp {
   return pipeline
 }
 
-function isFormatName(name: string): name is keyof typeof FORMAT_EXTENSIONS {
+function isFormatName(name: string): name is OutputFormat {
   return name in FORMAT_EXTENSIONS
+}
+
+/** The format the last format op (or `toFormat`) selects; `tile` ops are not a format. */
+export function opsFormat(ops: readonly SharpOp[]): OutputFormat | undefined {
+  for (const step of [...ops].reverse()) {
+    if (step.op === 'toFormat') return step.format
+    if (isFormatName(step.op)) return step.op
+  }
+  return undefined
 }
 
 /** Extension implied by the last op that sets the output format, if any. */

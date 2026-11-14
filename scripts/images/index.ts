@@ -1,6 +1,7 @@
 /**
- * Single entry point for the image tools: Sharp pipelines, resizing and
- * compression, image inspection, and Upscayl AI upscaling.
+ * Single entry point for the image tools: Sharp pipelines (including width
+ * variants and in-place compression), image inspection, and Upscayl AI
+ * upscaling.
  *
  * Run with `pnpm images <command> [options]`; see `pnpm images --help`.
  */

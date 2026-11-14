@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { parseWithSchema } from './options.ts'
+import { parseWithSchema } from './validation.ts'
 import { filePathSchema } from './sharp/common.ts'
 import { sharpOpSchema } from './sharp/ops.ts'
 import {

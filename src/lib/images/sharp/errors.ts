@@ -22,3 +22,13 @@ export class SharpTargetError extends Error {
     this.name = 'SharpTargetError'
   }
 }
+
+/** An in-place job's format op would write a file in a different format than its extension. */
+export class InPlaceFormatError extends Error {
+  constructor(file: string, current: string, requested: string) {
+    super(
+      `Writing "${file}" in place would change it from ${current} to ${requested}. Use output to convert it to a new file.`,
+    )
+    this.name = 'InPlaceFormatError'
+  }
+}

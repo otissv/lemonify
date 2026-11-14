@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util'
 import type { z } from 'zod'
 
 import { ImageOptionsError } from '../../src/lib/images/errors.ts'
-import { parseWithSchema } from '../../src/lib/images/options.ts'
+import { parseWithSchema } from '../../src/lib/images/validation.ts'
 
 export const PROGRAM = 'pnpm images'
 export const JOB_FLAG = '--job'

@@ -2,7 +2,16 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { SHARP_OP_NAMES, sharpOpSchema } from './ops.ts'
+import sharp from 'sharp'
+
+import { formatForFile } from './formats.ts'
+import {
+  SHARP_OP_NAMES,
+  applySharpOps,
+  opsFormat,
+  sharpOpSchema,
+} from './ops.ts'
+import type { SharpOp } from './ops.ts'
 
 describe('sharpOpSchema', () => {
   it.each([
@@ -133,5 +142,52 @@ describe('sharpOpSchema', () => {
         'withXmp',
       ].sort(),
     )
+  })
+})
+
+describe('opsFormat', () => {
+  it.each<[SharpOp[], string | undefined]>([
+    [[], undefined],
+    [[{ op: 'flip' }, { op: 'tile' }], undefined],
+    [[{ op: 'png' }, { op: 'webp', quality: 60 }], 'webp'],
+    [[{ op: 'toFormat', format: 'avif' }, { op: 'keepExif' }], 'avif'],
+  ])('reads %j as %s', (ops, format) => {
+    expect(opsFormat(ops)).toBe(format)
+  })
+})
+
+describe('applySharpOps stages', () => {
+  const ops: SharpOp[] = [{ op: 'resize', width: 4 }, { op: 'png' }]
+
+  it('applies only pixel ops in the pixels stage', async () => {
+    const image = sharp({
+      create: { width: 8, height: 8, channels: 3, background: '#000' },
+    }).jpeg()
+    const { info } = await applySharpOps(image, ops, 'pixels').toBuffer({
+      resolveWithObject: true,
+    })
+    expect(info).toMatchObject({ width: 4, format: 'jpeg' })
+  })
+
+  it('applies only output ops in the output stage', async () => {
+    const image = sharp({
+      create: { width: 8, height: 8, channels: 3, background: '#000' },
+    })
+    const { info } = await applySharpOps(image, ops, 'output').toBuffer({
+      resolveWithObject: true,
+    })
+    expect(info).toMatchObject({ width: 8, format: 'png' })
+  })
+})
+
+describe('formatForFile', () => {
+  it.each([
+    ['a.JPG', 'jpeg'],
+    ['a.jpeg', 'jpeg'],
+    ['a.tif', 'tiff'],
+    ['a.avif', 'avif'],
+    ['a.svg', undefined],
+  ])('maps %s to %s', (file, format) => {
+    expect(formatForFile(file)).toBe(format)
   })
 })

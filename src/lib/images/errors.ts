@@ -32,16 +32,6 @@ export class OutputCollisionError extends Error {
   }
 }
 
-/** A compress destination resolves to the source file it would replace. */
-export class CompressTargetError extends Error {
-  constructor(file: string) {
-    super(
-      `The destination resolves to the source file "${file}". Omit the destination to compress in place.`,
-    )
-    this.name = 'CompressTargetError'
-  }
-}
-
 /** An upscale destination resolves to the source file it would overwrite. */
 export class UpscaleTargetError extends Error {
   constructor(file: string) {
