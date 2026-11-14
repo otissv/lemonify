@@ -3,3 +3,5 @@ allowBuilds:
   lightningcss: true
 packages:
   - .
+patchedDependencies:
+  opencomic-ai-bin@1.6.1: patches/opencomic-ai-bin@1.6.1.patch

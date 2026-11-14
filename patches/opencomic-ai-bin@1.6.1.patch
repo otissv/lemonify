@@ -1,0 +1,24 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 97660ea..15736f8 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -2428,6 +2428,7 @@ class OpenComicAI {
+         const proc = node_child_process.spawn(binary, args);
+         proc.stderr.on('data', data);
+         proc.on('error', error);
++        proc.stdin.on('error', error);
+         proc.on('close', close);
+         return proc;
+     };
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 949a11c..5dba4a1 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -2425,6 +2425,7 @@ class OpenComicAI {
+         const proc = spawn(binary, args);
+         proc.stderr.on('data', data);
+         proc.on('error', error);
++        proc.stdin.on('error', error);
+         proc.on('close', close);
+         return proc;
+     };

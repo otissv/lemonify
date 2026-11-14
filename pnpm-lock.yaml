@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  opencomic-ai-bin@1.6.1:
+    hash: da9eb671fc9deb631a7b56bec839df7f8cf224bd6d2c74113aefccdd1b18541e
+    path: patches/opencomic-ai-bin@1.6.1.patch
+
 importers:
 
   .:
@@ -89,7 +94,7 @@ importers:
         version: 31.0.1
       opencomic-ai-bin:
         specifier: 1.6.1
-        version: 1.6.1
+        version: 1.6.1(patch_hash=da9eb671fc9deb631a7b56bec839df7f8cf224bd6d2c74113aefccdd1b18541e)
       prettier:
         specifier: ^3.8.1
         version: 3.10.1
@@ -6165,7 +6170,7 @@ snapshots:
 
   omggif@1.0.10: {}
 
-  opencomic-ai-bin@1.6.1:
+  opencomic-ai-bin@1.6.1(patch_hash=da9eb671fc9deb631a7b56bec839df7f8cf224bd6d2c74113aefccdd1b18541e):
     dependencies:
       oslllo-potrace: 5.0.0
     transitivePeerDependencies:
