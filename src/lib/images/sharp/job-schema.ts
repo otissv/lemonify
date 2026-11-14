@@ -47,7 +47,10 @@ export type FormatOptions = z.infer<typeof formatOptionsSchema>
 
 /** One output per width, named `<name>-<width><ext>`, resized after every pixel op. */
 export const variantsSchema = z.strictObject({
-  widths: z.array(positiveIntSchema).min(1),
+  widths: z
+    .array(positiveIntSchema)
+    .min(1)
+    .describe('Target widths in pixels; wider than the image are skipped'),
   manifest: filePathSchema
     .optional()
     .describe('JSON file mapping each source to its size and variants'),
@@ -56,8 +59,17 @@ export const variantsSchema = z.strictObject({
 export const IN_PLACE_MODES = ['always', 'ifSmaller'] as const
 
 const sharpJobShape = z.strictObject({
-  input: z.union([filePathSchema, z.array(filePathSchema).min(2)]).optional(),
-  output: filePathSchema.optional(),
+  input: z
+    .union([filePathSchema, z.array(filePathSchema).min(2)])
+    .optional()
+    .describe(
+      'An image file, a folder of images, or several files for options.join',
+    ),
+  output: filePathSchema
+    .optional()
+    .describe(
+      'The output file, or the output folder for a folder input or variants',
+    ),
   inPlace: z
     .enum(IN_PLACE_MODES)
     .optional()

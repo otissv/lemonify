@@ -116,7 +116,7 @@ pnpm images info photo.jpg --stats
 | `formats` | Sharp             | Lists supported formats and library versions             |
 | `schema`  | —                 | Prints the JSON Schema of each command's options         |
 
-Every command prints its full options with `--help`, for example `pnpm images upscale --help`. Paths can be relative to the current directory or absolute. In the output, paths inside the current directory are shown relative to it and paths outside it are shown in full.
+Every command prints its full options with `--help` (or `-h`), for example `pnpm images upscale --help`. Paths can be relative to the current directory or absolute. In the output, paths inside the current directory are shown relative to it and paths outside it are shown in full.
 
 Several commands accept either a single file or a folder. With a folder, every supported image directly inside it is processed; add `--recursive` to include subfolders, in which case the folder structure is recreated under the destination. An output folder that sits inside the source folder is skipped while scanning, so you can safely write results next to the originals.
 
@@ -149,6 +149,8 @@ The ops cover these groups of Sharp methods:
 | Output format       | `jpeg`, `png`, `webp`, `gif`, `avif`, `heif`, `tiff`, `jxl`, `jp2`, `raw`, `toFormat`, `tile`                                                                                                       |
 | Metadata            | `keepMetadata`, `keepExif`, `withExif`, `withExifMerge`, `keepIccProfile`, `withIccProfile`, `keepXmp`, `withXmp`, `withMetadata`, `withDensity`                                                    |
 | Control             | `timeout`                                                                                                                                                                                           |
+
+Every field of every op, input option, setting and format option, with its type, range and default, is listed in the [Sharp job reference](cli-sharp-reference.md).
 
 Writing JSON inline gets awkward for longer pipelines, so every JSON option also accepts `@path/to/file.json` to read the value from a file, or `-` to read it from standard input. A few examples of what the command can do:
 
@@ -208,6 +210,12 @@ pnpm images sharp --input ./public --in-place ifSmaller --recursive \
 ### `info`: metadata and statistics
 
 `info` prints what Sharp reads from an image: dimensions, format, colour space, channels, alpha, density, orientation, page count and more. With `--stats` it also measures the pixels: the minimum, maximum, mean and standard deviation of each channel, plus entropy, sharpness and the dominant colour. Binary blocks such as EXIF, ICC and XMP data are reported as their size in bytes, so the output is always valid JSON. The terminal output is a one-line summary per image; add `--json` to see every field.
+
+| Option        | Default | Meaning                                                   |
+| ------------- | ------- | --------------------------------------------------------- |
+| `<source>`    | —       | An image file, or a folder of images                      |
+| `--stats`     | off     | Also compute per-channel and whole-image pixel statistics |
+| `--recursive` | off     | Include subfolders of a folder source                     |
 
 ```bash
 pnpm images info ./photos --recursive --stats --json
@@ -399,6 +407,14 @@ node --disable-warning=ExperimentalWarning scripts/images/pin-models.ts
 ```
 
 The script reads the model list from `opencomic-ai-bin` and the Upscayl models from the pinned commit, downloads every file once (about 1.4 GB), and rewrites `src/lib/images/upscale-models.json` with fresh checksums and sizes. Review the diff before committing it: an existing file whose checksum changed without a version or commit change is a warning sign. When `opencomic-ai-bin` changes the commit it downloads from, update `OPENCOMIC_MODELS_URL` in `src/lib/images/upscale-models.ts` to match first.
+
+The [Sharp job reference](cli-sharp-reference.md) is generated from the same Zod schemas. After changing an op, option or job field, regenerate it with:
+
+```bash
+node --disable-warning=ExperimentalWarning scripts/images/gen-sharp-reference.ts
+```
+
+A test fails while the committed reference is out of date, so it cannot drift from the schemas unnoticed.
 
 The CLI's tests run with the rest of the project's tests (`pnpm test`). They cover option validation, every command's flag parsing, the Sharp pipeline, model installation and the upscale pipeline. The upscale tests use a stand-in for the GPU, so they run anywhere; `upscayl-bin` itself is only exercised by real runs.
 
