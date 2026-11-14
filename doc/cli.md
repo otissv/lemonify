@@ -58,7 +58,7 @@ pnpm images formats
 
 `formats` prints the Sharp and libvips versions and the file types this build can read and write, which is a quick way to check that Sharp loaded correctly.
 
-Upscale models are not downloaded at install time. Each model is fetched, verified and stored in the project's `.tools/upscayl-models/` the first time you use it, and that folder is ignored by Git. If you would rather download models ahead of time, for example before working offline, install them by name or all at once:
+Upscale models are not downloaded at install time. Each model is fetched, verified and stored in `.tools/upscayl-models/` the first time you use it, and that folder is ignored by Git. If you would rather download models ahead of time, for example before working offline, install them by name or all at once:
 
 ```bash
 pnpm images models --install 4x_NMKD-Siax_200k --install realcugan
@@ -67,18 +67,6 @@ pnpm images models --install 4x_NMKD-Siax_200k --install realcugan
 ```bash
 pnpm images models --install-all
 ```
-
-### Running it from any folder
-
-`package.json` declares a `lemonify-images` bin, so the CLI can be put on your PATH and run from any folder as `lemonify-images <command>` instead of `pnpm images <command>`. To do that, run this once from the project root:
-
-```bash
-pnpm link --global
-```
-
-`pnpm unlink --global` removes it again. The bin is `scripts/images/lemonify-images.js`, a small launcher that runs the same TypeScript entry point. Two things differ from the package script. Relative paths resolve from the folder you run the command in, whereas `pnpm images` runs in the project root and resolves them from there. Help text names the command you used. Upscale models are always stored in the project's `.tools/upscayl-models/`, whichever folder the CLI runs from, so they are downloaded only once.
-
-The link points at this checkout, so it always runs your current code and needs the project's dependencies installed. A copy-style global install (`pnpm add -g` from a registry or tarball) does not work: the package would be copied into a `node_modules` folder, and Node refuses to run TypeScript files from inside `node_modules`. Supporting that would need a compiled build of the CLI.
 
 ## Quick start
 

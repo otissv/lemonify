@@ -9,7 +9,7 @@ description: Process images with this project's `pnpm images` CLI, which runs Sh
 
 ## Rules
 
-1. Run it as `pnpm -s images …` from the repository. Without `-s`, pnpm prints a header before the JSON. pnpm runs the script in the project root, so relative paths resolve from there, not from your current folder; use absolute paths for anything outside the project. If the user has linked the bin (`pnpm link --global`), `lemonify-images …` works the same from any folder and resolves relative paths from the current folder.
+1. Run it as `pnpm -s images …` from the repository. Without `-s`, pnpm prints a header before the JSON. pnpm runs the script in the project root, so relative paths resolve from there, not from your current folder; use absolute paths for anything outside the project.
 2. Add `--json` to every call. A success prints `{"command": "<name>", "result": …}` on stdout. A failure prints `{"error": {"type", "message", "issues"?, "usage"?}}` on stderr and exits with 1.
 3. Write the job to a JSON file and pass `--job @file.json`; use the scratchpad or system temp folder, not the repository. Inline JSON in a shell argument breaks on quoting. `--job` must be the only argument besides `--json` and takes the same fields as the schema; the CLI flags are only shorthands for them.
 4. Look up fields instead of guessing: `pnpm -s images schema sharp` (or `upscale`, `info`, `models`) prints the JSON Schema. Unknown keys are rejected, never ignored.

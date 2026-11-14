@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { z } from 'zod'
 
-import { displayPath } from '../../../src/lib/images/display-path.ts'
 import { ImageOptionsError } from '../../../src/lib/images/errors.ts'
 import {
   installModels,
@@ -33,7 +32,7 @@ const USAGE = `Usage: ${PROGRAM} models [options]
 Lists every model \`${PROGRAM} upscale\` can run: AI upscalers and 1x
 restoration models (${MODEL_CATEGORIES.join(', ')}), with their scales,
 denoise levels, download size and whether they are installed in
-${displayPath(MODELS_ROOT)}. Each file is pinned by SHA-256.
+${MODELS_ROOT}. Each file is pinned by SHA-256.
 
 Options:
   --category <name>    Only list one category
