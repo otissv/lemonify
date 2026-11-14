@@ -1,6 +1,7 @@
 import type { Sharp } from 'sharp'
 import { z } from 'zod'
 
+import { SharpOperationError } from './errors.ts'
 import { applyColourOp, colourOpSchemas } from './ops-colour.ts'
 import type { ColourOp } from './ops-colour.ts'
 import { applyFilterOp, filterOpSchemas } from './ops-filter.ts'
@@ -8,6 +9,7 @@ import type { FilterOp } from './ops-filter.ts'
 import { applyGeometryOp, geometryOpSchemas } from './ops-geometry.ts'
 import type { GeometryOp } from './ops-geometry.ts'
 import { applyOutputOp, outputOpSchemas } from './ops-output.ts'
+import { FORMAT_EXTENSIONS } from './output-options.ts'
 
 /**
  * One step of a Sharp pipeline: `{ "op": "<method>", ...arguments }`.
@@ -59,4 +61,31 @@ export function applySharpOp(image: Sharp, step: SharpOp): Sharp {
   if (isFilterOp(step)) return applyFilterOp(image, step)
   if (isColourOp(step)) return applyColourOp(image, step)
   return applyOutputOp(image, step)
+}
+
+/** Applies ops in order; an op Sharp rejects is reported as `ops[index] (name)`. */
+export function applySharpOps(image: Sharp, ops: readonly SharpOp[]): Sharp {
+  let pipeline = image
+  for (const [index, step] of ops.entries()) {
+    try {
+      pipeline = applySharpOp(pipeline, step)
+    } catch (error) {
+      throw new SharpOperationError(`ops[${index}] (${step.op})`, error)
+    }
+  }
+  return pipeline
+}
+
+function isFormatName(name: string): name is keyof typeof FORMAT_EXTENSIONS {
+  return name in FORMAT_EXTENSIONS
+}
+
+/** Extension implied by the last op that sets the output format, if any. */
+export function formatExtension(ops: readonly SharpOp[]): string | undefined {
+  for (const step of [...ops].reverse()) {
+    if (step.op === 'tile') return step.container === 'zip' ? '.zip' : '.dz'
+    if (step.op === 'toFormat') return FORMAT_EXTENSIONS[step.format]
+    if (isFormatName(step.op)) return FORMAT_EXTENSIONS[step.op]
+  }
+  return undefined
 }

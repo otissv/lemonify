@@ -1,0 +1,1769 @@
+{
+  "models": [
+    {
+      "name": "opencomic-ai-upscale-fast-v3",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Fast v3",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x-fast-v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-fast-v3.bin",
+          "sha256": "5680cf04dcd7080465ca6580a753882d9f2602a44831b861e8b7fa7af15227dc",
+          "bytes": 1431620
+        },
+        {
+          "name": "opencomic-ai-upscale-2x-fast-v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-fast-v3.param",
+          "sha256": "a69d7c802247b22a5466f49f1b0cda27a8357fe9ed98023cd22351b8faf370fe",
+          "bytes": 22924
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-fast-v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-fast-v3.bin",
+          "sha256": "5ef6e2ac32dc208be7e773d4e0c60f56217ef4f01072ef65e453caa92cea3647",
+          "bytes": 1440320
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-fast-v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-fast-v3.param",
+          "sha256": "7b280d82c1bc366a23e24c5c7e92a6f746d0c3e69f8d40901217f26d80249db4",
+          "bytes": 22924
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-fast-v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-fast-v3.bin",
+          "sha256": "d16d8b8a3d7fe0ef5b150eac3cca1194456d5940240899426db0e268d98c2fb6",
+          "bytes": 1452500
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-fast-v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-fast-v3.param",
+          "sha256": "4d5a836a9832739101d666799effa34a9fa10fb151813ec26b91eb9e7741dbb3",
+          "bytes": 22925
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-upscale-balanced-v3",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Balanced v3",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x-balanced-v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-balanced-v3.bin",
+          "sha256": "a50275687a5a1b2872a34f4196f678698ffe9e57f3ad00a0888bb8d0176e977b",
+          "bytes": 8342052
+        },
+        {
+          "name": "opencomic-ai-upscale-2x-balanced-v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-balanced-v3.param",
+          "sha256": "34d6cd0f025bead34740a2d381e4c732446065bfc863938223bbeef07fb0f376",
+          "bytes": 34142
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-balanced-v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-balanced-v3.bin",
+          "sha256": "967050365cff3e321a7c2cc0d63215c96f253fbb1333a8750ee4bec3e4afa186",
+          "bytes": 8359392
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-balanced-v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-balanced-v3.param",
+          "sha256": "1a67160147fd3ca07c73f7f8ebd7203ae3086110c1c2a761d775acd9041a95d9",
+          "bytes": 34143
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-balanced-v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-balanced-v3.bin",
+          "sha256": "11f5a0e67eaf43edf66b59f0cf22ef09b6ffef5a62bc0dff2df0a7228417cfc9",
+          "bytes": 8383668
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-balanced-v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-balanced-v3.param",
+          "sha256": "ab17238199259e179b0549f97e1258a9071eac586c71958d993e4f88e43a1bd4",
+          "bytes": 34143
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-upscale-compact-v2",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Fast v2",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x-compact-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-compact-v2.bin",
+          "sha256": "f6266cfb0582a60e537bf157bd5a46d8aa022b7e72b098edffe589b7b6e322c0",
+          "bytes": 1205752
+        },
+        {
+          "name": "opencomic-ai-upscale-2x-compact-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-compact-v2.param",
+          "sha256": "7f14c50fc5a5ca3bd2c46aad97cd0cb0ca5d56e7774b12fbd7d90988fbfdd6c9",
+          "bytes": 2974
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-compact-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-compact-v2.bin",
+          "sha256": "626ed87f77ecf1e1639692265cf35ad5d7414419b221beb38fa6400c02075a51",
+          "bytes": 1223092
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-compact-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-compact-v2.param",
+          "sha256": "467b4698b5ce5530c58bb03bbc1e00b510fb9cbe650fe296e7ab33ac00caacd9",
+          "bytes": 2975
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-compact-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-compact-v2.bin",
+          "sha256": "43c7baba3229c34e101e95e4d46c577a90ab4aba00287291f1e16f63edc57f23",
+          "bytes": 1247368
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-compact-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-compact-v2.param",
+          "sha256": "d35d3bba1528d153f496a8433bfb55fcc383cde80cd0ac1dc2a6c9aea04a935e",
+          "bytes": 2975
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-upscale-lite-v2",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Balanced v2",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x-lite-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-lite-v2.bin",
+          "sha256": "6b6cab5e5b59ea544de573d7ac2afd3055dc57583188f8e8887a5c0de0d001c7",
+          "bytes": 10036336
+        },
+        {
+          "name": "opencomic-ai-upscale-2x-lite-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-lite-v2.param",
+          "sha256": "3cfc667cad8117da60f3224dcdd9cd9cd55387a860c2aa506826d29a375edc40",
+          "bytes": 45848
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-lite-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-lite-v2.bin",
+          "sha256": "27cc84ee0c2c4ed73f0b8e5ab14128b6a0579de5763c87f2684c1a92c82b8862",
+          "bytes": 10036336
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-lite-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-lite-v2.param",
+          "sha256": "3bc3f6904707a0e83aca1cb5d374b1a64db9306a892e33445727d98fcb8f7dac",
+          "bytes": 45848
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-lite-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-lite-v2.bin",
+          "sha256": "120c8cbdae9d112a8be34873afea891207f8a28b63fce920bcf8b9e9f453aece",
+          "bytes": 10054900
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-lite-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-lite-v2.param",
+          "sha256": "6baa80903c5f017f9d7ceb27aa60043304c69be4170cfac777e9af647f47b016",
+          "bytes": 46056
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-upscale-v2",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Quality v2",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-v2.bin",
+          "sha256": "f9d7338225b82c0d24e1af968ea1067f9b52c286a7d1eb1f4860cf30ad255040",
+          "bytes": 33350532
+        },
+        {
+          "name": "opencomic-ai-upscale-2x-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-v2.param",
+          "sha256": "9fee961cebd51f3ef30fb0cb97970005cb7a6a69d6128c130a6d67c223d69d6f",
+          "bytes": 89204
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-v2.bin",
+          "sha256": "fa1af17170bd23f13e5ca8e1ba9e0866d3d298c2328b8410c78663f8cc15f94c",
+          "bytes": 33350532
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-v2.param",
+          "sha256": "866522dc4e91eacb510364bf6346e8c74e5425d5efa0870ed56c151eeff901a3",
+          "bytes": 89204
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-v2.bin",
+          "sha256": "3856e382e3b88c33185e280bd574a2f398fb06afe24f94b113b125b248cd7331",
+          "bytes": 33424520
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-v2.param",
+          "sha256": "bd0a1271aa30b8c5d02187f5e446c07d750088a96a4ad0678744e98358dd83a7",
+          "bytes": 89417
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-upscale-compact",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Fast",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x-compact.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-compact.bin",
+          "sha256": "21e0fa2c38774914645c85ca21b4fb96bdc8dd53b92cdb501830f981e85d1d9f",
+          "bytes": 1205752
+        },
+        {
+          "name": "opencomic-ai-upscale-2x-compact.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-compact.param",
+          "sha256": "f04d94dbca70feff972b245fc94d91e2c92fc3f92a901a34fd69052377dfd92b",
+          "bytes": 3836
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-compact.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-compact.bin",
+          "sha256": "4241b627e7f7d44185ceda1c8bbac174bfe38c5118d04542a2e56e0257ef39e7",
+          "bytes": 1223092
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-compact.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-compact.param",
+          "sha256": "467b4698b5ce5530c58bb03bbc1e00b510fb9cbe650fe296e7ab33ac00caacd9",
+          "bytes": 2975
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-compact.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-compact.bin",
+          "sha256": "08086002adfc62bd96a425cf6fdb77ecda0afc74f692eeaa0a53319380c6e737",
+          "bytes": 1247368
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-compact.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-compact.param",
+          "sha256": "6f876a7dd18e5b860e3f3d2661024dfd4c367395459bd0a3391d400422fc2630",
+          "bytes": 3837
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-upscale-lite",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Balanced",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x-lite.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-lite.bin",
+          "sha256": "57117cade2c0ae3791acedff2eb23cd505f685d0f53455417fe1d2136cafe36e",
+          "bytes": 10036336
+        },
+        {
+          "name": "opencomic-ai-upscale-2x-lite.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x-lite.param",
+          "sha256": "b7022af813fea0654aaf4cc44d4d967ff5030f201f5f4f2213baba6246832517",
+          "bytes": 86038
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-lite.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-lite.bin",
+          "sha256": "80b49da61d3850eaf23e4922d96cf3896192ec8b063ca12bd5326de2e9617609",
+          "bytes": 10036336
+        },
+        {
+          "name": "opencomic-ai-upscale-3x-lite.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x-lite.param",
+          "sha256": "3bc3f6904707a0e83aca1cb5d374b1a64db9306a892e33445727d98fcb8f7dac",
+          "bytes": 45848
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-lite.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-lite.bin",
+          "sha256": "61bc038b4e2e82589e0a042ffbbd73a1a770f63b5ae10b13c83705641056e622",
+          "bytes": 10054900
+        },
+        {
+          "name": "opencomic-ai-upscale-4x-lite.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x-lite.param",
+          "sha256": "7a7f6beb03fabed9dc5f255c74253f1093436e13ff9798860ca6e7651586ab26",
+          "bytes": 86300
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-upscale",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "OpenComic AI Upscale Quality",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-upscale-2x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x.bin",
+          "sha256": "5ca8e5fb93492ba2037ccad61888505be8ffcdc177a805411bf34e2e870ed475",
+          "bytes": 33350532
+        },
+        {
+          "name": "opencomic-ai-upscale-2x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-2x.param",
+          "sha256": "aeec83fff0ef61fa999848ee65cc9fbd6ddb462dd5f8306ba7ae1f1f7fa81cd1",
+          "bytes": 165316
+        },
+        {
+          "name": "opencomic-ai-upscale-3x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x.bin",
+          "sha256": "af46131fdcc097676bb78148c3da81c16001f7af85fa6384325611b572c089c7",
+          "bytes": 33350532
+        },
+        {
+          "name": "opencomic-ai-upscale-3x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-3x.param",
+          "sha256": "866522dc4e91eacb510364bf6346e8c74e5425d5efa0870ed56c151eeff901a3",
+          "bytes": 89204
+        },
+        {
+          "name": "opencomic-ai-upscale-4x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x.bin",
+          "sha256": "06efe1cc79d4e3f1034e74709936539882465f6a9577a7db4d1f2d34aa72ba48",
+          "bytes": 33424520
+        },
+        {
+          "name": "opencomic-ai-upscale-4x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/opencomic-ai-upscale-4x.param",
+          "sha256": "0332002123306541c803cd675280eee7f9cdd96f0804a47129f86ebbf9ed4174",
+          "bytes": 165579
+        }
+      ]
+    },
+    {
+      "name": "realcugan",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "RealCUGAN",
+      "directory": "upscale/realcugan/models",
+      "scales": [2, 3, 4],
+      "noise": [-1, 0, 3],
+      "files": [
+        {
+          "name": "up2x-conservative.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up2x-conservative.bin",
+          "sha256": "91c72c136e7ff8556323d4449c5ceeff22d9829bf8463a01137cadb8d59b84a0",
+          "bytes": 2573648
+        },
+        {
+          "name": "up2x-conservative.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up2x-conservative.param",
+          "sha256": "91efac7489bf249f092faa3764e3a3d1d31ef290051e39f2afd2138c98ccce30",
+          "bytes": 4818
+        },
+        {
+          "name": "up2x-denoise3x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up2x-denoise3x.bin",
+          "sha256": "610ebae63f388fe6f39615cc5f4eaeb038d5aa6ba8b299ba3b989f7f7a1a280a",
+          "bytes": 2573648
+        },
+        {
+          "name": "up2x-denoise3x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up2x-denoise3x.param",
+          "sha256": "91efac7489bf249f092faa3764e3a3d1d31ef290051e39f2afd2138c98ccce30",
+          "bytes": 4818
+        },
+        {
+          "name": "up2x-no-denoise.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up2x-no-denoise.bin",
+          "sha256": "7f135a712830b16678cb8247b9517308c5f3858fca9b10e1c3ad5ef6e261de0c",
+          "bytes": 2573648
+        },
+        {
+          "name": "up2x-no-denoise.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up2x-no-denoise.param",
+          "sha256": "91efac7489bf249f092faa3764e3a3d1d31ef290051e39f2afd2138c98ccce30",
+          "bytes": 4818
+        },
+        {
+          "name": "up3x-conservative.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up3x-conservative.bin",
+          "sha256": "8321c450efedcd94192196b03ddec19c2a023a5637df7208d49e9e0461560dff",
+          "bytes": 2577104
+        },
+        {
+          "name": "up3x-conservative.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up3x-conservative.param",
+          "sha256": "9e71ba0bce194f6a95422140c8caa25accbbfd9ec84a0cc08f7f4ec1e615a5a8",
+          "bytes": 4818
+        },
+        {
+          "name": "up3x-denoise3x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up3x-denoise3x.bin",
+          "sha256": "fdb269034f7d6bf59be8fe1c03c43a75671af464e045a13870b24b649d64f1f6",
+          "bytes": 2577104
+        },
+        {
+          "name": "up3x-denoise3x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up3x-denoise3x.param",
+          "sha256": "9e71ba0bce194f6a95422140c8caa25accbbfd9ec84a0cc08f7f4ec1e615a5a8",
+          "bytes": 4818
+        },
+        {
+          "name": "up3x-no-denoise.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up3x-no-denoise.bin",
+          "sha256": "e22e8e647b20eb0067cc46b9cf83bcb0893b2e77e83beaee0bedecf4c735f716",
+          "bytes": 2577104
+        },
+        {
+          "name": "up3x-no-denoise.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up3x-no-denoise.param",
+          "sha256": "9e71ba0bce194f6a95422140c8caa25accbbfd9ec84a0cc08f7f4ec1e615a5a8",
+          "bytes": 4818
+        },
+        {
+          "name": "up4x-conservative.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up4x-conservative.bin",
+          "sha256": "1ffde324bf3444adade3e70ff4ff4eac7a4bfbf4c01b5aab4563a89e5cec16da",
+          "bytes": 2818348
+        },
+        {
+          "name": "up4x-conservative.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up4x-conservative.param",
+          "sha256": "63e8f6a5a57acb4b7678fd928612538ae7208c836223becdb66ffb82bd2aab9b",
+          "bytes": 5078
+        },
+        {
+          "name": "up4x-denoise3x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up4x-denoise3x.bin",
+          "sha256": "1fe05d6066901d354bbbc0cb53fba6588ef7637e1ec9c3bce7546900484d0b35",
+          "bytes": 2818348
+        },
+        {
+          "name": "up4x-denoise3x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up4x-denoise3x.param",
+          "sha256": "63e8f6a5a57acb4b7678fd928612538ae7208c836223becdb66ffb82bd2aab9b",
+          "bytes": 5078
+        },
+        {
+          "name": "up4x-no-denoise.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up4x-no-denoise.bin",
+          "sha256": "aa3d9bda3f46bb48f709d874ccaf67877e94a2fd6cedca7dac5ccb3bf714e066",
+          "bytes": 2818348
+        },
+        {
+          "name": "up4x-no-denoise.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/realcugan/models/up4x-no-denoise.param",
+          "sha256": "63e8f6a5a57acb4b7678fd928612538ae7208c836223becdb66ffb82bd2aab9b",
+          "bytes": 5078
+        }
+      ]
+    },
+    {
+      "name": "realesr-animevideov3",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "RealESR AnimeVideo v3",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "realesr-animevideov3-x2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesr-animevideov3-x2.bin",
+          "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d",
+          "bytes": 1247368
+        },
+        {
+          "name": "realesr-animevideov3-x2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesr-animevideov3-x2.param",
+          "sha256": "b88ff4f00ebf019a7fdac17fdd45a7fd3665d37509efc5baf2e4da2e24420a04",
+          "bytes": 3173
+        },
+        {
+          "name": "realesr-animevideov3-x3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesr-animevideov3-x3.bin",
+          "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d",
+          "bytes": 1247368
+        },
+        {
+          "name": "realesr-animevideov3-x3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesr-animevideov3-x3.param",
+          "sha256": "d1a5755008791d09b57e3425fc9dd0bd26b00fdf79c606210bc0e693f8230881",
+          "bytes": 3173
+        },
+        {
+          "name": "realesr-animevideov3-x4.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesr-animevideov3-x4.bin",
+          "sha256": "548a36f9c3f4ab8da56cd3b13badf23968bee207b396dad14d04b830e5f2ab2d",
+          "bytes": 1247368
+        },
+        {
+          "name": "realesr-animevideov3-x4.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesr-animevideov3-x4.param",
+          "sha256": "850a248e7c14c27e5bd8cf7265113a9441036a7db63963bb8aa5169d788a435e",
+          "bytes": 3077
+        }
+      ]
+    },
+    {
+      "name": "realesrgan-x4plus",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "RealESRGAN x4 Plus",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "realesrgan-x4plus.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesrgan-x4plus.bin",
+          "sha256": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+          "bytes": 33424520
+        },
+        {
+          "name": "realesrgan-x4plus.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesrgan-x4plus.param",
+          "sha256": "35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86",
+          "bytes": 116029
+        }
+      ]
+    },
+    {
+      "name": "realesrgan-x4plus-anime",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "RealESRGAN x4 Plus Anime",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "realesrgan-x4plus-anime.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesrgan-x4plus-anime.bin",
+          "sha256": "fe01c269cfd10cdef8e018ab66ebe750cf79c7af4d1f9c16c737e1295229bacc",
+          "bytes": 8943500
+        },
+        {
+          "name": "realesrgan-x4plus-anime.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesrgan-x4plus-anime.param",
+          "sha256": "2b8fb6e0ae4d2d85704ca08c119a2f5ea40add4f2ecd512eb7f4cd44b6127ed4",
+          "bytes": 30290
+        }
+      ]
+    },
+    {
+      "name": "realesrnet-x4plus",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "RealESRNet x4 Plus",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "realesrnet-x4plus.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesrnet-x4plus.bin",
+          "sha256": "26bccfcc82d9e8260c0c6b0dffb34ab297982740882d1f33c6d423f70b562c40",
+          "bytes": 33424520
+        },
+        {
+          "name": "realesrnet-x4plus.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/realesrnet-x4plus.param",
+          "sha256": "35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86",
+          "bytes": 116029
+        }
+      ]
+    },
+    {
+      "name": "waifu2x-models-cunet",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Waifu2x CUnet",
+      "directory": "upscale/waifu2x/models",
+      "scales": [2, 4, 8],
+      "noise": [-1, 0, 1, 2, 3],
+      "files": [
+        {
+          "name": "waifu2x-cunet-noise0_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise0_scale2.0x_model.bin",
+          "sha256": "5329a9375c9cfb64a60a2903fd8ae6e2851d9b069556bf025dbab9d0216fb27c",
+          "bytes": 2776400
+        },
+        {
+          "name": "waifu2x-cunet-noise0_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise0_scale2.0x_model.param",
+          "sha256": "ccc3b2f1c9fad829ecdda40cac8dc853fcddf14917170efba888b256fbf9074a",
+          "bytes": 7249
+        },
+        {
+          "name": "waifu2x-cunet-noise1_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise1_scale2.0x_model.bin",
+          "sha256": "862c0e40f3df956ff57bd4d168c85dea5d375b614077fdddd3ac8cfdb9a686da",
+          "bytes": 2776400
+        },
+        {
+          "name": "waifu2x-cunet-noise1_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise1_scale2.0x_model.param",
+          "sha256": "ccc3b2f1c9fad829ecdda40cac8dc853fcddf14917170efba888b256fbf9074a",
+          "bytes": 7249
+        },
+        {
+          "name": "waifu2x-cunet-noise2_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise2_scale2.0x_model.bin",
+          "sha256": "5c836e6ae022636cdd5590fbb66dbca2a5fc20bbf8e628884c3612ef72d51858",
+          "bytes": 2776400
+        },
+        {
+          "name": "waifu2x-cunet-noise2_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise2_scale2.0x_model.param",
+          "sha256": "ccc3b2f1c9fad829ecdda40cac8dc853fcddf14917170efba888b256fbf9074a",
+          "bytes": 7249
+        },
+        {
+          "name": "waifu2x-cunet-noise3_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise3_scale2.0x_model.bin",
+          "sha256": "f42c18610fecb14a40f75cca9b9276a6889689d5937a4f75f0c2b21bde7e49ed",
+          "bytes": 2776400
+        },
+        {
+          "name": "waifu2x-cunet-noise3_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-noise3_scale2.0x_model.param",
+          "sha256": "ccc3b2f1c9fad829ecdda40cac8dc853fcddf14917170efba888b256fbf9074a",
+          "bytes": 7249
+        },
+        {
+          "name": "waifu2x-cunet-scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-scale2.0x_model.bin",
+          "sha256": "d82ed30207fd07e1c16726a9ca838ce44e6e25a105b0278c7ca681516ee0e18e",
+          "bytes": 2776400
+        },
+        {
+          "name": "waifu2x-cunet-scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-cunet-scale2.0x_model.param",
+          "sha256": "ccc3b2f1c9fad829ecdda40cac8dc853fcddf14917170efba888b256fbf9074a",
+          "bytes": 7249
+        }
+      ]
+    },
+    {
+      "name": "waifu2x-models-upconv",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Waifu2x UpConv",
+      "directory": "upscale/waifu2x/models",
+      "scales": [2, 4, 8],
+      "noise": [-1, 0, 1, 2, 3],
+      "files": [
+        {
+          "name": "waifu2x-upconv-noise0_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise0_scale2.0x_model.bin",
+          "sha256": "e1d2c4d91be98e72c0d48d08626cbe7d879aa2b80f740133dcc0d860eabb4189",
+          "bytes": 1106248
+        },
+        {
+          "name": "waifu2x-upconv-noise0_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise0_scale2.0x_model.param",
+          "sha256": "413195ffde05b4d43807792c6c020c916cecdf25dcf002ee83f5e28d5cc246c6",
+          "bytes": 1047
+        },
+        {
+          "name": "waifu2x-upconv-noise1_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise1_scale2.0x_model.bin",
+          "sha256": "536fd7070b023463d30bd105f675acf301760dce539f2fb974bd06906045514f",
+          "bytes": 1106248
+        },
+        {
+          "name": "waifu2x-upconv-noise1_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise1_scale2.0x_model.param",
+          "sha256": "413195ffde05b4d43807792c6c020c916cecdf25dcf002ee83f5e28d5cc246c6",
+          "bytes": 1047
+        },
+        {
+          "name": "waifu2x-upconv-noise2_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise2_scale2.0x_model.bin",
+          "sha256": "435f9082425c4520d3586757411ac409b1d67e428ed37ec571feb06f823e245e",
+          "bytes": 1106248
+        },
+        {
+          "name": "waifu2x-upconv-noise2_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise2_scale2.0x_model.param",
+          "sha256": "413195ffde05b4d43807792c6c020c916cecdf25dcf002ee83f5e28d5cc246c6",
+          "bytes": 1047
+        },
+        {
+          "name": "waifu2x-upconv-noise3_scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise3_scale2.0x_model.bin",
+          "sha256": "3e783a9117d4564fbd0cc376375b29d7eb05bd2e457f748898e82eefb1ace2f1",
+          "bytes": 1106248
+        },
+        {
+          "name": "waifu2x-upconv-noise3_scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-noise3_scale2.0x_model.param",
+          "sha256": "413195ffde05b4d43807792c6c020c916cecdf25dcf002ee83f5e28d5cc246c6",
+          "bytes": 1047
+        },
+        {
+          "name": "waifu2x-upconv-scale2.0x_model.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-scale2.0x_model.bin",
+          "sha256": "27d880903ff81390a3b4a900b67af3381c465279e34297546c9a58781855f7ef",
+          "bytes": 1106248
+        },
+        {
+          "name": "waifu2x-upconv-scale2.0x_model.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/waifu2x/models/waifu2x-upconv-scale2.0x_model.param",
+          "sha256": "413195ffde05b4d43807792c6c020c916cecdf25dcf002ee83f5e28d5cc246c6",
+          "bytes": 1047
+        }
+      ]
+    },
+    {
+      "name": "4x-WTP-ColorDS",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "WTP ColorDS",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4x-WTP-ColorDS.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4x-WTP-ColorDS.bin",
+          "sha256": "45328e49de531bda54747cfc4a56b54fd8cc7f7c22c20e4589d5e5ebef5af354",
+          "bytes": 33424520
+        },
+        {
+          "name": "4x-WTP-ColorDS.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4x-WTP-ColorDS.param",
+          "sha256": "0332002123306541c803cd675280eee7f9cdd96f0804a47129f86ebbf9ed4174",
+          "bytes": 165579
+        }
+      ]
+    },
+    {
+      "name": "remacri-4x",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Remacri",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "remacri-4x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/remacri-4x.bin",
+          "sha256": "a43be595c0d743314c30b50fe7ef188be0c61cc55c46ce81adb79ba4b3c3fb7a",
+          "bytes": 33424520
+        },
+        {
+          "name": "remacri-4x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/remacri-4x.param",
+          "sha256": "859ecba5b3592ecf3e76c93bed65e9f627b5236dd696aae5a84ecf8c93ab65ce",
+          "bytes": 140295
+        }
+      ]
+    },
+    {
+      "name": "ultramix-balanced-4x",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Ultramix Balanced",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "ultramix-balanced-4x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/ultramix-balanced-4x.bin",
+          "sha256": "171cae5968485d366b4fb575d232f98d117d94b766b15f22849cfccde40d2050",
+          "bytes": 33424520
+        },
+        {
+          "name": "ultramix-balanced-4x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/ultramix-balanced-4x.param",
+          "sha256": "859ecba5b3592ecf3e76c93bed65e9f627b5236dd696aae5a84ecf8c93ab65ce",
+          "bytes": 140295
+        }
+      ]
+    },
+    {
+      "name": "ultrasharp-4x",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Ultrasharp",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "ultrasharp-4x.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/ultrasharp-4x.bin",
+          "sha256": "fb3e279d40d4cddb44db4e684d59e68d0aa39852c8cc14dc3f23ccc7e6eee9c1",
+          "bytes": 33424520
+        },
+        {
+          "name": "ultrasharp-4x.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/ultrasharp-4x.param",
+          "sha256": "0136ca83686809a8f17f7111f11b951e8db93610e24b7f4137c9ffe4dbc4a806",
+          "bytes": 116029
+        }
+      ]
+    },
+    {
+      "name": "4xInt-RemAnime",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Int-RemAnime",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4xInt-RemAnime.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xInt-RemAnime.bin",
+          "sha256": "e355c6816f90fb4c5e7cbb869e4a65b8fad8e4f59f675a66b664aa7b6a000c8f",
+          "bytes": 33424520
+        },
+        {
+          "name": "4xInt-RemAnime.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xInt-RemAnime.param",
+          "sha256": "0332002123306541c803cd675280eee7f9cdd96f0804a47129f86ebbf9ed4174",
+          "bytes": 165579
+        }
+      ]
+    },
+    {
+      "name": "AI-Forever_x4plus",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "AI-Forever x4plus",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "AI-Forever_x4plus.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/AI-Forever_x4plus.bin",
+          "sha256": "fe8cffa30fbc260b37eb98b96651a364608094de9fec65de13aca36b115bf78d",
+          "bytes": 33424520
+        },
+        {
+          "name": "AI-Forever_x4plus.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/AI-Forever_x4plus.param",
+          "sha256": "0332002123306541c803cd675280eee7f9cdd96f0804a47129f86ebbf9ed4174",
+          "bytes": 165579
+        }
+      ]
+    },
+    {
+      "name": "4xNomosWebPhoto_esrgan",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Nomos Web Photo ESRGAN",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4xNomosWebPhoto_esrgan.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xNomosWebPhoto_esrgan.bin",
+          "sha256": "99df8408f2a6efd21e008c23256f29ddc93311a9a01dab57c4fa66f1a821f267",
+          "bytes": 33424520
+        },
+        {
+          "name": "4xNomosWebPhoto_esrgan.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xNomosWebPhoto_esrgan.param",
+          "sha256": "0332002123306541c803cd675280eee7f9cdd96f0804a47129f86ebbf9ed4174",
+          "bytes": 165579
+        }
+      ]
+    },
+    {
+      "name": "4xHFA2k",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "HFA2k",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4xHFA2k.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xHFA2k.bin",
+          "sha256": "8a135402b4f39286121b76abb47601a6b7b7e8d4f3e999a5aaa45ed277824fb4",
+          "bytes": 33424520
+        },
+        {
+          "name": "4xHFA2k.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xHFA2k.param",
+          "sha256": "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e",
+          "bytes": 108039
+        }
+      ]
+    },
+    {
+      "name": "4xLSDIRCompactC3",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "LSDIR Compact C3",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4xLSDIRCompactC3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xLSDIRCompactC3.bin",
+          "sha256": "692aa5e70c86522ce2d72b94f372751339a2fee65f515d06da5d496d8cf93667",
+          "bytes": 1247368
+        },
+        {
+          "name": "4xLSDIRCompactC3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xLSDIRCompactC3.param",
+          "sha256": "6e3795fb5b6c68b2c39822e78bf83b575c918f96e9db6c36934a79e7d491d5e1",
+          "bytes": 2767
+        }
+      ]
+    },
+    {
+      "name": "4xLSDIRplusC",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "LSDIR Plus C",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4xLSDIRplusC.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xLSDIRplusC.bin",
+          "sha256": "6df18c714bb7d4ac63ca8a1fb1f1b2712fe3ef5a4b36f09bfa9b827da167ae81",
+          "bytes": 33424520
+        },
+        {
+          "name": "4xLSDIRplusC.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xLSDIRplusC.param",
+          "sha256": "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e",
+          "bytes": 108039
+        }
+      ]
+    },
+    {
+      "name": "4x_NMKD-Siax_200k",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "NMKD Siax",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4x_NMKD-Siax_200k.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4x_NMKD-Siax_200k.bin",
+          "sha256": "b2abdffa30fb15be752ac681e0c0edf8b543745c33a989aadc9d7d3394dd3110",
+          "bytes": 66793352
+        },
+        {
+          "name": "4x_NMKD-Siax_200k.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4x_NMKD-Siax_200k.param",
+          "sha256": "519bffb4912e295155d3cb5d6a29639d217ccca55f80962d8f677ef777a65b7a",
+          "bytes": 108037
+        }
+      ]
+    },
+    {
+      "name": "4xNomos8kSC",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Nomos 8k SC",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "4xNomos8kSC.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xNomos8kSC.bin",
+          "sha256": "da16e3880d87b177b7c6b659bbd880f8a101b868eb9ebc08d69eaa6d3edc4517",
+          "bytes": 33424520
+        },
+        {
+          "name": "4xNomos8kSC.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/4xNomos8kSC.param",
+          "sha256": "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e",
+          "bytes": 108039
+        }
+      ]
+    },
+    {
+      "name": "RealESRGAN_General_WDN_x4_v3",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "RealESRGAN General WDN v3",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "RealESRGAN_General_WDN_x4_v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/RealESRGAN_General_WDN_x4_v3.bin",
+          "sha256": "74eae91a6230cbe5b931be6c49141faaff0034976933d4da9accb77c329c8a78",
+          "bytes": 2435272
+        },
+        {
+          "name": "RealESRGAN_General_WDN_x4_v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/RealESRGAN_General_WDN_x4_v3.param",
+          "sha256": "22174924330297357434ad21ed0af7f4b820008d2a502b492754d130d4142714",
+          "bytes": 5019
+        }
+      ]
+    },
+    {
+      "name": "RealESRGAN_General_x4_v3",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "RealESRGAN General v3",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "RealESRGAN_General_x4_v3.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/RealESRGAN_General_x4_v3.bin",
+          "sha256": "85ee266b632a765a725425ba6a5620c088c8aa2939a03063b2d83b3462724cc1",
+          "bytes": 2435272
+        },
+        {
+          "name": "RealESRGAN_General_x4_v3.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/RealESRGAN_General_x4_v3.param",
+          "sha256": "22174924330297357434ad21ed0af7f4b820008d2a502b492754d130d4142714",
+          "bytes": 5019
+        }
+      ]
+    },
+    {
+      "name": "uniscale_restore_x4",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Uniscale Restore x4",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "uniscale_restore_x4.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/uniscale_restore_x4.bin",
+          "sha256": "444397498efed02b5ea83094547456eba736d6aa41378f54b2e33c1f1ab25717",
+          "bytes": 33424520
+        },
+        {
+          "name": "uniscale_restore_x4.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/uniscale_restore_x4.param",
+          "sha256": "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e",
+          "bytes": 108039
+        }
+      ]
+    },
+    {
+      "name": "unknown-2.0.1",
+      "source": "opencomic",
+      "category": "upscale",
+      "description": "Unknown 2.0.1",
+      "directory": "upscale/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "unknown-2.0.1.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/unknown-2.0.1.bin",
+          "sha256": "ffed11ae7b684812b78decc59fd8469086211c2ea22a6cdd8142cd81c21a7da7",
+          "bytes": 33424520
+        },
+        {
+          "name": "unknown-2.0.1.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/upscale/models/unknown-2.0.1.param",
+          "sha256": "859ecba5b3592ecf3e76c93bed65e9f627b5236dd696aae5a84ecf8c93ab65ce",
+          "bytes": 140295
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-fast-v4-preview",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Fast v4 Preview",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-fast-v4-preview.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-fast-v4-preview.bin",
+          "sha256": "3b019ab7209ff9407a842849b100ef9e0b3a743c458ddd92bb7d92a9cccd7946",
+          "bytes": 20518012
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-fast-v4-preview.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-fast-v4-preview.param",
+          "sha256": "84163b4f2923ca6abb75a6c2ff52aff4eb349f23eee767f253da98c374fdb287",
+          "bytes": 113907
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-balanced-v4-preview",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Balanced v4 Preview",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-balanced-v4-preview.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-balanced-v4-preview.bin",
+          "sha256": "f51c76abd49ee56fdc3afab9e390b880f6af2107009dc94717898f8c83ceefbf",
+          "bytes": 17308696
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-balanced-v4-preview.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-balanced-v4-preview.param",
+          "sha256": "d30bd606f46cc50892176dc058eadd9dc7009199e37c1c220f6377b40a636254",
+          "bytes": 72475
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-fast-v3-256",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Fast v3",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-fast-v3-256.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-fast-v3-256.bin",
+          "sha256": "35689df85b1a56bbd248f6b2f1aec3bce7fdca6aaa97c4937e7fc1c2bdf95abb",
+          "bytes": 1426400
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-fast-v3-256.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-fast-v3-256.param",
+          "sha256": "6d3bdd193effcf56ab5bde4ae09ebb25d914bd14484b97fbdd2719142dda5d54",
+          "bytes": 22760
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-balanced-v3-256",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Balanced v3",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-balanced-v3-256.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-balanced-v3-256.bin",
+          "sha256": "ca11e6fdd0ce17fa3be73a75147b3a8731b349f7e6cf756765c94bd91ab1a094",
+          "bytes": 8331648
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-balanced-v3-256.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-balanced-v3-256.param",
+          "sha256": "f49bc2af0631f36b2f756b19dd8e89f20b6ca8f690f4e8c62a1abc06cf3139f1",
+          "bytes": 33979
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-compact-v2",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Fast v2",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-compact-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-compact-v2.bin",
+          "sha256": "a23ba0d45fb6497479c9c2a74ae3a032bf4ea75439b4bb72aabef92bbfba674c",
+          "bytes": 1195348
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-compact-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-compact-v2.param",
+          "sha256": "0c40c98b871c693facbd34d01f44753ef25a00bd76d4b150b3983a16307d178e",
+          "bytes": 2875
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-lite-v2",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Balanced v2",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-lite-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-lite-v2.bin",
+          "sha256": "3f9a08ef21e707f93fc1bae6a1fd4bffb583f2a079373eb4287579519655c14e",
+          "bytes": 10017772
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-lite-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-lite-v2.param",
+          "sha256": "e99cca83ed0905342dad5e147cf618216f8047bdc43b9b25ddbe341d4204ec73",
+          "bytes": 45640
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-v2",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Quality v2",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-v2.bin",
+          "sha256": "5db84eba8f1484d06e2539650075422d1bed8ca22b5e23500f647b5beec753ca",
+          "bytes": 33276544
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-v2.param",
+          "sha256": "da63a33e4b6ed07806992d03a31fe9f91cb092820a8155f1f72ea6e5853fdb77",
+          "bytes": 88991
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-compact",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Fast",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-compact.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-compact.bin",
+          "sha256": "8da002aa725a7988a2da56b435e1c35be427b1777d830153bb16cf2e4ea88545",
+          "bytes": 1195348
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-compact.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-compact.param",
+          "sha256": "d892912a9ebf7b8e19b61773b1c543d7fbf0fbd9464a6b620355f7580f797cb9",
+          "bytes": 3801
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard-lite",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Balanced",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard-lite.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-lite.bin",
+          "sha256": "99e58fb1423100d4dc3e5f38a4d67b8d53dd800a288c5f5ebd94e22236bf7714",
+          "bytes": 10017772
+        },
+        {
+          "name": "opencomic-ai-descreen-hard-lite.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard-lite.param",
+          "sha256": "78b2040aad77ba0412d835b7cbbb81a7e2de31e7d69c476a896dabfde17e2366",
+          "bytes": 85780
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-descreen-hard",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "OpenComic AI Descreen Hard Quality",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-descreen-hard.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard.bin",
+          "sha256": "8cf936d6767b1ca462b8c0286df6df8799db08d1ad4588094df842a0ce5ad623",
+          "bytes": 33276544
+        },
+        {
+          "name": "opencomic-ai-descreen-hard.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/opencomic-ai-descreen-hard.param",
+          "sha256": "74b2c0227bfa9d8c9ff28d12cd6056d40b75911a08d156cc49ae5afb07663b6b",
+          "bytes": 165057
+        }
+      ]
+    },
+    {
+      "name": "1x_halftone_patch_060000_G",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "Halftone Patch 060000 G",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "1x_halftone_patch_060000_G.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/1x_halftone_patch_060000_G.bin",
+          "sha256": "812a067b4083c4369e898494f223dfed7ef5acc9dfa18ba3adb3d6a0ec494b4d",
+          "bytes": 33276544
+        },
+        {
+          "name": "1x_halftone_patch_060000_G.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/1x_halftone_patch_060000_G.param",
+          "sha256": "74b2c0227bfa9d8c9ff28d12cd6056d40b75911a08d156cc49ae5afb07663b6b",
+          "bytes": 165057
+        }
+      ]
+    },
+    {
+      "name": "1x_wtp_descreenton_compact",
+      "source": "opencomic",
+      "category": "descreen",
+      "description": "WTP DescreenTon Compact",
+      "directory": "descreen/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "1x_wtp_descreenton_compact.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/1x_wtp_descreenton_compact.bin",
+          "sha256": "21a3e110b7a846a56f76306f9b3805ec693e36bac9ac9765e9a1e73a6a6d8985",
+          "bytes": 1195348
+        },
+        {
+          "name": "1x_wtp_descreenton_compact.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/descreen/models/1x_wtp_descreenton_compact.param",
+          "sha256": "d892912a9ebf7b8e19b61773b1c543d7fbf0fbd9464a6b620355f7580f797cb9",
+          "bytes": 3801
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal-balanced-v3-ps",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Balanced v3",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal-balanced-v3-ps.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-balanced-v3-ps.bin",
+          "sha256": "d17639ba6b5e1a38d5de2b1699dedccbd43f970b892ba82b0d3245790dd526db",
+          "bytes": 8435508
+        },
+        {
+          "name": "opencomic-ai-artifact-removal-balanced-v3-ps.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-balanced-v3-ps.param",
+          "sha256": "5a2be4c0f4b55fdf5aa325ec7549d07e843d9c2e3ef88eb5432f92221120c858",
+          "bytes": 34114
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal-quality-v3-ps",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Quality v3",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal-quality-v3-ps.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-quality-v3-ps.bin",
+          "sha256": "e5c74ad0a86925eebe585caca0322410ccec491062fbfb40cad0251f04a104a5",
+          "bytes": 65367188
+        },
+        {
+          "name": "opencomic-ai-artifact-removal-quality-v3-ps.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-quality-v3-ps.param",
+          "sha256": "5dcba31cafe0e1f5630ec87beca8f750ca007a3191f2b468b1a2648e8d27d0d4",
+          "bytes": 68861
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal-compact-v2",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Fast v2",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal-compact-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-compact-v2.bin",
+          "sha256": "319f91018d86181803ca9b51bbaeb954519f20d5028c9f6236b8010f4b91c500",
+          "bytes": 1195348
+        },
+        {
+          "name": "opencomic-ai-artifact-removal-compact-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-compact-v2.param",
+          "sha256": "0c40c98b871c693facbd34d01f44753ef25a00bd76d4b150b3983a16307d178e",
+          "bytes": 2875
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal-lite-v2",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Balanced v2",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal-lite-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-lite-v2.bin",
+          "sha256": "12c5a62837c7d89816eb55c93cf19b16be5629d5cd75702d3f53841c4b74268d",
+          "bytes": 10017772
+        },
+        {
+          "name": "opencomic-ai-artifact-removal-lite-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-lite-v2.param",
+          "sha256": "e99cca83ed0905342dad5e147cf618216f8047bdc43b9b25ddbe341d4204ec73",
+          "bytes": 45640
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal-v2",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Quality v2",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal-v2.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-v2.bin",
+          "sha256": "e9deeb2758c064311cc82dd37d4aa4fa863d546b260cfe3ff97158c731aa7095",
+          "bytes": 33276544
+        },
+        {
+          "name": "opencomic-ai-artifact-removal-v2.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-v2.param",
+          "sha256": "da63a33e4b6ed07806992d03a31fe9f91cb092820a8155f1f72ea6e5853fdb77",
+          "bytes": 88991
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal-compact",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Fast",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal-compact.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-compact.bin",
+          "sha256": "12b160f38668e186e3761613e70fa9b588d300c443a99a042eabe2a44f4929b6",
+          "bytes": 1195348
+        },
+        {
+          "name": "opencomic-ai-artifact-removal-compact.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-compact.param",
+          "sha256": "d892912a9ebf7b8e19b61773b1c543d7fbf0fbd9464a6b620355f7580f797cb9",
+          "bytes": 3801
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal-lite",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Balanced",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal-lite.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-lite.bin",
+          "sha256": "db4773460cdae46e258b587fbf04118635e6a17df378ab0fabdd52b30e8851d5",
+          "bytes": 10017772
+        },
+        {
+          "name": "opencomic-ai-artifact-removal-lite.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal-lite.param",
+          "sha256": "78b2040aad77ba0412d835b7cbbb81a7e2de31e7d69c476a896dabfde17e2366",
+          "bytes": 85780
+        }
+      ]
+    },
+    {
+      "name": "opencomic-ai-artifact-removal",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "OpenComic AI Artifact Removal Quality",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "opencomic-ai-artifact-removal.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal.bin",
+          "sha256": "0535dcab1a4ed0c76567dcb5b45fbe66409ce748c4c16934164a18f0d5901d46",
+          "bytes": 33276544
+        },
+        {
+          "name": "opencomic-ai-artifact-removal.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/opencomic-ai-artifact-removal.param",
+          "sha256": "74b2c0227bfa9d8c9ff28d12cd6056d40b75911a08d156cc49ae5afb07663b6b",
+          "bytes": 165057
+        }
+      ]
+    },
+    {
+      "name": "1x_NMKD-Jaywreck3-Lite_320k",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "NMKD Jaywreck3 Lite",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "1x_NMKD-Jaywreck3-Lite_320k.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x_NMKD-Jaywreck3-Lite_320k.bin",
+          "sha256": "b3c31401627eb01748b92261eea57a995048e5e96abf10da69c0e02653abc5de",
+          "bytes": 10017772
+        },
+        {
+          "name": "1x_NMKD-Jaywreck3-Lite_320k.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x_NMKD-Jaywreck3-Lite_320k.param",
+          "sha256": "78b2040aad77ba0412d835b7cbbb81a7e2de31e7d69c476a896dabfde17e2366",
+          "bytes": 85780
+        }
+      ]
+    },
+    {
+      "name": "1x_NMKD-Jaywreck3-Soft-Lite_320k",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "NMKD Jaywreck3 Soft Lite",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "1x_NMKD-Jaywreck3-Soft-Lite_320k.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x_NMKD-Jaywreck3-Soft-Lite_320k.bin",
+          "sha256": "85ae1f1810a97b69bff275a3a772be4462ffc613ad70eef8dd755b7f84362b5f",
+          "bytes": 10017772
+        },
+        {
+          "name": "1x_NMKD-Jaywreck3-Soft-Lite_320k.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x_NMKD-Jaywreck3-Soft-Lite_320k.param",
+          "sha256": "78b2040aad77ba0412d835b7cbbb81a7e2de31e7d69c476a896dabfde17e2366",
+          "bytes": 85780
+        }
+      ]
+    },
+    {
+      "name": "1x-SaiyaJin-DeJpeg",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "SaiyaJin DeJpeg",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "1x-SaiyaJin-DeJpeg.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x-SaiyaJin-DeJpeg.bin",
+          "sha256": "d2663e5ffbdb1caee44ed1c668821c22203c25b325712cfe8e633d5a2a3e0815",
+          "bytes": 33276544
+        },
+        {
+          "name": "1x-SaiyaJin-DeJpeg.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x-SaiyaJin-DeJpeg.param",
+          "sha256": "74b2c0227bfa9d8c9ff28d12cd6056d40b75911a08d156cc49ae5afb07663b6b",
+          "bytes": 165057
+        }
+      ]
+    },
+    {
+      "name": "1x_JPEGDestroyerV2_96000G",
+      "source": "opencomic",
+      "category": "artifact-removal",
+      "description": "JPEG Destroyer V2",
+      "directory": "artifact-removal/models",
+      "scales": [1],
+      "noise": null,
+      "files": [
+        {
+          "name": "1x_JPEGDestroyerV2_96000G.bin",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x_JPEGDestroyerV2_96000G.bin",
+          "sha256": "40145713f92382149ca5f4a93e52f43fc2227fdb9d09c0720205269f2cc56927",
+          "bytes": 33276544
+        },
+        {
+          "name": "1x_JPEGDestroyerV2_96000G.param",
+          "url": "https://raw.githubusercontent.com/ollm/opencomic-ai-models/ca1c17faabcb029a14b8bcabfc864227d6b9e2b2/models/artifact-removal/models/1x_JPEGDestroyerV2_96000G.param",
+          "sha256": "74b2c0227bfa9d8c9ff28d12cd6056d40b75911a08d156cc49ae5afb07663b6b",
+          "bytes": 165057
+        }
+      ]
+    },
+    {
+      "name": "upscayl-standard-4x",
+      "source": "upscayl",
+      "category": "upscale",
+      "description": "Upscayl upscayl-standard-4x",
+      "directory": "upscayl/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "upscayl-standard-4x.param",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/upscayl-standard-4x.param",
+          "sha256": "35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86",
+          "bytes": 116029
+        },
+        {
+          "name": "upscayl-standard-4x.bin",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/upscayl-standard-4x.bin",
+          "sha256": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+          "bytes": 33424520
+        }
+      ]
+    },
+    {
+      "name": "upscayl-lite-4x",
+      "source": "upscayl",
+      "category": "upscale",
+      "description": "Upscayl upscayl-lite-4x",
+      "directory": "upscayl/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "upscayl-lite-4x.param",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/upscayl-lite-4x.param",
+          "sha256": "22174924330297357434ad21ed0af7f4b820008d2a502b492754d130d4142714",
+          "bytes": 5019
+        },
+        {
+          "name": "upscayl-lite-4x.bin",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/upscayl-lite-4x.bin",
+          "sha256": "85ee266b632a765a725425ba6a5620c088c8aa2939a03063b2d83b3462724cc1",
+          "bytes": 2435272
+        }
+      ]
+    },
+    {
+      "name": "high-fidelity-4x",
+      "source": "upscayl",
+      "category": "upscale",
+      "description": "Upscayl high-fidelity-4x",
+      "directory": "upscayl/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "high-fidelity-4x.param",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/high-fidelity-4x.param",
+          "sha256": "4576ed5c2fc5fa250d3c3d585ef02248f26abdfc1867088078f501fe71e5d61e",
+          "bytes": 108039
+        },
+        {
+          "name": "high-fidelity-4x.bin",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/high-fidelity-4x.bin",
+          "sha256": "8a135402b4f39286121b76abb47601a6b7b7e8d4f3e999a5aaa45ed277824fb4",
+          "bytes": 33424520
+        }
+      ]
+    },
+    {
+      "name": "digital-art-4x",
+      "source": "upscayl",
+      "category": "upscale",
+      "description": "Upscayl digital-art-4x",
+      "directory": "upscayl/models",
+      "scales": [2, 3, 4],
+      "noise": null,
+      "files": [
+        {
+          "name": "digital-art-4x.param",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/digital-art-4x.param",
+          "sha256": "2b8fb6e0ae4d2d85704ca08c119a2f5ea40add4f2ecd512eb7f4cd44b6127ed4",
+          "bytes": 30290
+        },
+        {
+          "name": "digital-art-4x.bin",
+          "url": "https://raw.githubusercontent.com/upscayl/upscayl/e1aeaf1217b6061b4212b87c9fd421984f73e437/resources/models/digital-art-4x.bin",
+          "sha256": "fe01c269cfd10cdef8e018ab66ebe750cf79c7af4d1f9c16c737e1295229bacc",
+          "bytes": 8943500
+        }
+      ]
+    }
+  ]
+}

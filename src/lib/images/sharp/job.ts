@@ -11,9 +11,7 @@ import { readableExtensions } from './capabilities.ts'
 import { filePathSchema, nonNegativeIntSchema } from './common.ts'
 import { SharpOperationError, SharpTargetError } from './errors.ts'
 import { sharpInputOptionsSchema } from './input-options.ts'
-import { applySharpOp, sharpOpSchema } from './ops.ts'
-import type { SharpOp } from './ops.ts'
-import { FORMAT_EXTENSIONS } from './output-options.ts'
+import { applySharpOps, formatExtension, sharpOpSchema } from './ops.ts'
 
 /** Process-wide Sharp settings (`sharp.concurrency()`, `sharp.cache()`, …) applied before the job runs. */
 export const sharpSettingsSchema = z.strictObject({
@@ -93,18 +91,6 @@ function applySettings(settings: SharpSettings | undefined): void {
   if (settings.unblock) sharp.unblock({ operation: settings.unblock })
 }
 
-/** Extension implied by the last op that sets the output format, if any. */
-function outputExtension(ops: readonly SharpOp[]): string | undefined {
-  for (const step of [...ops].reverse()) {
-    if (step.op === 'tile') return step.container === 'zip' ? '.zip' : '.dz'
-    if (step.op === 'toFormat') return FORMAT_EXTENSIONS[step.format]
-    if (step.op in FORMAT_EXTENSIONS) {
-      return FORMAT_EXTENSIONS[step.op as keyof typeof FORMAT_EXTENSIONS]
-    }
-  }
-  return undefined
-}
-
 async function isDirectory(file: string): Promise<boolean> {
   try {
     return (await stat(file)).isDirectory()
@@ -120,7 +106,7 @@ async function planFolder(job: SharpJob, folder: string): Promise<SharpTask[]> {
     exclude: output,
     extensions: readableExtensions(),
   })
-  const extension = outputExtension(job.ops)
+  const extension = formatExtension(job.ops)
   const tasks: SharpTask[] = []
   for (const source of sources.files) {
     const mirrored = mirroredPath(source, sources.root, output)
@@ -150,16 +136,9 @@ async function planTasks(job: SharpJob): Promise<SharpTask[]> {
 }
 
 function buildPipeline(task: SharpTask, job: SharpJob): Sharp {
-  let image =
+  const image =
     task.source === null ? sharp(job.options) : sharp(task.source, job.options)
-  for (const [index, step] of job.ops.entries()) {
-    try {
-      image = applySharpOp(image, step)
-    } catch (error) {
-      throw new SharpOperationError(`ops[${index}] (${step.op})`, error)
-    }
-  }
-  return image
+  return applySharpOps(image, job.ops)
 }
 
 function describeSource(source: SharpTask['source']): string {

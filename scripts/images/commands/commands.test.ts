@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
+import { ImageOptionsError } from '../../../src/lib/images/errors.ts'
 import { CliUsageError } from '../cli.ts'
 import { compressCommand } from './compress.ts'
 import { modelsCommand } from './models.ts'
@@ -8,20 +9,78 @@ import { resizeCommand } from './resize.ts'
 import { upscaleCommand } from './upscale.ts'
 
 describe('upscale', () => {
-  it('parses model and scale', () => {
+  it('maps every flag to options', () => {
     expect(
       upscaleCommand.parse([
         'in',
         'out',
         '--model',
-        'animevideov3',
+        'realcugan',
         '--scale',
+        '2',
+        '--noise',
+        '0',
+        '--iterations',
+        '2',
+        '--tile-size',
+        '256',
+        '--max-tile-size',
+        '1024',
+        '--memory-percent',
+        '40',
+        '--gpu',
+        '0',
+        '--threads',
+        '2',
+        '--tta',
+        '--fp32',
+        '--ops',
+        '[{"op":"webp","quality":80}]',
+        '--recursive',
+      ]),
+    ).toEqual({
+      kind: 'run',
+      options: {
+        source: 'in',
+        destination: 'out',
+        recursive: true,
+        model: 'realcugan',
+        scale: 2,
+        noise: 0,
+        iterations: 2,
+        tileSize: 256,
+        maxTileSize: 1024,
+        memorySafePercentage: 40,
+        gpuId: '0',
+        threads: 2,
+        tta: true,
+        fp32: true,
+        ops: [{ op: 'webp', quality: 80 }],
+      },
+    })
+  })
+
+  it('builds a custom model from --model-path, --model-name and --model-scale', () => {
+    expect(
+      upscaleCommand.parse([
+        'in',
+        'out',
+        '--model-path',
+        'models',
+        '--model-name',
+        'mine',
+        '--model-scale',
         '2',
       ]),
     ).toMatchObject({
-      kind: 'run',
-      options: { model: 'animevideov3', scale: 2 },
+      options: { customModel: { directory: 'models', name: 'mine', scale: 2 } },
     })
+  })
+
+  it('needs --model-path for --model-name', () => {
+    expect(() =>
+      upscaleCommand.parse(['in', 'out', '--model-name', 'mine']),
+    ).toThrow(CliUsageError)
   })
 
   it('rejects unknown options with its own usage', () => {
@@ -36,9 +95,33 @@ describe('upscale', () => {
 })
 
 describe('models', () => {
-  it('takes no arguments', () => {
-    expect(modelsCommand.parse([])).toEqual({ kind: 'run', options: {} })
+  it('lists by default and installs named models on request', () => {
+    expect(modelsCommand.parse([])).toEqual({
+      kind: 'run',
+      options: { installAll: false },
+    })
+    expect(
+      modelsCommand.parse([
+        '--category',
+        'descreen',
+        '--install',
+        'realcugan',
+        '--install',
+        'remacri-4x',
+      ]),
+    ).toMatchObject({
+      options: { category: 'descreen', install: ['realcugan', 'remacri-4x'] },
+    })
+  })
+
+  it('rejects positional arguments, unknown models and conflicting installs', () => {
     expect(() => modelsCommand.parse(['extra'])).toThrow(CliUsageError)
+    expect(() => modelsCommand.parse(['--install', 'nope'])).toThrow(
+      ImageOptionsError,
+    )
+    expect(() =>
+      modelsCommand.parse(['--install', 'realcugan', '--install-all']),
+    ).toThrow(ImageOptionsError)
   })
 })
 

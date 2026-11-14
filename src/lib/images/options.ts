@@ -1,12 +1,6 @@
 import { z } from 'zod'
 
 import { ImageOptionsError } from './errors.ts'
-import {
-  DEFAULT_UPSCALE_MODEL,
-  DEFAULT_UPSCALE_SCALE,
-  upscaleModelNameSchema,
-  upscaleScaleSchema,
-} from './upscale-models.ts'
 
 export const IMAGE_FORMATS = ['webp', 'avif', 'jpeg', 'png'] as const
 export const DEFAULT_WIDTHS: readonly number[] = [480, 768, 1280, 1920]
@@ -75,14 +69,6 @@ export const compressOptionsSchema = baseOptionsSchema.extend({
 export type CompressOptionsInput = z.input<typeof compressOptionsSchema>
 export type CompressOptions = z.output<typeof compressOptionsSchema>
 
-export const upscaleOptionsSchema = baseOptionsSchema.extend({
-  destination: pathSchema,
-  model: upscaleModelNameSchema.default(DEFAULT_UPSCALE_MODEL),
-  scale: upscaleScaleSchema.default(DEFAULT_UPSCALE_SCALE),
-})
-export type UpscaleOptionsInput = z.input<typeof upscaleOptionsSchema>
-export type UpscaleOptions = z.output<typeof upscaleOptionsSchema>
-
 export function parseWithSchema<TSchema extends z.ZodType>(
   schema: TSchema,
   input: unknown,
@@ -103,8 +89,4 @@ export function parseBuildOptions(input: unknown): BuildOptions {
 
 export function parseCompressOptions(input: unknown): CompressOptions {
   return parseWithSchema(compressOptionsSchema, input)
-}
-
-export function parseUpscaleOptions(input: unknown): UpscaleOptions {
-  return parseWithSchema(upscaleOptionsSchema, input)
 }

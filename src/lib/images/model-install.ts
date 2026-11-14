@@ -1,21 +1,16 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { ModelChecksumError, ModelDownloadError } from './errors.ts'
-import {
-  MODEL_SOURCE_URL,
-  UPSCALE_MODELS,
-  modelFilesDirectory,
-} from './upscale-models.ts'
-import type { ModelFile, UpscaleModelName } from './upscale-models.ts'
+import { modelDirectory } from './upscale-models.ts'
+import type { PinnedFile, PinnedModel } from './upscale-models.ts'
 
 export type Fetcher = (url: string) => Promise<Response>
 
 export interface InstallModelFilesOptions {
   directory: string
-  baseUrl: string
-  files: readonly ModelFile[]
+  files: readonly PinnedFile[]
   fetch?: Fetcher
 }
 
@@ -67,7 +62,7 @@ async function writeAtomically(file: string, data: Uint8Array): Promise<void> {
 }
 
 async function installFile(
-  file: ModelFile,
+  file: PinnedFile,
   options: InstallModelFilesOptions,
   fetcher: Fetcher,
 ): Promise<InstalledModelFile> {
@@ -76,7 +71,7 @@ async function installFile(
   if (existing && sha256(existing) === file.sha256) {
     return { file: target, downloaded: false }
   }
-  const url = new URL(file.name, options.baseUrl).href
+  const { url } = file
   const data = await download(url, fetcher)
   const actual = sha256(data)
   if (actual !== file.sha256) {
@@ -99,16 +94,46 @@ export async function installModelFiles(
   return results
 }
 
-/** Installs the named upscale models under `modelsRoot` in the layout `opencomic-ai-bin` expects. */
-export async function installUpscaleModels(
+/** Ensures every file of each model is present under `modelsRoot` with its pinned checksum. */
+export async function installModels(
   modelsRoot: string,
-  names: readonly UpscaleModelName[],
+  models: readonly PinnedModel[],
 ): Promise<InstalledModelFile[]> {
-  const files: ModelFile[] = []
-  for (const name of names) files.push(...UPSCALE_MODELS[name].files)
-  return installModelFiles({
-    directory: modelFilesDirectory(modelsRoot),
-    baseUrl: MODEL_SOURCE_URL,
-    files,
-  })
+  const results: InstalledModelFile[] = []
+  for (const model of models) {
+    const installed = await installModelFiles({
+      directory: modelDirectory(modelsRoot, model),
+      files: model.files,
+    })
+    results.push(...installed)
+  }
+  return results
+}
+
+export type ModelInstallState = 'installed' | 'partial' | 'missing'
+
+async function sizeOf(file: string): Promise<number | undefined> {
+  try {
+    return (await stat(file)).size
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return undefined
+    }
+    throw error
+  }
+}
+
+/** A quick check by file presence and size; checksums are verified when a model is installed or used. */
+export async function modelInstallState(
+  modelsRoot: string,
+  model: PinnedModel,
+): Promise<ModelInstallState> {
+  const directory = modelDirectory(modelsRoot, model)
+  let present = 0
+  for (const file of model.files) {
+    if ((await sizeOf(path.join(directory, file.name))) === file.bytes)
+      present++
+  }
+  if (present === model.files.length) return 'installed'
+  return present === 0 ? 'missing' : 'partial'
 }

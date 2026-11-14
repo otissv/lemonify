@@ -7,15 +7,24 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTempDir, listFiles, removeDir } from '@/test/image-fixtures.ts'
 
 import { ModelChecksumError, ModelDownloadError } from './errors.ts'
-import { installModelFiles } from './model-install.ts'
+import { installModelFiles, modelInstallState } from './model-install.ts'
 import type { Fetcher } from './model-install.ts'
-import { UPSCALE_MODELS, modelFilesDirectory } from './upscale-models.ts'
+import { modelManifest } from './upscale-models.ts'
+import type { PinnedFile, PinnedModel } from './upscale-models.ts'
 
-const BASE_URL = 'https://models.test/upscale/'
-const SHA256_PATTERN = /^[0-9a-f]{64}$/
+const URL_BASE = 'https://models.test/'
 
 function sha256(data: string): string {
   return createHash('sha256').update(data).digest('hex')
+}
+
+function pinned(name: string, content: string): PinnedFile {
+  return {
+    name,
+    url: `${URL_BASE}${name}`,
+    sha256: sha256(content),
+    bytes: Buffer.byteLength(content),
+  }
 }
 
 function fakeFetch(bodies: Readonly<Partial<Record<string, string>>>): {
@@ -44,12 +53,11 @@ describe('installModelFiles', () => {
   })
 
   it('downloads missing files after verifying their checksums', async () => {
-    const { fetcher } = fakeFetch({ [`${BASE_URL}a.bin`]: 'weights' })
+    const { fetcher } = fakeFetch({ [`${URL_BASE}a.bin`]: 'weights' })
 
     const results = await installModelFiles({
       directory,
-      baseUrl: BASE_URL,
-      files: [{ name: 'a.bin', sha256: sha256('weights') }],
+      files: [pinned('a.bin', 'weights')],
       fetch: fetcher,
     })
 
@@ -67,8 +75,7 @@ describe('installModelFiles', () => {
 
     const results = await installModelFiles({
       directory,
-      baseUrl: BASE_URL,
-      files: [{ name: 'a.bin', sha256: sha256('weights') }],
+      files: [pinned('a.bin', 'weights')],
       fetch: fetcher,
     })
 
@@ -78,12 +85,11 @@ describe('installModelFiles', () => {
 
   it('replaces a corrupted file', async () => {
     await writeFile(path.join(directory, 'a.bin'), 'truncated')
-    const { fetcher } = fakeFetch({ [`${BASE_URL}a.bin`]: 'weights' })
+    const { fetcher } = fakeFetch({ [`${URL_BASE}a.bin`]: 'weights' })
 
     await installModelFiles({
       directory,
-      baseUrl: BASE_URL,
-      files: [{ name: 'a.bin', sha256: sha256('weights') }],
+      files: [pinned('a.bin', 'weights')],
       fetch: fetcher,
     })
 
@@ -93,13 +99,12 @@ describe('installModelFiles', () => {
   })
 
   it('rejects a download whose checksum does not match and writes nothing', async () => {
-    const { fetcher } = fakeFetch({ [`${BASE_URL}a.bin`]: 'tampered' })
+    const { fetcher } = fakeFetch({ [`${URL_BASE}a.bin`]: 'tampered' })
 
     await expect(
       installModelFiles({
         directory,
-        baseUrl: BASE_URL,
-        files: [{ name: 'a.bin', sha256: sha256('weights') }],
+        files: [pinned('a.bin', 'weights')],
         fetch: fetcher,
       }),
     ).rejects.toThrow(ModelChecksumError)
@@ -111,26 +116,57 @@ describe('installModelFiles', () => {
 
     const install = installModelFiles({
       directory,
-      baseUrl: BASE_URL,
-      files: [{ name: 'a.bin', sha256: sha256('weights') }],
+      files: [pinned('a.bin', 'weights')],
       fetch: fetcher,
     })
 
     await expect(install).rejects.toThrow(ModelDownloadError)
-    await expect(install).rejects.toThrow(`${BASE_URL}a.bin`)
+    await expect(install).rejects.toThrow(`${URL_BASE}a.bin`)
     await expect(install).rejects.toThrow('404')
   })
 })
 
-describe('UPSCALE_MODELS', () => {
-  it.each(Object.entries(UPSCALE_MODELS))(
-    '%s pins a SHA-256 for every .param and .bin pair',
+describe('modelInstallState', () => {
+  let root = ''
+  const model: PinnedModel = {
+    name: 'demo',
+    source: 'opencomic',
+    category: 'upscale',
+    description: 'Demo',
+    directory: 'upscale/models',
+    scales: [4],
+    noise: null,
+    files: [pinned('demo.param', 'p'), pinned('demo.bin', 'weights')],
+  }
+
+  beforeEach(async () => {
+    root = await createTempDir('model-state')
+  })
+
+  afterEach(async () => {
+    await removeDir(root)
+  })
+
+  it('is missing, partial or installed by file presence and size', async () => {
+    expect(await modelInstallState(root, model)).toBe('missing')
+    const folder = path.join(root, 'upscale', 'models')
+    await installModelFiles({
+      directory: folder,
+      files: [model.files[0]],
+      fetch: fakeFetch({ [`${URL_BASE}demo.param`]: 'p' }).fetcher,
+    })
+    expect(await modelInstallState(root, model)).toBe('partial')
+    await writeFile(path.join(folder, 'demo.bin'), 'weights')
+    expect(await modelInstallState(root, model)).toBe('installed')
+  })
+})
+
+describe('the pinned manifest', () => {
+  it.each(modelManifest().models.map((model) => [model.name, model] as const))(
+    '%s pins a .param and .bin pair for every file',
     (_name, model) => {
       const names: string[] = []
-      for (const file of model.files) {
-        expect(file.sha256).toMatch(SHA256_PATTERN)
-        names.push(file.name)
-      }
+      for (const file of model.files) names.push(file.name)
       for (const name of names) {
         const pair = name.endsWith('.bin')
           ? name.replace(/\.bin$/, '.param')
@@ -139,10 +175,4 @@ describe('UPSCALE_MODELS', () => {
       }
     },
   )
-
-  it('stores model files where opencomic-ai-bin looks for them', () => {
-    expect(modelFilesDirectory('/root')).toBe(
-      path.join('/root', 'upscale', 'models'),
-    )
-  })
 })

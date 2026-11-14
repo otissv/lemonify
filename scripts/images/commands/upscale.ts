@@ -1,53 +1,63 @@
 import path from 'node:path'
 
 import { displayPath } from '../../../src/lib/images/display-path.ts'
-import {
-  parseUpscaleOptions,
-  upscaleOptionsSchema,
-} from '../../../src/lib/images/options.ts'
-import type { UpscaleOptions } from '../../../src/lib/images/options.ts'
 import { upscaleImages } from '../../../src/lib/images/upscale.ts'
 import type { UpscaleResult } from '../../../src/lib/images/upscale.ts'
 import {
+  parseUpscaleOptions,
+  resolveModel,
+  upscaleOptionsSchema,
+} from '../../../src/lib/images/upscale-options.ts'
+import type { UpscaleOptions } from '../../../src/lib/images/upscale-options.ts'
+import {
   DEFAULT_UPSCALE_MODEL,
-  DEFAULT_UPSCALE_SCALE,
   MODELS_ROOT,
-  UPSCALE_MODELS,
-  UPSCALE_MODEL_NAMES,
-  UPSCALE_SCALES,
 } from '../../../src/lib/images/upscale-models.ts'
 import {
   CliUsageError,
   PROGRAM,
   defineCommand,
   parseCliArgs,
+  readJsonArgument,
   toNumber,
 } from '../cli.ts'
 import type { ArgsOptions, ParsedCommand } from '../cli.ts'
 
-const MODEL_INDENT = ' '.repeat(23)
-
-function describeModels(): string {
-  const lines: string[] = []
-  for (const name of UPSCALE_MODEL_NAMES) {
-    lines.push(`${MODEL_INDENT}${name}: ${UPSCALE_MODELS[name].description}`)
-  }
-  return lines.join('\n')
-}
-
 const USAGE = `Usage: ${PROGRAM} upscale <source> <destination> [options]
 
-Upscales <source> (a file or folder) with AI models on the GPU (Vulkan, via
-Upscayl) and writes the results into <destination>, keeping names and
-formats. The destination is created if missing. The chosen model is
-downloaded and verified on first use. AVIF sources are not supported.
+Upscales or restores <source> (a file or folder) with an AI model on the GPU
+(Vulkan, via Upscayl) and writes the results into <destination>, keeping
+names. Any format Sharp reads is accepted; EXIF orientation is applied first.
+The chosen model is downloaded and verified on first use.
 
-Options:
-  --model <name>       ${UPSCALE_MODEL_NAMES.join(' | ')} (default ${DEFAULT_UPSCALE_MODEL})
-${describeModels()}
-  --scale <factor>     ${UPSCALE_SCALES.join(' | ')} (default ${DEFAULT_UPSCALE_SCALE})
-  --recursive          Include subfolders and keep their structure
-  -h, --help           Show this help`
+Upscayl does only the AI step. Output format, exact size, quality and
+metadata come from --ops, the same Sharp ops as \`${PROGRAM} sharp\`.
+
+Model:
+  --model <name>         Catalogue model (default ${DEFAULT_UPSCALE_MODEL}).
+                         \`${PROGRAM} models\` lists all of them.
+  --model-path <dir>     Use your own ncnn model from this folder instead…
+  --model-name <name>    …loading <name>.param and <name>.bin
+  --model-scale <n>      …which upscales by this factor
+  --scale <n>            One of the model's scales (default: its largest)
+  --noise <-1..3>        Denoise level, for models that offer it
+  --iterations <1-3>     Run the model again on its own output (default 1)
+
+Performance:
+  --tile-size <px>       Tile size, at least 32; 0 = auto (default auto)
+  --max-tile-size <px>   Cap for the automatic tile size
+  --memory-percent <n>   Share of GPU memory auto tiling may plan for (1-100)
+  --gpu <id>             auto, a device index, or 0,1 for several GPUs
+  --threads <n>          Worker threads for load, process and save
+  --tta                  Test-time augmentation: slower, slightly better
+  --fp32                 Force 32-bit floating point inference
+
+Output:
+  --ops <json>           Sharp ops for the upscaled image (inline JSON,
+                         @file.json, or - for stdin), e.g.
+                         '[{"op":"resize","width":2000},{"op":"avif","quality":60}]'
+  --recursive            Include subfolders and keep their structure
+  -h, --help             Show this help`
 
 const POSITIONALS = 2
 
@@ -56,11 +66,47 @@ const ARGS = {
   strict: true,
   options: {
     model: { type: 'string' },
+    'model-path': { type: 'string' },
+    'model-name': { type: 'string' },
+    'model-scale': { type: 'string' },
     scale: { type: 'string' },
+    noise: { type: 'string' },
+    iterations: { type: 'string' },
+    'tile-size': { type: 'string' },
+    'max-tile-size': { type: 'string' },
+    'memory-percent': { type: 'string' },
+    gpu: { type: 'string' },
+    threads: { type: 'string' },
+    tta: { type: 'boolean' },
+    fp32: { type: 'boolean' },
+    ops: { type: 'string' },
     recursive: { type: 'boolean' },
     help: { type: 'boolean', short: 'h' },
   },
 } as const satisfies ArgsOptions
+
+type Values = ReturnType<typeof parseCliArgs<typeof ARGS>>['values']
+
+function customModel(values: Values): unknown {
+  const directory = values['model-path']
+  if (directory === undefined) {
+    if (
+      values['model-name'] !== undefined ||
+      values['model-scale'] !== undefined
+    ) {
+      throw new CliUsageError(
+        '--model-name and --model-scale need --model-path.',
+        USAGE,
+      )
+    }
+    return undefined
+  }
+  return {
+    directory,
+    name: values['model-name'],
+    scale: toNumber(values['model-scale']),
+  }
+}
 
 function parse(argv: readonly string[]): ParsedCommand<UpscaleOptions> {
   const { values, positionals } = parseCliArgs(ARGS, argv, USAGE)
@@ -72,16 +118,31 @@ function parse(argv: readonly string[]): ParsedCommand<UpscaleOptions> {
   const options = parseUpscaleOptions({
     source,
     destination,
-    model: values.model,
-    scale: toNumber(values.scale),
     recursive: values.recursive,
+    model: values.model,
+    customModel: customModel(values),
+    scale: toNumber(values.scale),
+    noise: toNumber(values.noise),
+    iterations: toNumber(values.iterations),
+    tileSize: toNumber(values['tile-size']),
+    maxTileSize: toNumber(values['max-tile-size']),
+    memorySafePercentage: toNumber(values['memory-percent']),
+    gpuId: values.gpu,
+    threads: toNumber(values.threads),
+    tta: values.tta,
+    fp32: values.fp32,
+    ops:
+      values.ops === undefined
+        ? undefined
+        : readJsonArgument(values.ops, '--ops', USAGE),
   })
   return { kind: 'run', options }
 }
 
 interface UpscaleRun {
-  model: UpscaleOptions['model']
-  scale: UpscaleOptions['scale']
+  model: string
+  scale: number
+  iterations: number
   images: UpscaleResult[]
 }
 
@@ -89,12 +150,16 @@ interface UpscaleRun {
 async function run(options: UpscaleOptions): Promise<UpscaleRun> {
   const { createUpscaylEngine } =
     await import('../../../src/lib/images/upscayl-engine.ts')
-  const engine = await createUpscaylEngine(path.resolve(MODELS_ROOT), [
-    options.model,
-  ])
+  const { model, scale } = resolveModel(options)
+  const engine = await createUpscaylEngine(
+    path.resolve(MODELS_ROOT),
+    model,
+    scale,
+  )
   try {
     const images = await upscaleImages(options, engine.upscale)
-    return { model: options.model, scale: options.scale, images }
+    const name = model.kind === 'pinned' ? model.model.name : model.name
+    return { model: name, scale, iterations: options.iterations, images }
   } finally {
     engine.close()
   }
@@ -105,15 +170,16 @@ function format(result: UpscaleRun): string {
   for (const image of result.images) {
     lines.push(`${displayPath(image.output)}: ${image.width}x${image.height}`)
   }
+  const passes = result.iterations > 1 ? `, ${result.iterations} passes` : ''
   lines.push(
-    `Upscaled ${result.images.length} images ${result.scale}x with ${result.model}`,
+    `Upscaled ${result.images.length} images ${result.scale}x with ${result.model}${passes}`,
   )
   return lines.join('\n')
 }
 
 export const upscaleCommand = defineCommand({
   name: 'upscale',
-  summary: 'Upscale images with AI models on the GPU (Upscayl)',
+  summary: 'Upscale or restore images with AI models on the GPU (Upscayl)',
   usage: USAGE,
   schema: upscaleOptionsSchema,
   parse,
