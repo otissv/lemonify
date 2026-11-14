@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import sharp from 'sharp'
 
+import { refuseDryRun } from './dry-run.ts'
 import { UpscaleTargetError } from './errors.ts'
 import { mirroredPath } from './plan.ts'
 import { readableExtensions } from './sharp/capabilities.ts'
@@ -53,7 +54,8 @@ export interface UpscaleResult {
 
 type PassSettings = Omit<AiPass, 'input' | 'output'>
 
-interface UpscaleJob {
+/** One source and the file its upscaled result is written to. */
+export interface UpscaleJob {
   source: string
   output: string
 }
@@ -143,24 +145,33 @@ function passSettings(options: UpscaleOptions): PassSettings {
   }
 }
 
-/**
- * Upscales an image or folder into `destination`: each source is made
- * readable for `upscayl-bin` (converted and oriented when needed), run
- * through the model `iterations` times, then written through the Sharp
- * `ops`, which decide the output format, size and metadata.
- */
-export async function upscaleImages(
-  input: UpscaleOptionsInput,
-  engine: UpscaleEngine,
-): Promise<UpscaleResult[]> {
-  const options = parseUpscaleOptions(input)
+/** The sources of a validated upscale and their outputs, refusing an output over its source. */
+export async function planUpscaleJobs(
+  options: UpscaleOptions,
+): Promise<UpscaleJob[]> {
   const destination = path.resolve(options.destination)
   const sources = await collectSources(path.resolve(options.source), {
     recursive: options.recursive,
     exclude: destination,
     extensions: readableExtensions(),
   })
-  const jobs = planJobs(sources.files, sources.root, destination, options.ops)
+  return planJobs(sources.files, sources.root, destination, options.ops)
+}
+
+/**
+ * Upscales an image or folder into `destination`: each source is made
+ * readable for `upscayl-bin` (converted and oriented when needed), run
+ * through the model `iterations` times, then written through the Sharp
+ * `ops`, which decide the output format, size and metadata. Refuses
+ * `dryRun`; use `planUpscale` for that.
+ */
+export async function upscaleImages(
+  input: UpscaleOptionsInput,
+  engine: UpscaleEngine,
+): Promise<UpscaleResult[]> {
+  const options = parseUpscaleOptions(input)
+  refuseDryRun(options.dryRun, 'planUpscale')
+  const jobs = await planUpscaleJobs(options)
   const settings = passSettings(options)
   const results: UpscaleResult[] = []
   for (const job of jobs)

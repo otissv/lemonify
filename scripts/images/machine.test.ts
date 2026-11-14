@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -181,6 +181,18 @@ describe('sharp command flags', () => {
     })
   })
 
+  it('maps --dry-run', () => {
+    expect(
+      sharpCommand.parse([
+        '--input',
+        'a.png',
+        '--output',
+        'b.png',
+        '--dry-run',
+      ]),
+    ).toMatchObject({ options: { dryRun: true } })
+  })
+
   it('maps --in-place without an output', () => {
     expect(
       sharpCommand.parse(['--input', 'photos', '--in-place', 'ifSmaller']),
@@ -238,5 +250,62 @@ describe('schema command', () => {
 
   it('rejects an unknown command name', () => {
     expect(() => schemaCommand.resolve(['nope'])).toThrow(ImageOptionsError)
+  })
+})
+
+describe('--dry-run output', () => {
+  let directory = ''
+
+  beforeEach(async () => {
+    directory = await mkdtemp(path.join(tmpdir(), 'lemonify-dry-run-'))
+  })
+
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    await rm(directory, { recursive: true, force: true })
+  })
+
+  it('prints the plan for sharp and writes nothing', async () => {
+    const output = path.join(directory, 'blank.png')
+    const stdout = captureStdout()
+
+    await sharpCommand.execute(
+      [
+        '--output',
+        output,
+        '--options',
+        '{"create":{"width":2,"height":2,"channels":3,"background":"#000"}}',
+        '--dry-run',
+      ],
+      { json: false },
+    )
+
+    expect(stdout.output()).toContain('Would write 1 file, read 0')
+    await expect(access(output)).rejects.toThrow()
+  })
+
+  it('prints the plan as JSON', async () => {
+    const output = path.join(directory, 'blank.png')
+    const stdout = captureStdout()
+
+    await sharpCommand.execute(
+      [
+        '--output',
+        output,
+        '--options',
+        '{"create":{"width":2,"height":2,"channels":3,"background":"#000"}}',
+        '--dry-run',
+      ],
+      { json: true },
+    )
+
+    expect(JSON.parse(stdout.output())).toEqual({
+      command: 'sharp',
+      result: {
+        dryRun: true,
+        reads: [],
+        writes: [{ file: output, source: null, kind: 'file', exists: false }],
+      },
+    })
   })
 })

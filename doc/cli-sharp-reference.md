@@ -19,6 +19,7 @@ The top level of a job, as passed with `--job`. The CLI flags map onto these fie
 | `formatOptions` | object, see Format options  |          |         |                                                                          |
 | `settings`      | object, see Settings        |          |         |                                                                          |
 | `recursive`     | boolean                     |          | `false` | When input is a folder, include subfolders                               |
+| `dryRun`        | boolean                     |          | `false` | List every file the job would read and write, writing nothing            |
 
 ## Input options (`options`, `--options`)
 

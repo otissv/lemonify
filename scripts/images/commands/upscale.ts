@@ -3,6 +3,8 @@ import path from 'node:path'
 import { displayPath } from '../../../src/lib/images/display-path.ts'
 import { upscaleImages } from '../../../src/lib/images/upscale.ts'
 import type { UpscaleResult } from '../../../src/lib/images/upscale.ts'
+import { planUpscale } from '../../../src/lib/images/upscale-plan.ts'
+import type { UpscalePlan } from '../../../src/lib/images/upscale-plan.ts'
 import {
   parseUpscaleOptions,
   resolveModel,
@@ -22,6 +24,7 @@ import {
   toNumber,
 } from '../cli.ts'
 import type { ArgsOptions, ParsedCommand } from '../cli.ts'
+import { formatWritePlan } from '../plan-format.ts'
 
 const USAGE = `Usage: ${PROGRAM} upscale <source> <destination> [options]
 
@@ -57,6 +60,10 @@ Output:
                          @file.json, or - for stdin), e.g.
                          '[{"op":"resize","width":2000},{"op":"avif","quality":60}]'
   --recursive            Include subfolders and keep their structure
+  --dry-run              List every file the upscale would read and write,
+                         with upscaled sizes and whether the model is
+                         installed; runs no model, downloads nothing, needs
+                         no GPU
   -h, --help             Show this help`
 
 const POSITIONALS = 2
@@ -79,6 +86,7 @@ const ARGS = {
     threads: { type: 'string' },
     tta: { type: 'boolean' },
     fp32: { type: 'boolean' },
+    'dry-run': { type: 'boolean' },
     ops: { type: 'string' },
     recursive: { type: 'boolean' },
     help: { type: 'boolean', short: 'h' },
@@ -131,6 +139,7 @@ function parse(argv: readonly string[]): ParsedCommand<UpscaleOptions> {
     threads: toNumber(values.threads),
     tta: values.tta,
     fp32: values.fp32,
+    dryRun: values['dry-run'],
     ops:
       values.ops === undefined
         ? undefined
@@ -147,7 +156,7 @@ interface UpscaleRun {
 }
 
 /** The Upscayl engine is loaded only here, so other commands never load `opencomic-ai-bin`. */
-async function run(options: UpscaleOptions): Promise<UpscaleRun> {
+async function upscale(options: UpscaleOptions): Promise<UpscaleRun> {
   const { createUpscaylEngine } =
     await import('../../../src/lib/images/upscayl-engine.ts')
   const { model, scale } = resolveModel(options)
@@ -165,7 +174,22 @@ async function run(options: UpscaleOptions): Promise<UpscaleRun> {
   }
 }
 
-function format(result: UpscaleRun): string {
+function run(options: UpscaleOptions): Promise<UpscaleRun | UpscalePlan> {
+  if (options.dryRun) return planUpscale(options, path.resolve(MODELS_ROOT))
+  return upscale(options)
+}
+
+function formatPlan(plan: UpscalePlan): string {
+  const passes = plan.iterations > 1 ? `, ${plan.iterations} passes` : ''
+  const header = `${plan.model} at ${plan.scale}x${passes}; model ${plan.modelStatus}`
+  const body = formatWritePlan(
+    plan,
+    (write) => `upscaled to ${write.upscaledWidth}x${write.upscaledHeight}`,
+  )
+  return `${header}\n${body}`
+}
+
+function formatRun(result: UpscaleRun): string {
   const lines: string[] = []
   for (const image of result.images) {
     lines.push(`${displayPath(image.output)}: ${image.width}x${image.height}`)
@@ -175,6 +199,10 @@ function format(result: UpscaleRun): string {
     `Upscaled ${result.images.length} images ${result.scale}x with ${result.model}${passes}`,
   )
   return lines.join('\n')
+}
+
+function format(outcome: UpscaleRun | UpscalePlan): string {
+  return 'dryRun' in outcome ? formatPlan(outcome) : formatRun(outcome)
 }
 
 export const upscaleCommand = defineCommand({

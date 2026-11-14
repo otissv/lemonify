@@ -20,6 +20,7 @@ describe('parseUpscaleOptions', () => {
       tta: false,
       fp32: false,
       ops: [],
+      dryRun: false,
     })
   })
 

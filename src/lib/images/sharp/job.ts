@@ -3,7 +3,10 @@ import sharp from 'sharp'
 
 import { createManifest, writeManifest } from '../manifest.ts'
 import type { ManifestSource } from '../manifest.ts'
+import { refuseDryRun } from '../dry-run.ts'
+import type { WritePlan } from '../dry-run.ts'
 import { parseWithSchema } from '../validation.ts'
+import { planValidatedSharpJob } from './job-dry-run.ts'
 import { planTasks } from './job-plan.ts'
 import type {
   FileTask,
@@ -79,11 +82,17 @@ function runSingle(
     : writeInPlaceTask(task, job)
 }
 
-/** Validates and runs a Sharp job; folder inputs produce one result per image. */
+/** Validates a Sharp job and lists every file it would read and write, writing nothing. */
+export async function planSharpJob(input: SharpJobInput): Promise<WritePlan> {
+  return planValidatedSharpJob(parseWithSchema(sharpJobSchema, input))
+}
+
+/** Validates and runs a Sharp job; folder inputs produce one result per image. Refuses `dryRun`. */
 export async function runSharpJob(
   input: SharpJobInput,
 ): Promise<SharpJobResult[]> {
   const job = parseWithSchema(sharpJobSchema, input)
+  refuseDryRun(job.dryRun, 'planSharpJob')
   applySettings(job.settings)
   const { single, variants } = splitTasks(await planTasks(job))
   if (job.variants) return runVariants(variants, job, job.variants)

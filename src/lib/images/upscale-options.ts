@@ -77,6 +77,12 @@ export const upscaleOptionsSchema = z
       .describe(
         'Sharp ops applied to the upscaled image, as for `pnpm images sharp`',
       ),
+    dryRun: z
+      .boolean()
+      .default(false)
+      .describe(
+        'List every file the upscale would read and write, writing nothing and needing no GPU',
+      ),
   })
   .superRefine((options, context) => {
     for (const message of modelProblems(options)) {

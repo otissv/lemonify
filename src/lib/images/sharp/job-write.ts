@@ -142,19 +142,41 @@ async function renderPixels(
   )
 }
 
-async function writeVariant(
-  task: VariantTask,
-  job: SharpJob,
-  data: Buffer,
-  width: number,
-): Promise<SharpJobOutput> {
-  const file = variantPath({
+function variantFile(task: VariantTask, width: number): string {
+  return variantPath({
     sourceFile: task.source,
     sourceRoot: task.root,
     destination: task.destination,
     width,
     extension: task.extension,
   })
+}
+
+/** The variant files a task would write, sized from the image the pixel ops produce. Writes nothing. */
+export async function plannedVariantFiles(
+  task: VariantTask,
+  job: SharpJob,
+  widths: readonly number[],
+): Promise<string[]> {
+  const pixels = applySharpOps(openInput(task.source, job), job.ops, 'pixels')
+  const { info } = await guard(
+    pixels.raw().toBuffer({ resolveWithObject: true }),
+    task.source,
+    task.destination,
+  )
+  const files: string[] = []
+  for (const width of planWidths(info.width, widths))
+    files.push(variantFile(task, width))
+  return files
+}
+
+async function writeVariant(
+  task: VariantTask,
+  job: SharpJob,
+  data: Buffer,
+  width: number,
+): Promise<SharpJobOutput> {
+  const file = variantFile(task, width)
   const resized = sharp(data, { pages: -1, limitInputPixels: false }).resize({
     width,
   })

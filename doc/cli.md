@@ -138,6 +138,7 @@ The ops are not a script that runs step by step. Sharp builds one libvips pipeli
 | `--options <json>`        | Input options, as passed to `sharp(input, options)`: `create`, `text`, `join`, `raw`, `density`, `pages`, `page`, `animated`, `failOn`, `limitInputPixels`, `autoOrient` and the rest       |
 | `--settings <json>`       | Process settings: `concurrency`, `cache`, `simd`, `block`, `unblock`                                                                                                                        |
 | `--recursive`             | Include subfolders of a folder input                                                                                                                                                        |
+| `--dry-run`               | List every file the job would read and write, and which already exist, without writing anything                                                                                             |
 
 The ops cover these groups of Sharp methods:
 
@@ -227,24 +228,25 @@ pnpm images info ./photos --recursive --stats --json
 
 `upscale` runs an AI model over each source and writes the results into the destination, keeping file names. It accepts any format Sharp reads, and applies the EXIF orientation before upscaling so portrait photos come out the right way up. The chosen model is downloaded and verified on first use. As described in [How it fits together](#how-it-fits-together), `upscayl-bin` only does the AI step: the output format, exact size, quality and metadata come from `--ops`, which takes the same ops as the `sharp` command. Without `--ops`, each output is written in the same format as its source.
 
-| Option                     | Default             | Meaning                                                            |
-| -------------------------- | ------------------- | ------------------------------------------------------------------ |
-| `--model <name>`           | `4x_NMKD-Siax_200k` | A model from the catalogue; see `pnpm images models`               |
-| `--model-path <dir>`       | none                | Use your own ncnn model from this folder…                          |
-| `--model-name <name>`      | none                | …loading `<name>.param` and `<name>.bin`…                          |
-| `--model-scale <n>`        | none                | …which upscales by this factor                                     |
-| `--scale <n>`              | the model's largest | One of the scales the model offers                                 |
-| `--noise <-1..3>`          | the model's default | Denoise level, for models that have one                            |
-| `--iterations <1-3>`       | `1`                 | Run the model again on its own output (Upscayl's "double upscayl") |
-| `--tile-size <px>`         | auto                | Tile size, at least 32; `0` means auto                             |
-| `--max-tile-size <px>`     | `2048`              | Upper limit for the automatic tile size                            |
-| `--memory-percent <1-100>` | `50`                | Share of GPU memory automatic tiling may plan for                  |
-| `--gpu <id>`               | `auto`              | A device index, or a list such as `0,1` for several GPUs           |
-| `--threads <n>`            | binary default      | Worker threads for loading, processing and saving                  |
-| `--tta`                    | off                 | Test-time augmentation: about 8× slower, slightly better results   |
-| `--fp32`                   | off                 | Force 32-bit floating-point inference                              |
-| `--ops <json>`             | none                | Sharp ops applied to the upscaled image                            |
-| `--recursive`              | off                 | Include subfolders and keep their structure                        |
+| Option                     | Default             | Meaning                                                                                                                                               |
+| -------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--model <name>`           | `4x_NMKD-Siax_200k` | A model from the catalogue; see `pnpm images models`                                                                                                  |
+| `--model-path <dir>`       | none                | Use your own ncnn model from this folder…                                                                                                             |
+| `--model-name <name>`      | none                | …loading `<name>.param` and `<name>.bin`…                                                                                                             |
+| `--model-scale <n>`        | none                | …which upscales by this factor                                                                                                                        |
+| `--scale <n>`              | the model's largest | One of the scales the model offers                                                                                                                    |
+| `--noise <-1..3>`          | the model's default | Denoise level, for models that have one                                                                                                               |
+| `--iterations <1-3>`       | `1`                 | Run the model again on its own output (Upscayl's "double upscayl")                                                                                    |
+| `--tile-size <px>`         | auto                | Tile size, at least 32; `0` means auto                                                                                                                |
+| `--max-tile-size <px>`     | `2048`              | Upper limit for the automatic tile size                                                                                                               |
+| `--memory-percent <1-100>` | `50`                | Share of GPU memory automatic tiling may plan for                                                                                                     |
+| `--gpu <id>`               | `auto`              | A device index, or a list such as `0,1` for several GPUs                                                                                              |
+| `--threads <n>`            | binary default      | Worker threads for loading, processing and saving                                                                                                     |
+| `--tta`                    | off                 | Test-time augmentation: about 8× slower, slightly better results                                                                                      |
+| `--fp32`                   | off                 | Force 32-bit floating-point inference                                                                                                                 |
+| `--ops <json>`             | none                | Sharp ops applied to the upscaled image                                                                                                               |
+| `--recursive`              | off                 | Include subfolders and keep their structure                                                                                                           |
+| `--dry-run`                | off                 | List the files the upscale would read and write, with upscaled sizes and the model's install state; runs no model, downloads nothing and needs no GPU |
 
 `--scale` and `--noise` are checked against what the chosen model supports, and the error says what is available, so `--scale 8` with a model that offers 2, 3 and 4 fails before anything runs. `--iterations` multiplies the scale with each pass: two passes at 4× give 16×.
 
@@ -279,7 +281,7 @@ pnpm images upscale photo.jpg ./out --model-path ./my-models --model-name my-mod
 
 ## Using the CLI from agents and GUIs
 
-Every command has the same machine interface, built from three parts.
+Every command has the same machine interface, built from three parts, and the commands that write files add a fourth: a dry run.
 
 **`--job <json>`** passes all of a command's options as one JSON object instead of flags. The object has the same shape as the command's schema, so `{"input":"in","output":"out","variants":{"widths":[640,1280]}}` is equivalent to `pnpm images sharp --input in --output out --widths 640,1280`. Like the other JSON options, it accepts inline JSON, `@file.json`, or `-` for standard input, which avoids any shell quoting. When `--job` is used it must be the command's only argument (apart from `--json`).
 
@@ -320,6 +322,32 @@ echo '{"input":"photo.jpg","output":"thumb.webp","ops":[{"op":"resize","width":3
 ```
 
 A `sharp` result has one entry per source, each with an `outputs` array: one output normally, one per width with `--widths`. `sourceBytes` is the size of a single source file (`null` for joined or generated images), and `written` is `false` when `--in-place ifSmaller` kept the original because the result was not smaller.
+
+**`--dry-run`** (or `"dryRun": true` in a job) on `sharp` and `upscale` makes the same checks as a real run, so a job that would fail on validation, clashing output names, a format change in place or an output over its source fails the same way. Instead of writing anything, it reports every file the job would read and write. Each write has a `kind` (`file`, `variant`, `inPlace` or `manifest`) and an `exists` flag that shows which files would be replaced. An `upscale` dry run also gives each output's size after the model passes, before any `--ops`. It reports the model and scale, and whether the model is `installed`, `partial`, `missing` (downloaded on the real run) or `custom`. It runs no model and downloads nothing, so it works without a GPU. A `sharp` dry run with `--widths` runs the pixel ops in memory to learn the image size, so its variant names are exact; everything else reads only file headers. Running a job with `dryRun` through the library's real runners (`runSharpJob`, `upscaleImages`) is refused rather than silently ignored; dry runs go through `planSharpJob` and `planUpscale`.
+
+```bash
+pnpm -s images sharp --input ./photos --in-place ifSmaller --recursive --dry-run --json
+```
+
+```json
+{
+  "command": "sharp",
+  "result": {
+    "dryRun": true,
+    "reads": ["/home/me/project/photos/a.jpg"],
+    "writes": [
+      {
+        "file": "/home/me/project/photos/a.jpg",
+        "source": "/home/me/project/photos/a.jpg",
+        "kind": "inPlace",
+        "exists": true
+      }
+    ]
+  }
+}
+```
+
+A dry run of `--in-place ifSmaller` lists every file it may rewrite; which ones are actually replaced depends on the encoded size, which only a real run knows.
 
 Use `pnpm -s` (silent) when another program reads the output, so pnpm does not print its own header before the JSON.
 

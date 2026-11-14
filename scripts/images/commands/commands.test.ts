@@ -37,6 +37,7 @@ describe('upscale', () => {
         '--ops',
         '[{"op":"webp","quality":80}]',
         '--recursive',
+        '--dry-run',
       ]),
     ).toEqual({
       kind: 'run',
@@ -56,6 +57,7 @@ describe('upscale', () => {
         tta: true,
         fp32: true,
         ops: [{ op: 'webp', quality: 80 }],
+        dryRun: true,
       },
     })
   })

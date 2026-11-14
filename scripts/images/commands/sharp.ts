@@ -1,6 +1,8 @@
 import { displayPath } from '../../../src/lib/images/display-path.ts'
 import { parseWithSchema } from '../../../src/lib/images/validation.ts'
+import type { WritePlan } from '../../../src/lib/images/dry-run.ts'
 import {
+  planSharpJob,
   runSharpJob,
   sharpJobSchema,
 } from '../../../src/lib/images/sharp/job.ts'
@@ -19,6 +21,7 @@ import {
   toNumberList,
 } from '../cli.ts'
 import type { ArgsOptions, ParsedCommand } from '../cli.ts'
+import { formatWritePlan } from '../plan-format.ts'
 
 const OPS_PER_LINE = 6
 const OP_INDENT = '    '
@@ -63,6 +66,8 @@ Options:
                        join, raw, density, pages, animated, failOn, …
   --settings <json>    Process settings: concurrency, cache, simd, block, unblock
   --recursive          Include subfolders of a folder input
+  --dry-run            List every file the job would read and write (and
+                       which already exist) without writing anything
   -h, --help           Show this help
 
 Ops:
@@ -95,6 +100,7 @@ const ARGS = {
     options: { type: 'string' },
     settings: { type: 'string' },
     recursive: { type: 'boolean' },
+    'dry-run': { type: 'boolean' },
     help: { type: 'boolean', short: 'h' },
   },
 } as const satisfies ArgsOptions
@@ -127,6 +133,7 @@ function parse(argv: readonly string[]): ParsedCommand<SharpJob> {
     options: jsonFlag(values.options, '--options'),
     settings: jsonFlag(values.settings, '--settings'),
     recursive: values.recursive,
+    dryRun: values['dry-run'],
   })
   return { kind: 'run', options: job }
 }
@@ -140,7 +147,7 @@ function describeOutput(output: SharpJobOutput): string {
   return `${displayPath(output.file)}: ${parts.join(', ')}`
 }
 
-function format(results: SharpJobResult[]): string {
+function formatResults(results: SharpJobResult[]): string {
   const lines: string[] = []
   let written = 0
   let kept = 0
@@ -159,12 +166,24 @@ function format(results: SharpJobResult[]): string {
   return lines.join('\n')
 }
 
+type SharpOutcome = SharpJobResult[] | WritePlan
+
+function run(job: SharpJob): Promise<SharpOutcome> {
+  return job.dryRun ? planSharpJob(job) : runSharpJob(job)
+}
+
+function format(outcome: SharpOutcome): string {
+  return Array.isArray(outcome)
+    ? formatResults(outcome)
+    : formatWritePlan(outcome)
+}
+
 export const sharpCommand = defineCommand({
   name: 'sharp',
   summary: 'Run any Sharp pipeline (every Sharp operation, as JSON ops)',
   usage: USAGE,
   schema: sharpJobSchema,
   parse,
-  run: runSharpJob,
+  run,
   format,
 })

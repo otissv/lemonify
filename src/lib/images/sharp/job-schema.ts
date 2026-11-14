@@ -85,6 +85,10 @@ const sharpJobShape = z.strictObject({
     .boolean()
     .default(false)
     .describe('When input is a folder, include subfolders'),
+  dryRun: z
+    .boolean()
+    .default(false)
+    .describe('List every file the job would read and write, writing nothing'),
 })
 type SharpJobShape = z.output<typeof sharpJobShape>
 
