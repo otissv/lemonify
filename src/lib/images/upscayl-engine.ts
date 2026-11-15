@@ -94,10 +94,15 @@ export async function createUpscaylEngine(
     registerCustomModel(choice, scale)
   }
 
-  const upscale: UpscaleEngine = async (pass) => {
+  const upscale: UpscaleEngine = async (pass, onProgress) => {
     try {
       await captureUncaughtErrors(() =>
-        OpenComicAI.image(pass.input, pass.output, libraryOptions(pass)),
+        OpenComicAI.image(
+          pass.input,
+          pass.output,
+          libraryOptions(pass),
+          onProgress ?? false,
+        ),
       )
     } catch (error) {
       throw new UpscaleEngineError(pass.input, { cause: error })

@@ -8,7 +8,8 @@ import { UpscaleTargetError } from './errors.ts'
 import { mirroredPath } from './plan.ts'
 import { readableExtensions } from './sharp/capabilities.ts'
 import { SharpOperationError } from './sharp/errors.ts'
-import { applySharpOps, formatExtension } from './sharp/ops.ts'
+import { applySharpOpsBlended } from './sharp/blend-tint.ts'
+import { formatExtension } from './sharp/ops.ts'
 import type { SharpOp } from './sharp/ops.ts'
 import { collectSources } from './sources.ts'
 import { parseUpscaleOptions, resolveModel } from './upscale-options.ts'
@@ -43,7 +44,13 @@ export interface AiPass {
   fp32: boolean
 }
 
-export type UpscaleEngine = (pass: AiPass) => Promise<void>
+/** Called with how much of the work is done, from 0 to 1. */
+export type ProgressListener = (fraction: number) => void
+
+export type UpscaleEngine = (
+  pass: AiPass,
+  onProgress?: ProgressListener,
+) => Promise<void>
 
 export interface UpscaleResult {
   source: string
@@ -101,11 +108,32 @@ async function writeOutput(
 ): Promise<UpscaleResult> {
   await mkdir(path.dirname(job.output), { recursive: true })
   try {
-    const info = await applySharpOps(sharp(upscaled), ops).toFile(job.output)
+    const image = await applySharpOpsBlended(sharp(upscaled), ops)
+    const info = await image.toFile(job.output)
     return { ...job, width: info.width, height: info.height }
   } catch (error) {
     if (error instanceof SharpOperationError) throw error
     throw new SharpOperationError(`Writing ${job.output} failed`, error)
+  }
+}
+
+/** Where one image's run sits in the whole upscale, for progress. */
+interface JobSlot {
+  index: number
+  count: number
+  onProgress?: ProgressListener
+}
+
+function passProgress(
+  slot: JobSlot,
+  pass: number,
+  passes: number,
+): ProgressListener | undefined {
+  const { onProgress } = slot
+  if (!onProgress) return undefined
+  return (fraction) => {
+    const image = (pass + fraction) / passes
+    onProgress((slot.index + image) / slot.count)
   }
 }
 
@@ -114,13 +142,17 @@ async function runJob(
   options: UpscaleOptions,
   settings: PassSettings,
   engine: UpscaleEngine,
+  slot: JobSlot,
 ): Promise<UpscaleResult> {
   const workDir = await mkdtemp(path.join(tmpdir(), 'lemonify-upscale-'))
   try {
     let current = await prepareInput(job.source, workDir)
     for (let pass = 0; pass < options.iterations; pass++) {
       const output = path.join(workDir, `pass-${pass}.png`)
-      await engine({ ...settings, input: current, output })
+      await engine(
+        { ...settings, input: current, output },
+        passProgress(slot, pass, options.iterations),
+      )
       current = output
     }
     return await writeOutput(current, job, options.ops)
@@ -163,18 +195,22 @@ export async function planUpscaleJobs(
  * readable for `upscayl-bin` (converted and oriented when needed), run
  * through the model `iterations` times, then written through the Sharp
  * `ops`, which decide the output format, size and metadata. Refuses
- * `dryRun`; use `planUpscale` for that.
+ * `dryRun`; use `planUpscale` for that. `onProgress` hears the share of
+ * the whole upscale done, across every image and pass.
  */
 export async function upscaleImages(
   input: UpscaleOptionsInput,
   engine: UpscaleEngine,
+  onProgress?: ProgressListener,
 ): Promise<UpscaleResult[]> {
   const options = parseUpscaleOptions(input)
   refuseDryRun(options.dryRun, 'planUpscale')
   const jobs = await planUpscaleJobs(options)
   const settings = passSettings(options)
   const results: UpscaleResult[] = []
-  for (const job of jobs)
-    results.push(await runJob(job, options, settings, engine))
+  for (const [index, job] of jobs.entries()) {
+    const slot = { index, count: jobs.length, onProgress }
+    results.push(await runJob(job, options, settings, engine, slot))
+  }
   return results
 }

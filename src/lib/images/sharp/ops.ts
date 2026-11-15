@@ -38,6 +38,14 @@ const FILTER_OPS = namesOf(filterOpSchemas)
 const COLOUR_OPS = namesOf(colourOpSchemas)
 const OUTPUT_OPS = namesOf(outputOpSchemas)
 
+/** Sharp op names by the kind of change they make, in documentation order. */
+export const SHARP_OP_CATEGORIES = {
+  geometry: [...GEOMETRY_OPS],
+  filter: [...FILTER_OPS],
+  colour: [...COLOUR_OPS],
+  output: [...OUTPUT_OPS],
+} as const satisfies Record<string, readonly string[]>
+
 export const SHARP_OP_NAMES: readonly string[] = [
   ...GEOMETRY_OPS,
   ...FILTER_OPS,
@@ -50,6 +58,11 @@ export const SHARP_OP_NAMES: readonly string[] = [
  * `output` the ones that choose the format, metadata, tiles and timeout.
  */
 export type SharpOpStage = 'all' | 'pixels' | 'output'
+
+/** Whether an op chooses the output (format, metadata, tiles, timeout) rather than changing pixels. */
+export function isOutputOp(step: SharpOp): boolean {
+  return OUTPUT_OPS.has(step.op)
+}
 
 function inStage(step: SharpOp, stage: SharpOpStage): boolean {
   if (stage === 'all') return true

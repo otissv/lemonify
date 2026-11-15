@@ -1,0 +1,30 @@
+# Glossary
+
+The words below have one meaning each, in code, docs and conversation. "File" is not used on its own: it could mean a Source, a Document or a Render.
+
+| Term         | Means                                                                                                                                                                                               | Lives in                                            |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **User**     | A signed-in person. Owns Documents and Sources.                                                                                                                                                     | SQLite, managed by Better Auth                      |
+| **Source**   | An image the User uploaded to the server, identified by its content hash. Never modified.                                                                                                           | `.data/sources/<content hash>` on the server's disk |
+| **Document** | The editable thing, like a PSD: a permanent id, its owner, a link to its Source, its Pipeline and its History.                                                                                      | SQLite                                              |
+| **Pipeline** | The ordered Steps a Document applies to its Source.                                                                                                                                                 | Inside the Document                                 |
+| **Step**     | One operation in a Pipeline (a Sharp tool or an AI tool), with its options and an on/off switch.                                                                                                    | Inside the Pipeline                                 |
+| **History**  | The undo and redo record of changes to a Pipeline, stored as reversible patches.                                                                                                                    | Inside the Document                                 |
+| **Render**   | A cheap image computed from a Document: a preview, a thumbnail or a Sharp intermediate. A cache: it can be deleted at any time and is rebuilt when missing.                                         | `.data/render-cache/`, named by a content hash      |
+| **Result**   | An image that cost real work or that the User asked for: the output of an AI Step, an Export, or a workflow Run. Kept until the User deletes it; never evicted.                                     | `.data/results/`, named by a content hash           |
+| **AI tool**  | A Step that runs a model, on the GPU by default. Upscale is the first; others (such as background removal) are added by registering them.                                                           | The AI tool registry                                |
+| **Export**   | A Result written at full size, downloaded by the User's browser or written to a path by the CLI.                                                                                                    | The User's machine, and kept as a Result            |
+| **Job**      | One piece of slow server work (a preview or thumbnail, an AI Step, an export, one Segment of one Source of a workflow run), queued, run by a worker pool, and recorded in SQLite with its progress. | SQLite                                              |
+| **Workflow** | A reusable canvas of Steps that runs on many Sources.                                                                                                                                               | SQLite                                              |
+| **Run**      | One start of a Workflow over its Sources, made of one Job per Source per Segment. Kept until the User deletes it; its Results go with it.                                                           | SQLite                                              |
+| **Segment**  | A run of consecutive Sharp Steps (applied in one pass), or a single AI Step: the unit one Job of a Run executes. The last Segment also encodes the Output.                                          | Worked out from the Pipeline or Workflow graph      |
+
+## Rules
+
+- **Opening an image** uploads it as a Source and creates its Document. Uploading the same image again finds the existing Source by its hash. The UI says "Open image", never "Open file".
+- **The Document id** is permanent and is the only id the app and its routes use (`/documents/<id>`). It is the same in every browser, tab and device, and after a server restart.
+- **A Source never changes or moves.** It is stored by its content hash, so there is nothing to relink and no "changed Source" state.
+- **Ownership:** a User can read and change only their own Documents and Sources. The CLI has no account of its own: it acts as an existing User.
+- **Renders are a cache, not data.** Deleting all of them loses nothing.
+- **Results are kept.** A Result is never evicted; it goes only when the User deletes it, or its Document or Run. Clearing unused Results removes only AI Step Results the Pipeline no longer uses; Exports are never cleared that way.
+- **Cancelling a Job** ends it as cancelled and keeps any Result it already made; it queues no following Jobs.

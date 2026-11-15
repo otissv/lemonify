@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+
+exec node --disable-warning=ExperimentalWarning --experimental-transform-types --import "$root/scripts/images/register-alias.ts" "$root/scripts/images/index.ts" "$@"

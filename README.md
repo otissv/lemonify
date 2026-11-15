@@ -1,197 +1,118 @@
-Welcome to your new TanStack Start app!
+# Lemonify
 
-# Getting Started
+Lemonify is a command-line image toolkit with a web editor on top. The CLI is the product: it edits images with [Sharp](https://sharp.pixelplumbing.com/), upscales them with [Upscayl](https://upscayl.org/) on the GPU, and runs saved workflows. Every command takes a JSON job and prints JSON, so people at a terminal, scripts and AI agents all use it the same way. The web editor is an add-on that gives the same operations a visual interface, for people who would rather click than type.
 
-To run this application:
+## How it works
+
+**Two front doors, one set of services.** The CLI and the website are separate ways in to the same services. Neither contains image or data rules of its own, so anything the editor can do the CLI can do, and the reverse.
+
+| Layer       | Does                                                                                                                                                                       |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI, API    | The two front doors. The API sits behind middleware that signs the caller in, checks the request and rate-limits it; the CLI acts as a named user. Each calls one service. |
+| Services    | All the rules: who may touch what, editing a pipeline, undo history, planning a render, queueing and running jobs, running a workflow.                                     |
+| Tools, DAOs | Tools do the image work (Sharp, Upscayl, the folder of uploaded images). DAOs are the only code that touches the database.                                                 |
+
+Services depend on interfaces for tools and DAOs, never on a specific database or library. Changing the database means writing a new set of DAO classes; the services, the API and the CLI stay as they are. Ownership is checked inside the services, not in the API, because queued jobs and workflow runs have no web request at all.
+
+**The CLI runs where the data is.** On a server, a person or agent signs in to the machine and runs `lemonify` there; on a developer's machine, that machine is the server. There is no network connection between a CLI and a server, so there are no API keys. The CLI and the web server on one machine share one database and one job queue.
+
+**A job queue keeps the server fair.** Slow work (renders, upscales, exports, each image of a workflow run) is queued as a Job and run by worker pools: one for the CPU (Sharp) and one for the GPU (Upscayl), so a long upscale never blocks a preview. Waiting jobs are served in turn per image and per workflow run, so no single image or workflow can hog the server. Consecutive Sharp steps run as one pass, and images that share an upscale model are upscaled in one batch. Jobs survive a restart.
+
+**Images are edited, never changed.** An uploaded image is kept as it was. What you do to it is a pipeline of steps (41 Sharp tools across geometry, filters and colour, plus AI tools, starting with upscale) that can be edited, reordered, switched off and undone. Previews and exports run the real pipeline, so what you see is what you export.
+
+## Core ideas
+
+These terms are used the same way in code and docs; the full list is in [docs/glossary.md](docs/glossary.md).
+
+| Term         | Means                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| **Source**   | An image a user uploaded, stored as a plain file by its content hash and never modified.          |
+| **Document** | The editable thing: an owner, a Source, a pipeline of steps and an undo history, kept in SQLite.  |
+| **Render**   | A cheap image computed from a Document (a preview or thumbnail). A disposable cache.              |
+| **Result**   | An image that cost real work or was asked for (an AI Step, an export, a run). Kept until deleted. |
+| **Job**      | One piece of queued server work, with progress, that can be cancelled.                            |
+| **Workflow** | A reusable chain of steps that runs over many Sources, started and followed from the CLI.         |
+
+## Requirements
+
+| Requirement                | Needed for      | Notes                                                                               |
+| -------------------------- | --------------- | ----------------------------------------------------------------------------------- |
+| Node.js 22.18 or newer     | Everything      | Developed on Node 24.                                                               |
+| pnpm 10                    | Everything      | Install scripts of dependencies are blocked by default.                             |
+| A GPU with a Vulkan driver | AI upscale only | Every other feature runs on the CPU. See [doc/cli.md](doc/cli.md) for driver setup. |
+
+## Getting started
 
 ```bash
 pnpm install
+pnpm images --help
+```
+
+To run the web editor as well:
+
+```bash
 pnpm dev
 ```
 
-# Building For Production
-
-To build this application for production:
+The editor is served at `http://localhost:3100`. To build for production:
 
 ```bash
 pnpm build
 ```
 
-## Styling
+The full CLI guide, including every command, is in [doc/cli.md](doc/cli.md). An agent skill that teaches an agent to use the CLI is in `skills/images-cli/`.
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+## CLI commands
 
-### Removing Tailwind CSS
+The stateless commands work on any image with no database or sign-in. The stateful ones act as a user (`--user <name>`, or `LEMONIFY_USER`, or the only user) on the data in `.data/`.
 
-If you prefer not to use Tailwind CSS:
+| Commands                                                                                                              | Does                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `sharp`, `info`, `upscale`, `models`, `formats`, `schema`                                                             | Process, inspect and upscale images; list models and formats; print a command's JSON Schema |
+| `user list`                                                                                                           | List the users                                                                              |
+| `source add`, `list`, `delete`                                                                                        | Upload images as sources, list or delete them                                               |
+| `document create`, `list`, `show`, `delete`, `undo`, `redo`, `step add`, `remove`, `move`, `set`, `enable`, `disable` | Create and edit documents: a pipeline of steps with undo history                            |
+| `export <documentId> --out <path>`                                                                                    | Render a document at full size and write it                                                 |
+| `workflow create`, `show`, `list`, `update`, `delete`, `run`, `results`, `runs`, `cancel`, `run delete`               | Save a workflow and run it over its sources                                                 |
+| `result list`, `show`, `delete`, `save`, `clear-unused`                                                               | Manage the images that cost work or were asked for                                          |
+| `job list`, `show`, `cancel`                                                                                          | Follow and cancel queued work                                                               |
+| `worker`                                                                                                              | Take jobs from the queue until stopped                                                      |
 
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
+A command that waits for its jobs (`export`, `workflow run --follow`) does the work in its own process, so no server or worker is needed. The web server also runs workers itself, so `worker` is only for doing queued work when no server is running.
 
-## Linting & Formatting
+## Configuration
 
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
+Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `LEMONIFY_BASE_URL` and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
 
-```bash
-pnpm lint
-pnpm format
-pnpm check
-```
+## Scripts
 
-## Shadcn
+| Script                  | Does                                                 |
+| ----------------------- | ---------------------------------------------------- |
+| `pnpm images <command>` | Runs the image CLI, for example `pnpm images --help` |
+| `pnpm dev`              | Starts the web editor's dev server on port 3100      |
+| `pnpm build`            | Builds for production                                |
+| `pnpm test`             | Runs the tests once (Vitest)                         |
+| `pnpm typecheck`        | Runs `tsc --noEmit`                                  |
+| `pnpm check`            | Lints and checks formatting with Biome               |
+| `pnpm format`           | Fixes lint and formatting with Biome                 |
 
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
+Linting and formatting use [Biome](https://biomejs.dev/), configured in `biome.json`. Biome has no type-aware rules, so `pnpm typecheck` is the type check.
 
-```bash
-pnpm dlx shadcn@latest add button
-```
+## Project layout
 
-## Routing
+| Path                 | Holds                                                                                                             |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `scripts/images/`    | The image CLI                                                                                                     |
+| `src/lib/images/`    | The image logic (Sharp and Upscayl), shared by the CLI and the app                                                |
+| `src/server/`        | The services, DAOs, tools, job scheduler, composition file and HTTP middleware the CLI and the API both use       |
+| `src/features/`      | The web editor by feature: documents, pipeline, tools, export, results, AI tools, workflows and more              |
+| `src/routes/`        | TanStack Router file-based routes, including the API routes (`/api/sources`, `/api/results`, renders)             |
+| `migrations/`        | Knex migrations for the SQLite database                                                                           |
+| `src/components/ui/` | Shared UI components ([shadcn/ui](https://ui.shadcn.com/)); add one with `pnpm dlx shadcn@latest add <component>` |
+| `src/store/`         | Client state (Zustand)                                                                                            |
+| `skills/images-cli/` | The agent skill for the CLI                                                                                       |
+| `doc/`               | CLI documentation, including the generated Sharp job reference                                                    |
+| `docs/`              | Project design: the [glossary](docs/glossary.md) and the [editor and server plan](docs/editor-pipeline-plan.md)   |
+| `.data/`             | The SQLite database, uploaded sources, results, the render cache and work folders (not committed)                 |
 
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from '@tanstack/react-router'
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+The web editor is built with TanStack Start, React 19 and TypeScript. Its visual design is described in [DESIGN.md](DESIGN.md).

@@ -44,7 +44,7 @@ describe('--json', () => {
   it('prints the command result as one JSON document', async () => {
     const stdout = captureStdout()
 
-    await formatsCommand.execute([], { json: true })
+    await formatsCommand.execute([], { json: true, progress: false })
 
     const document: unknown = JSON.parse(stdout.output())
     expect(document).toMatchObject({
@@ -234,7 +234,7 @@ describe('schema command', () => {
   it('prints the JSON Schema of every command keyed by name', async () => {
     const stdout = captureStdout()
 
-    await schemaCommand.execute([], { json: false })
+    await schemaCommand.execute([], { json: false, progress: false })
 
     const schemas = JSON.parse(stdout.output()) as Record<string, unknown>
     for (const command of COMMANDS) expect(schemas).toHaveProperty(command.name)
@@ -243,7 +243,7 @@ describe('schema command', () => {
   it('prints one command when named', async () => {
     const stdout = captureStdout()
 
-    await schemaCommand.execute(['sharp'], { json: false })
+    await schemaCommand.execute(['sharp'], { json: false, progress: false })
 
     expect(stdout.output()).toContain('"pipelineColourspace"')
   })
@@ -277,7 +277,7 @@ describe('--dry-run output', () => {
         '{"create":{"width":2,"height":2,"channels":3,"background":"#000"}}',
         '--dry-run',
       ],
-      { json: false },
+      { json: false, progress: false },
     )
 
     expect(stdout.output()).toContain('Would write 1 file, read 0')
@@ -296,7 +296,7 @@ describe('--dry-run output', () => {
         '{"create":{"width":2,"height":2,"channels":3,"background":"#000"}}',
         '--dry-run',
       ],
-      { json: true },
+      { json: true, progress: false },
     )
 
     expect(JSON.parse(stdout.output())).toEqual({

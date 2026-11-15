@@ -9,6 +9,7 @@ import { SharpOperationError } from './errors.ts'
 import { formatForFile } from './formats.ts'
 import type { FileTask, InPlaceTask, VariantTask } from './job-plan.ts'
 import type { FormatOptions, SharpJob } from './job-schema.ts'
+import { applySharpOpsBlended } from './blend-tint.ts'
 import { applySharpOps, opsFormat } from './ops.ts'
 import type { OutputFormat } from './output-options.ts'
 
@@ -76,15 +77,30 @@ function targetFormat(file: string, job: SharpJob): OutputFormat | undefined {
   return opsFormat(job.ops) ?? formatForFile(file)
 }
 
+/** The source with the pixel ops applied, then the format and the output ops. */
+async function buildImage(
+  source: FileTask['source'],
+  format: OutputFormat | undefined,
+  job: SharpJob,
+): Promise<Sharp> {
+  const pixels = await applySharpOpsBlended(
+    openInput(source, job),
+    job.ops,
+    'pixels',
+  )
+  return applySharpOps(
+    selectFormat(pixels, format, job.formatOptions),
+    job.ops,
+    'output',
+  )
+}
+
 export async function writeFileTask(
   task: FileTask,
   job: SharpJob,
 ): Promise<SharpJobResult> {
   const format = targetFormat(task.output, job)
-  const image = applySharpOps(
-    selectFormat(openInput(task.source, job), format, job.formatOptions),
-    job.ops,
-  )
+  const image = await buildImage(task.source, format, job)
   await mkdir(path.dirname(task.output), { recursive: true })
   const info = await guard(image.toFile(task.output), task.source, task.output)
   return {
@@ -106,10 +122,7 @@ export async function writeInPlaceTask(
 ): Promise<SharpJobResult> {
   const sourceBytes = (await stat(task.source)).size
   const format = targetFormat(task.source, job)
-  const image = applySharpOps(
-    selectFormat(openInput(task.source, job), format, job.formatOptions),
-    job.ops,
-  )
+  const image = await buildImage(task.source, format, job)
   const { data, info } = await guard(
     image.toBuffer({ resolveWithObject: true }),
     task.source,
@@ -133,7 +146,11 @@ async function renderPixels(
   task: VariantTask,
   job: SharpJob,
 ): Promise<{ data: Buffer; info: OutputInfo }> {
-  const pixels = applySharpOps(openInput(task.source, job), job.ops, 'pixels')
+  const pixels = await applySharpOpsBlended(
+    openInput(task.source, job),
+    job.ops,
+    'pixels',
+  )
   const intermediate = pixels.keepMetadata().tiff({ compression: 'none' })
   return guard(
     intermediate.toBuffer({ resolveWithObject: true }),
@@ -158,7 +175,11 @@ export async function plannedVariantFiles(
   job: SharpJob,
   widths: readonly number[],
 ): Promise<string[]> {
-  const pixels = applySharpOps(openInput(task.source, job), job.ops, 'pixels')
+  const pixels = await applySharpOpsBlended(
+    openInput(task.source, job),
+    job.ops,
+    'pixels',
+  )
   const { info } = await guard(
     pixels.raw().toBuffer({ resolveWithObject: true }),
     task.source,

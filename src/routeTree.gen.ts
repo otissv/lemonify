@@ -10,33 +10,141 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as ApiSourcesRouteImport } from './routes/api/sources'
+import { Route as DocumentsIdRouteImport } from './routes/documents.$id'
+import { Route as WorkflowsIdRouteImport } from './routes/workflows.$id'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiResultsIdRouteImport } from './routes/api/results.$id'
+import { Route as ApiSourcesIdRouteImport } from './routes/api/sources.$id'
+import { Route as ApiDocumentsIdRendersKindKeyRouteImport } from './routes/api/documents.$id.renders.$kind.$key'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSourcesRoute = ApiSourcesRouteImport.update({
+  id: '/api/sources',
+  path: '/api/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocumentsIdRoute = DocumentsIdRouteImport.update({
+  id: '/documents/$id',
+  path: '/documents/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkflowsIdRoute = WorkflowsIdRouteImport.update({
+  id: '/workflows/$id',
+  path: '/workflows/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiResultsIdRoute = ApiResultsIdRouteImport.update({
+  id: '/api/results/$id',
+  path: '/api/results/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSourcesIdRoute = ApiSourcesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiSourcesRoute,
+} as any)
+const ApiDocumentsIdRendersKindKeyRoute =
+  ApiDocumentsIdRendersKindKeyRouteImport.update({
+    id: '/api/documents/$id/renders/$kind/$key',
+    path: '/api/documents/$id/renders/$kind/$key',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/api/sources': typeof ApiSourcesRouteWithChildren
+  '/documents/$id': typeof DocumentsIdRoute
+  '/workflows/$id': typeof WorkflowsIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/results/$id': typeof ApiResultsIdRoute
+  '/api/sources/$id': typeof ApiSourcesIdRoute
+  '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/api/sources': typeof ApiSourcesRouteWithChildren
+  '/documents/$id': typeof DocumentsIdRoute
+  '/workflows/$id': typeof WorkflowsIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/results/$id': typeof ApiResultsIdRoute
+  '/api/sources/$id': typeof ApiSourcesIdRoute
+  '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/api/sources': typeof ApiSourcesRouteWithChildren
+  '/documents/$id': typeof DocumentsIdRoute
+  '/workflows/$id': typeof WorkflowsIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/results/$id': typeof ApiResultsIdRoute
+  '/api/sources/$id': typeof ApiSourcesIdRoute
+  '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/sign-in'
+    | '/api/sources'
+    | '/documents/$id'
+    | '/workflows/$id'
+    | '/api/auth/$'
+    | '/api/results/$id'
+    | '/api/sources/$id'
+    | '/api/documents/$id/renders/$kind/$key'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/sign-in'
+    | '/api/sources'
+    | '/documents/$id'
+    | '/workflows/$id'
+    | '/api/auth/$'
+    | '/api/results/$id'
+    | '/api/sources/$id'
+    | '/api/documents/$id/renders/$kind/$key'
+  id:
+    | '__root__'
+    | '/'
+    | '/sign-in'
+    | '/api/sources'
+    | '/documents/$id'
+    | '/workflows/$id'
+    | '/api/auth/$'
+    | '/api/results/$id'
+    | '/api/sources/$id'
+    | '/api/documents/$id/renders/$kind/$key'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SignInRoute: typeof SignInRoute
+  ApiSourcesRoute: typeof ApiSourcesRouteWithChildren
+  DocumentsIdRoute: typeof DocumentsIdRoute
+  WorkflowsIdRoute: typeof WorkflowsIdRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiResultsIdRoute: typeof ApiResultsIdRoute
+  ApiDocumentsIdRendersKindKeyRoute: typeof ApiDocumentsIdRendersKindKeyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,21 +156,97 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sources': {
+      id: '/api/sources'
+      path: '/api/sources'
+      fullPath: '/api/sources'
+      preLoaderRoute: typeof ApiSourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/documents/$id': {
+      id: '/documents/$id'
+      path: '/documents/$id'
+      fullPath: '/documents/$id'
+      preLoaderRoute: typeof DocumentsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workflows/$id': {
+      id: '/workflows/$id'
+      path: '/workflows/$id'
+      fullPath: '/workflows/$id'
+      preLoaderRoute: typeof WorkflowsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/results/$id': {
+      id: '/api/results/$id'
+      path: '/api/results/$id'
+      fullPath: '/api/results/$id'
+      preLoaderRoute: typeof ApiResultsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sources/$id': {
+      id: '/api/sources/$id'
+      path: '/$id'
+      fullPath: '/api/sources/$id'
+      preLoaderRoute: typeof ApiSourcesIdRouteImport
+      parentRoute: typeof ApiSourcesRoute
+    }
+    '/api/documents/$id/renders/$kind/$key': {
+      id: '/api/documents/$id/renders/$kind/$key'
+      path: '/api/documents/$id/renders/$kind/$key'
+      fullPath: '/api/documents/$id/renders/$kind/$key'
+      preLoaderRoute: typeof ApiDocumentsIdRendersKindKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface ApiSourcesRouteChildren {
+  ApiSourcesIdRoute: typeof ApiSourcesIdRoute
+}
+
+const ApiSourcesRouteChildren: ApiSourcesRouteChildren = {
+  ApiSourcesIdRoute: ApiSourcesIdRoute,
+}
+
+const ApiSourcesRouteWithChildren = ApiSourcesRoute._addFileChildren(
+  ApiSourcesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SignInRoute: SignInRoute,
+  ApiSourcesRoute: ApiSourcesRouteWithChildren,
+  DocumentsIdRoute: DocumentsIdRoute,
+  WorkflowsIdRoute: WorkflowsIdRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiResultsIdRoute: ApiResultsIdRoute,
+  ApiDocumentsIdRendersKindKeyRoute: ApiDocumentsIdRendersKindKeyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

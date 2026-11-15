@@ -15,6 +15,8 @@ import { UpscaleTargetError } from './errors.ts'
 import { upscaleImages } from './upscale.ts'
 import type { AiPass, UpscaleEngine } from './upscale.ts'
 
+const HALF = 0.5
+
 function resizingEngine(passes: AiPass[]): UpscaleEngine {
   return async (pass) => {
     passes.push(pass)
@@ -192,5 +194,33 @@ describe('upscaleImages', () => {
     await expect(
       upscaleImages({ source, destination: source }, resizingEngine([])),
     ).rejects.toThrow(UpscaleTargetError)
+  })
+
+  it('reports overall progress across images and passes, ending at 1', async () => {
+    await createImage(path.join(source, 'a.png'), {
+      width: 8,
+      height: 8,
+      format: 'png',
+    })
+    await createImage(path.join(source, 'b.png'), {
+      width: 8,
+      height: 8,
+      format: 'png',
+    })
+    const resize = resizingEngine([])
+    const halfwayEngine: UpscaleEngine = async (pass, onProgress) => {
+      onProgress?.(HALF)
+      await resize(pass)
+      onProgress?.(1)
+    }
+    const reported: Array<number> = []
+
+    await upscaleImages(
+      { source, destination, scale: 2, iterations: 2 },
+      halfwayEngine,
+      (fraction) => reported.push(fraction),
+    )
+
+    expect(reported).toEqual([0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1])
   })
 })

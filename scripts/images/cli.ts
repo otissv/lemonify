@@ -3,11 +3,14 @@ import { parseArgs } from 'node:util'
 import type { z } from 'zod'
 
 import { ImageOptionsError } from '../../src/lib/images/errors.ts'
+import { ERROR_REPORTING, isAppError } from '../../src/server/errors.ts'
 import { parseWithSchema } from '../../src/lib/images/validation.ts'
 
 export const PROGRAM = 'pnpm images'
 export const JOB_FLAG = '--job'
 export const JSON_FLAG = '--json'
+export const PROGRESS_FLAG = '--progress'
+export const PROGRESS_EVENT = 'progress'
 const STDIN_FD = 0
 
 export class CliUsageError extends Error {
@@ -21,11 +24,26 @@ export class CliUsageError extends Error {
 }
 
 export type ParsedCommand<TOptions> =
-  { kind: 'help' } | { kind: 'run'; options: TOptions }
+  | { kind: 'help' }
+  | { kind: 'run'; options: TOptions }
 
 export interface CommandContext {
   /** Print one JSON document instead of human-readable lines. */
   json: boolean
+  /** Write progress to stderr as JSON lines while the command runs. */
+  progress: boolean
+}
+
+/** What a running command may report back. */
+export interface RunContext {
+  /** The share of the work done, from 0 to 1; only set with `--progress`. */
+  onProgress?: (fraction: number) => void
+}
+
+function writeProgress(fraction: number): void {
+  process.stderr.write(
+    `${JSON.stringify({ event: PROGRESS_EVENT, fraction })}\n`,
+  )
 }
 
 /** What `pnpm images` needs to list, describe and run a subcommand. */
@@ -46,7 +64,7 @@ export interface CommandDefinition<TSchema extends z.ZodType, TResult> {
   schema: TSchema
   /** Maps command-line flags to validated options. */
   parse: (argv: readonly string[]) => ParsedCommand<z.output<TSchema>>
-  run: (options: z.output<TSchema>) => Promise<TResult>
+  run: (options: z.output<TSchema>, context: RunContext) => Promise<TResult>
   /** Human-readable rendering of the result; `--json` prints the result itself. */
   format: (result: TResult) => string
 }
@@ -118,7 +136,9 @@ export function defineCommand<TSchema extends z.ZodType, TResult>(
       console.log(definition.usage)
       return
     }
-    const result = await definition.run(command.options)
+    const result = await definition.run(command.options, {
+      onProgress: context.progress ? writeProgress : undefined,
+    })
     console.log(
       context.json
         ? JSON.stringify({ command: definition.name, result }, null, 2)
@@ -172,6 +192,7 @@ interface ErrorReport {
 function reportOf(error: unknown): ErrorReport {
   if (!(error instanceof Error))
     return { type: 'Error', message: String(error) }
+  if (isAppError(error)) return { type: error.kind, message: error.message }
   const report: ErrorReport = { type: error.name, message: error.message }
   if (error instanceof ImageOptionsError) report.issues = error.issues
   if (error instanceof CliUsageError) report.usage = error.usage
@@ -184,12 +205,14 @@ function reportOf(error: unknown): ErrorReport {
  */
 export async function runCli(
   main: () => Promise<void>,
-  context: CommandContext,
+  context: Pick<CommandContext, 'json'>,
 ): Promise<void> {
   try {
     await main()
   } catch (error) {
-    process.exitCode = 1
+    process.exitCode = isAppError(error)
+      ? ERROR_REPORTING[error.kind].exitCode
+      : 1
     if (context.json) {
       console.error(JSON.stringify({ error: reportOf(error) }))
       return

@@ -16,7 +16,12 @@ const toggle = z
   .describe('Defaults to true; false disables the operation')
 
 export const colourOpSchemas = [
-  z.strictObject({ op: z.literal('tint'), colour: colourSchema }),
+  z.strictObject({
+    op: z.literal('tint'),
+    colour: colourSchema.describe(
+      'The tint colour: a CSS string such as "#ff000080", or { r, g, b, alpha }. An alpha below 1 blends the tint with the original image by that strength.',
+    ),
+  }),
   z.strictObject({ op: z.literal('greyscale'), enabled: toggle }),
   z.strictObject({ op: z.literal('grayscale'), enabled: toggle }),
   z.strictObject({

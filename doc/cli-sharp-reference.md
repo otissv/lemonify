@@ -8,102 +8,102 @@ Every field a `pnpm images sharp` job accepts, generated from the same schemas t
 
 The top level of a job, as passed with `--job`. The CLI flags map onto these fields.
 
-| Field           | Type                        | Required | Default | Description                                                              |
-| --------------- | --------------------------- | -------- | ------- | ------------------------------------------------------------------------ |
-| `input`         | string or string[]          |          |         | An image file, a folder of images, or several files for options.join     |
-| `output`        | string                      |          |         | The output file, or the output folder for a folder input or variants     |
-| `inPlace`       | `"always"` \| `"ifSmaller"` |          |         | Overwrite each source; ifSmaller keeps it when the result is not smaller |
-| `variants`      | object, see Variants        |          |         |                                                                          |
-| `options`       | object, see Input options   |          |         |                                                                          |
-| `ops`           | op[], see the op sections   |          | `[]`    |                                                                          |
-| `formatOptions` | object, see Format options  |          |         |                                                                          |
-| `settings`      | object, see Settings        |          |         |                                                                          |
-| `recursive`     | boolean                     |          | `false` | When input is a folder, include subfolders                               |
-| `dryRun`        | boolean                     |          | `false` | List every file the job would read and write, writing nothing            |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `input` | string or string[] |  |  | An image file, a folder of images, or several files for options.join |
+| `output` | string |  |  | The output file, or the output folder for a folder input or variants |
+| `inPlace` | `"always"` \| `"ifSmaller"` |  |  | Overwrite each source; ifSmaller keeps it when the result is not smaller |
+| `variants` | object, see Variants |  |  |  |
+| `options` | object, see Input options |  |  |  |
+| `ops` | op[], see the op sections |  | `[]` |  |
+| `formatOptions` | object, see Format options |  |  |  |
+| `settings` | object, see Settings |  |  |  |
+| `recursive` | boolean |  | `false` | When input is a folder, include subfolders |
+| `dryRun` | boolean |  | `false` | List every file the job would read and write, writing nothing |
 
 ## Input options (`options`, `--options`)
 
 Passed to `sharp(input, options)`.
 
-| Field                | Type                                                              | Required | Default | Description                                                    |
-| -------------------- | ----------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `autoOrient`         | boolean                                                           |          |         |                                                                |
-| `failOn`             | `"none"` \| `"truncated"` \| `"error"` \| `"warning"`             |          |         |                                                                |
-| `limitInputPixels`   | integer > 0 or boolean                                            |          |         |                                                                |
-| `limitInputChannels` | integer > 0 or boolean                                            |          |         |                                                                |
-| `unlimited`          | boolean                                                           |          |         |                                                                |
-| `sequentialRead`     | boolean                                                           |          |         |                                                                |
-| `density`            | number > 0, ≤ 100000                                              |          |         |                                                                |
-| `ignoreIcc`          | boolean                                                           |          |         |                                                                |
-| `pages`              | integer ≥ -1                                                      |          |         |                                                                |
-| `page`               | integer ≥ 0                                                       |          |         |                                                                |
-| `tiff`               | object { subifd }                                                 |          |         |                                                                |
-| `tiff.subifd`        | integer ≥ -1                                                      |          |         |                                                                |
-| `svg`                | object { stylesheet, highBitdepth }                               |          |         |                                                                |
-| `svg.stylesheet`     | string                                                            |          |         |                                                                |
-| `svg.highBitdepth`   | boolean                                                           |          |         |                                                                |
-| `pdf`                | object { background }                                             |          |         |                                                                |
-| `pdf.background`     | string or object { r, g, b, alpha }                               |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `openSlide`          | object { level }                                                  |          |         |                                                                |
-| `openSlide.level`    | integer ≥ 0                                                       |          |         |                                                                |
-| `jp2`                | object { oneshot }                                                |          |         |                                                                |
-| `jp2.oneshot`        | boolean                                                           |          |         |                                                                |
-| `subifd`             | integer ≥ -1                                                      |          |         |                                                                |
-| `pdfBackground`      | string or object { r, g, b, alpha }                               |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `level`              | integer ≥ 0                                                       |          |         |                                                                |
-| `animated`           | boolean                                                           |          |         |                                                                |
-| `raw`                | object { width, height, channels, premultiplied, pageHeight }     |          |         |                                                                |
-| `raw.width`          | integer > 0                                                       | yes      |         |                                                                |
-| `raw.height`         | integer > 0                                                       | yes      |         |                                                                |
-| `raw.channels`       | `1` \| `2` \| `3` \| `4`                                          | yes      |         |                                                                |
-| `raw.premultiplied`  | boolean                                                           |          |         |                                                                |
-| `raw.pageHeight`     | integer > 0                                                       |          |         |                                                                |
-| `create`             | object { width, height, channels, background, noise, pageHeight } |          |         |                                                                |
-| `create.width`       | integer > 0                                                       | yes      |         |                                                                |
-| `create.height`      | integer > 0                                                       | yes      |         |                                                                |
-| `create.channels`    | `3` \| `4`                                                        | yes      |         |                                                                |
-| `create.background`  | string or object { r, g, b, alpha }                               | yes      |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `create.noise`       | object { type, mean, sigma }                                      |          |         |                                                                |
-| `create.noise.type`  | `"gaussian"`                                                      | yes      |         |                                                                |
-| `create.noise.mean`  | number                                                            |          |         |                                                                |
-| `create.noise.sigma` | number                                                            |          |         |                                                                |
-| `create.pageHeight`  | integer > 0                                                       |          |         |                                                                |
-| `text`               | object                                                            |          |         |                                                                |
-| `text.text`          | string                                                            | yes      |         |                                                                |
-| `text.font`          | string                                                            |          |         |                                                                |
-| `text.fontfile`      | string                                                            |          |         |                                                                |
-| `text.width`         | integer > 0                                                       |          |         |                                                                |
-| `text.height`        | integer > 0                                                       |          |         |                                                                |
-| `text.align`         | `"left"` \| `"centre"` \| `"center"` \| `"right"`                 |          |         |                                                                |
-| `text.justify`       | boolean                                                           |          |         |                                                                |
-| `text.dpi`           | integer > 0                                                       |          |         |                                                                |
-| `text.rgba`          | boolean                                                           |          |         |                                                                |
-| `text.spacing`       | integer                                                           |          |         |                                                                |
-| `text.wrap`          | `"word"` \| `"char"` \| `"word-char"` \| `"none"`                 |          |         |                                                                |
-| `join`               | object { across, animated, shim, background, halign, valign }     |          |         |                                                                |
-| `join.across`        | integer > 0                                                       |          |         |                                                                |
-| `join.animated`      | boolean                                                           |          |         |                                                                |
-| `join.shim`          | integer ≥ 0                                                       |          |         |                                                                |
-| `join.background`    | string or object { r, g, b, alpha }                               |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `join.halign`        | `"left"` \| `"centre"` \| `"center"` \| `"right"`                 |          |         |                                                                |
-| `join.valign`        | `"top"` \| `"centre"` \| `"center"` \| `"bottom"`                 |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `autoOrient` | boolean |  |  |  |
+| `failOn` | `"none"` \| `"truncated"` \| `"error"` \| `"warning"` |  |  |  |
+| `limitInputPixels` | integer > 0 or boolean |  |  |  |
+| `limitInputChannels` | integer > 0 or boolean |  |  |  |
+| `unlimited` | boolean |  |  |  |
+| `sequentialRead` | boolean |  |  |  |
+| `density` | number > 0, ≤ 100000 |  |  |  |
+| `ignoreIcc` | boolean |  |  |  |
+| `pages` | integer ≥ -1 |  |  |  |
+| `page` | integer ≥ 0 |  |  |  |
+| `tiff` | object { subifd } |  |  |  |
+| `tiff.subifd` | integer ≥ -1 |  |  |  |
+| `svg` | object { stylesheet, highBitdepth } |  |  |  |
+| `svg.stylesheet` | string |  |  |  |
+| `svg.highBitdepth` | boolean |  |  |  |
+| `pdf` | object { background } |  |  |  |
+| `pdf.background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `openSlide` | object { level } |  |  |  |
+| `openSlide.level` | integer ≥ 0 |  |  |  |
+| `jp2` | object { oneshot } |  |  |  |
+| `jp2.oneshot` | boolean |  |  |  |
+| `subifd` | integer ≥ -1 |  |  |  |
+| `pdfBackground` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `level` | integer ≥ 0 |  |  |  |
+| `animated` | boolean |  |  |  |
+| `raw` | object { width, height, channels, premultiplied, pageHeight } |  |  |  |
+| `raw.width` | integer > 0 | yes |  |  |
+| `raw.height` | integer > 0 | yes |  |  |
+| `raw.channels` | `1` \| `2` \| `3` \| `4` | yes |  |  |
+| `raw.premultiplied` | boolean |  |  |  |
+| `raw.pageHeight` | integer > 0 |  |  |  |
+| `create` | object { width, height, channels, background, noise, pageHeight } |  |  |  |
+| `create.width` | integer > 0 | yes |  |  |
+| `create.height` | integer > 0 | yes |  |  |
+| `create.channels` | `3` \| `4` | yes |  |  |
+| `create.background` | string or object { r, g, b, alpha } | yes |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `create.noise` | object { type, mean, sigma } |  |  |  |
+| `create.noise.type` | `"gaussian"` | yes |  |  |
+| `create.noise.mean` | number |  |  |  |
+| `create.noise.sigma` | number |  |  |  |
+| `create.pageHeight` | integer > 0 |  |  |  |
+| `text` | object |  |  |  |
+| `text.text` | string | yes |  |  |
+| `text.font` | string |  |  |  |
+| `text.fontfile` | string |  |  |  |
+| `text.width` | integer > 0 |  |  |  |
+| `text.height` | integer > 0 |  |  |  |
+| `text.align` | `"left"` \| `"centre"` \| `"center"` \| `"right"` |  |  |  |
+| `text.justify` | boolean |  |  |  |
+| `text.dpi` | integer > 0 |  |  |  |
+| `text.rgba` | boolean |  |  |  |
+| `text.spacing` | integer |  |  |  |
+| `text.wrap` | `"word"` \| `"char"` \| `"word-char"` \| `"none"` |  |  |  |
+| `join` | object { across, animated, shim, background, halign, valign } |  |  |  |
+| `join.across` | integer > 0 |  |  |  |
+| `join.animated` | boolean |  |  |  |
+| `join.shim` | integer ≥ 0 |  |  |  |
+| `join.background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `join.halign` | `"left"` \| `"centre"` \| `"center"` \| `"right"` |  |  |  |
+| `join.valign` | `"top"` \| `"centre"` \| `"center"` \| `"bottom"` |  |  |  |
 
 ## Variants (`variants`, `--widths`, `--manifest`)
 
-| Field      | Type            | Required | Default | Description                                               |
-| ---------- | --------------- | -------- | ------- | --------------------------------------------------------- |
-| `widths`   | (integer > 0)[] | yes      |         | Target widths in pixels; wider than the image are skipped |
-| `manifest` | string          |          |         | JSON file mapping each source to its size and variants    |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `widths` | (integer > 0)[] | yes |  | Target widths in pixels; wider than the image are skipped |
+| `manifest` | string |  |  | JSON file mapping each source to its size and variants |
 
 ## Settings (`settings`, `--settings`)
 
-| Field         | Type                                       | Required | Default | Description |
-| ------------- | ------------------------------------------ | -------- | ------- | ----------- |
-| `concurrency` | integer ≥ 0                                |          |         |             |
-| `cache`       | boolean or object { memory, files, items } |          |         |             |
-| `simd`        | boolean                                    |          |         |             |
-| `block`       | string[]                                   |          |         |             |
-| `unblock`     | string[]                                   |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `concurrency` | integer ≥ 0 |  |  |  |
+| `cache` | boolean or object { memory, files, items } |  |  |  |
+| `simd` | boolean |  |  |  |
+| `block` | string[] |  |  |  |
+| `unblock` | string[] |  |  |  |
 
 ## Format options (`formatOptions`, `--format-options`, format ops)
 
@@ -111,199 +111,199 @@ The same fields are taken by `formatOptions.<format>` and by the format op of th
 
 ### `jpeg` options
 
-| Field                 | Type                   | Required | Default | Description |
-| --------------------- | ---------------------- | -------- | ------- | ----------- |
-| `force`               | boolean                |          |         |             |
-| `quality`             | integer 1–100          |          |         |             |
-| `progressive`         | boolean                |          |         |             |
-| `chromaSubsampling`   | `"4:2:0"` \| `"4:4:4"` |          |         |             |
-| `trellisQuantisation` | boolean                |          |         |             |
-| `overshootDeringing`  | boolean                |          |         |             |
-| `optimiseScans`       | boolean                |          |         |             |
-| `optimizeScans`       | boolean                |          |         |             |
-| `optimiseCoding`      | boolean                |          |         |             |
-| `optimizeCoding`      | boolean                |          |         |             |
-| `quantisationTable`   | integer 0–8            |          |         |             |
-| `quantizationTable`   | integer 0–8            |          |         |             |
-| `mozjpeg`             | boolean                |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `progressive` | boolean |  |  |  |
+| `chromaSubsampling` | `"4:2:0"` \| `"4:4:4"` |  |  |  |
+| `trellisQuantisation` | boolean |  |  |  |
+| `overshootDeringing` | boolean |  |  |  |
+| `optimiseScans` | boolean |  |  |  |
+| `optimizeScans` | boolean |  |  |  |
+| `optimiseCoding` | boolean |  |  |  |
+| `optimizeCoding` | boolean |  |  |  |
+| `quantisationTable` | integer 0–8 |  |  |  |
+| `quantizationTable` | integer 0–8 |  |  |  |
+| `mozjpeg` | boolean |  |  |  |
 
 ### `png` options
 
-| Field               | Type          | Required | Default | Description |
-| ------------------- | ------------- | -------- | ------- | ----------- |
-| `force`             | boolean       |          |         |             |
-| `progressive`       | boolean       |          |         |             |
-| `compressionLevel`  | integer 0–9   |          |         |             |
-| `adaptiveFiltering` | boolean       |          |         |             |
-| `quality`           | integer 1–100 |          |         |             |
-| `effort`            | integer 1–10  |          |         |             |
-| `palette`           | boolean       |          |         |             |
-| `colours`           | integer 2–256 |          |         |             |
-| `colors`            | integer 2–256 |          |         |             |
-| `dither`            | number 0–1    |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `progressive` | boolean |  |  |  |
+| `compressionLevel` | integer 0–9 |  |  |  |
+| `adaptiveFiltering` | boolean |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `effort` | integer 1–10 |  |  |  |
+| `palette` | boolean |  |  |  |
+| `colours` | integer 2–256 |  |  |  |
+| `colors` | integer 2–256 |  |  |  |
+| `dither` | number 0–1 |  |  |  |
 
 ### `webp` options
 
-| Field            | Type                                                                           | Required | Default | Description |
-| ---------------- | ------------------------------------------------------------------------------ | -------- | ------- | ----------- |
-| `force`          | boolean                                                                        |          |         |             |
-| `loop`           | integer ≥ 0                                                                    |          |         |             |
-| `delay`          | integer ≥ 0 or (integer ≥ 0)[]                                                 |          |         |             |
-| `quality`        | integer 1–100                                                                  |          |         |             |
-| `alphaQuality`   | integer 0–100                                                                  |          |         |             |
-| `lossless`       | boolean                                                                        |          |         |             |
-| `nearLossless`   | boolean                                                                        |          |         |             |
-| `smartSubsample` | boolean                                                                        |          |         |             |
-| `smartDeblock`   | boolean                                                                        |          |         |             |
-| `effort`         | integer 0–6                                                                    |          |         |             |
-| `minSize`        | boolean                                                                        |          |         |             |
-| `mixed`          | boolean                                                                        |          |         |             |
-| `preset`         | `"default"` \| `"picture"` \| `"photo"` \| `"drawing"` \| `"icon"` \| `"text"` |          |         |             |
-| `exact`          | boolean                                                                        |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `loop` | integer ≥ 0 |  |  |  |
+| `delay` | integer ≥ 0 or (integer ≥ 0)[] |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `alphaQuality` | integer 0–100 |  |  |  |
+| `lossless` | boolean |  |  |  |
+| `nearLossless` | boolean |  |  |  |
+| `smartSubsample` | boolean |  |  |  |
+| `smartDeblock` | boolean |  |  |  |
+| `effort` | integer 0–6 |  |  |  |
+| `minSize` | boolean |  |  |  |
+| `mixed` | boolean |  |  |  |
+| `preset` | `"default"` \| `"picture"` \| `"photo"` \| `"drawing"` \| `"icon"` \| `"text"` |  |  |  |
+| `exact` | boolean |  |  |  |
 
 ### `gif` options
 
-| Field                  | Type                           | Required | Default | Description |
-| ---------------------- | ------------------------------ | -------- | ------- | ----------- |
-| `force`                | boolean                        |          |         |             |
-| `loop`                 | integer ≥ 0                    |          |         |             |
-| `delay`                | integer ≥ 0 or (integer ≥ 0)[] |          |         |             |
-| `reuse`                | boolean                        |          |         |             |
-| `progressive`          | boolean                        |          |         |             |
-| `colours`              | integer 2–256                  |          |         |             |
-| `colors`               | integer 2–256                  |          |         |             |
-| `effort`               | integer 1–10                   |          |         |             |
-| `dither`               | number 0–1                     |          |         |             |
-| `interFrameMaxError`   | number 0–32                    |          |         |             |
-| `interPaletteMaxError` | number 0–256                   |          |         |             |
-| `keepDuplicateFrames`  | boolean                        |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `loop` | integer ≥ 0 |  |  |  |
+| `delay` | integer ≥ 0 or (integer ≥ 0)[] |  |  |  |
+| `reuse` | boolean |  |  |  |
+| `progressive` | boolean |  |  |  |
+| `colours` | integer 2–256 |  |  |  |
+| `colors` | integer 2–256 |  |  |  |
+| `effort` | integer 1–10 |  |  |  |
+| `dither` | number 0–1 |  |  |  |
+| `interFrameMaxError` | number 0–32 |  |  |  |
+| `interPaletteMaxError` | number 0–256 |  |  |  |
+| `keepDuplicateFrames` | boolean |  |  |  |
 
 ### `avif` options
 
-| Field               | Type                                       | Required | Default | Description |
-| ------------------- | ------------------------------------------ | -------- | ------- | ----------- |
-| `force`             | boolean                                    |          |         |             |
-| `quality`           | integer 1–100                              |          |         |             |
-| `lossless`          | boolean                                    |          |         |             |
-| `effort`            | integer 0–9                                |          |         |             |
-| `chromaSubsampling` | `"4:2:0"` \| `"4:4:4"`                     |          |         |             |
-| `bitdepth`          | `8` \| `10` \| `12`                        |          |         |             |
-| `tune`              | `"auto"` \| `"iq"` \| `"psnr"` \| `"ssim"` |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `lossless` | boolean |  |  |  |
+| `effort` | integer 0–9 |  |  |  |
+| `chromaSubsampling` | `"4:2:0"` \| `"4:4:4"` |  |  |  |
+| `bitdepth` | `8` \| `10` \| `12` |  |  |  |
+| `tune` | `"auto"` \| `"iq"` \| `"psnr"` \| `"ssim"` |  |  |  |
 
 ### `heif` options
 
-| Field               | Type                                       | Required | Default | Description |
-| ------------------- | ------------------------------------------ | -------- | ------- | ----------- |
-| `force`             | boolean                                    |          |         |             |
-| `quality`           | integer 1–100                              |          |         |             |
-| `compression`       | `"av1"` \| `"hevc"`                        |          |         |             |
-| `lossless`          | boolean                                    |          |         |             |
-| `effort`            | integer 0–9                                |          |         |             |
-| `chromaSubsampling` | `"4:2:0"` \| `"4:4:4"`                     |          |         |             |
-| `bitdepth`          | `8` \| `10` \| `12`                        |          |         |             |
-| `tune`              | `"auto"` \| `"iq"` \| `"psnr"` \| `"ssim"` |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `compression` | `"av1"` \| `"hevc"` |  |  |  |
+| `lossless` | boolean |  |  |  |
+| `effort` | integer 0–9 |  |  |  |
+| `chromaSubsampling` | `"4:2:0"` \| `"4:4:4"` |  |  |  |
+| `bitdepth` | `8` \| `10` \| `12` |  |  |  |
+| `tune` | `"auto"` \| `"iq"` \| `"psnr"` \| `"ssim"` |  |  |  |
 
 ### `tiff` options
 
-| Field            | Type                                                                                                                | Required | Default | Description |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `force`          | boolean                                                                                                             |          |         |             |
-| `quality`        | integer 1–100                                                                                                       |          |         |             |
-| `compression`    | `"none"` \| `"jpeg"` \| `"deflate"` \| `"packbits"` \| `"ccittfax4"` \| `"lzw"` \| `"webp"` \| `"zstd"` \| `"jp2k"` |          |         |             |
-| `bigtiff`        | boolean                                                                                                             |          |         |             |
-| `predictor`      | `"none"` \| `"horizontal"` \| `"float"`                                                                             |          |         |             |
-| `pyramid`        | boolean                                                                                                             |          |         |             |
-| `tile`           | boolean                                                                                                             |          |         |             |
-| `tileWidth`      | integer > 0                                                                                                         |          |         |             |
-| `tileHeight`     | integer > 0                                                                                                         |          |         |             |
-| `xres`           | number > 0                                                                                                          |          |         |             |
-| `yres`           | number > 0                                                                                                          |          |         |             |
-| `bitdepth`       | `1` \| `2` \| `4`                                                                                                   |          |         |             |
-| `miniswhite`     | boolean                                                                                                             |          |         |             |
-| `resolutionUnit` | `"inch"` \| `"cm"`                                                                                                  |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `compression` | `"none"` \| `"jpeg"` \| `"deflate"` \| `"packbits"` \| `"ccittfax4"` \| `"lzw"` \| `"webp"` \| `"zstd"` \| `"jp2k"` |  |  |  |
+| `bigtiff` | boolean |  |  |  |
+| `predictor` | `"none"` \| `"horizontal"` \| `"float"` |  |  |  |
+| `pyramid` | boolean |  |  |  |
+| `tile` | boolean |  |  |  |
+| `tileWidth` | integer > 0 |  |  |  |
+| `tileHeight` | integer > 0 |  |  |  |
+| `xres` | number > 0 |  |  |  |
+| `yres` | number > 0 |  |  |  |
+| `bitdepth` | `1` \| `2` \| `4` |  |  |  |
+| `miniswhite` | boolean |  |  |  |
+| `resolutionUnit` | `"inch"` \| `"cm"` |  |  |  |
 
 ### `jxl` options
 
-| Field          | Type                           | Required | Default | Description |
-| -------------- | ------------------------------ | -------- | ------- | ----------- |
-| `force`        | boolean                        |          |         |             |
-| `loop`         | integer ≥ 0                    |          |         |             |
-| `delay`        | integer ≥ 0 or (integer ≥ 0)[] |          |         |             |
-| `distance`     | number 0–15                    |          |         |             |
-| `quality`      | integer 1–100                  |          |         |             |
-| `decodingTier` | integer 0–4                    |          |         |             |
-| `lossless`     | boolean                        |          |         |             |
-| `effort`       | integer 1–9                    |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `loop` | integer ≥ 0 |  |  |  |
+| `delay` | integer ≥ 0 or (integer ≥ 0)[] |  |  |  |
+| `distance` | number 0–15 |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `decodingTier` | integer 0–4 |  |  |  |
+| `lossless` | boolean |  |  |  |
+| `effort` | integer 1–9 |  |  |  |
 
 ### `jp2` options
 
-| Field               | Type                   | Required | Default | Description |
-| ------------------- | ---------------------- | -------- | ------- | ----------- |
-| `force`             | boolean                |          |         |             |
-| `quality`           | integer 1–100          |          |         |             |
-| `lossless`          | boolean                |          |         |             |
-| `tileWidth`         | integer > 0            |          |         |             |
-| `tileHeight`        | integer > 0            |          |         |             |
-| `chromaSubsampling` | `"4:4:4"` \| `"4:2:0"` |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `quality` | integer 1–100 |  |  |  |
+| `lossless` | boolean |  |  |  |
+| `tileWidth` | integer > 0 |  |  |  |
+| `tileHeight` | integer > 0 |  |  |  |
+| `chromaSubsampling` | `"4:4:4"` \| `"4:2:0"` |  |  |  |
 
 ### `raw` options
 
-| Field   | Type                                                                                                                               | Required | Default | Description |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `force` | boolean                                                                                                                            |          |         |             |
-| `depth` | `"char"` \| `"uchar"` \| `"short"` \| `"ushort"` \| `"int"` \| `"uint"` \| `"float"` \| `"complex"` \| `"double"` \| `"dpcomplex"` |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `force` | boolean |  |  |  |
+| `depth` | `"char"` \| `"uchar"` \| `"short"` \| `"ushort"` \| `"int"` \| `"uint"` \| `"float"` \| `"complex"` \| `"double"` \| `"dpcomplex"` |  |  |  |
 
 ## Geometry ops
 
 ### `resize`
 
-| Field                | Type                                                                                                                                                                                                                                                                                                                    | Required | Default | Description                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `width`              | integer > 0                                                                                                                                                                                                                                                                                                             |          |         |                                                                |
-| `height`             | integer > 0                                                                                                                                                                                                                                                                                                             |          |         |                                                                |
-| `fit`                | `"contain"` \| `"cover"` \| `"fill"` \| `"inside"` \| `"outside"`                                                                                                                                                                                                                                                       |          |         |                                                                |
-| `position`           | `"north"` \| `"northeast"` \| `"east"` \| `"southeast"` \| `"south"` \| `"southwest"` \| `"west"` \| `"northwest"` \| `"center"` \| `"centre"` \| `"entropy"` \| `"attention"` \| `"top"` \| `"right top"` \| `"right"` \| `"right bottom"` \| `"bottom"` \| `"left bottom"` \| `"left"` \| `"left top"` or integer ≥ 0 |          |         |                                                                |
-| `background`         | string or object { r, g, b, alpha }                                                                                                                                                                                                                                                                                     |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `kernel`             | `"nearest"` \| `"linear"` \| `"cubic"` \| `"mitchell"` \| `"lanczos2"` \| `"lanczos3"` \| `"mks2013"` \| `"mks2021"`                                                                                                                                                                                                    |          |         |                                                                |
-| `withoutEnlargement` | boolean                                                                                                                                                                                                                                                                                                                 |          |         |                                                                |
-| `withoutReduction`   | boolean                                                                                                                                                                                                                                                                                                                 |          |         |                                                                |
-| `fastShrinkOnLoad`   | boolean                                                                                                                                                                                                                                                                                                                 |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `width` | integer > 0 |  |  |  |
+| `height` | integer > 0 |  |  |  |
+| `fit` | `"contain"` \| `"cover"` \| `"fill"` \| `"inside"` \| `"outside"` |  |  |  |
+| `position` | `"north"` \| `"northeast"` \| `"east"` \| `"southeast"` \| `"south"` \| `"southwest"` \| `"west"` \| `"northwest"` \| `"center"` \| `"centre"` \| `"entropy"` \| `"attention"` \| `"top"` \| `"right top"` \| `"right"` \| `"right bottom"` \| `"bottom"` \| `"left bottom"` \| `"left"` \| `"left top"` or integer ≥ 0 |  |  |  |
+| `background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `kernel` | `"nearest"` \| `"linear"` \| `"cubic"` \| `"mitchell"` \| `"lanczos2"` \| `"lanczos3"` \| `"mks2013"` \| `"mks2021"` |  |  |  |
+| `withoutEnlargement` | boolean |  |  |  |
+| `withoutReduction` | boolean |  |  |  |
+| `fastShrinkOnLoad` | boolean |  |  |  |
 
 ### `extend`
 
-| Field        | Type                                                   | Required | Default | Description                                                    |
-| ------------ | ------------------------------------------------------ | -------- | ------- | -------------------------------------------------------------- |
-| `top`        | integer ≥ 0                                            |          |         |                                                                |
-| `left`       | integer ≥ 0                                            |          |         |                                                                |
-| `bottom`     | integer ≥ 0                                            |          |         |                                                                |
-| `right`      | integer ≥ 0                                            |          |         |                                                                |
-| `background` | string or object { r, g, b, alpha }                    |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `extendWith` | `"background"` \| `"copy"` \| `"repeat"` \| `"mirror"` |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `top` | integer ≥ 0 |  |  |  |
+| `left` | integer ≥ 0 |  |  |  |
+| `bottom` | integer ≥ 0 |  |  |  |
+| `right` | integer ≥ 0 |  |  |  |
+| `background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `extendWith` | `"background"` \| `"copy"` \| `"repeat"` \| `"mirror"` |  |  |  |
 
 ### `extract`
 
-| Field    | Type        | Required | Default | Description |
-| -------- | ----------- | -------- | ------- | ----------- |
-| `left`   | integer ≥ 0 | yes      |         |             |
-| `top`    | integer ≥ 0 | yes      |         |             |
-| `width`  | integer > 0 | yes      |         |             |
-| `height` | integer > 0 | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `left` | integer ≥ 0 | yes |  |  |
+| `top` | integer ≥ 0 | yes |  |  |
+| `width` | integer > 0 | yes |  |  |
+| `height` | integer > 0 | yes |  |  |
 
 ### `trim`
 
-| Field        | Type                                | Required | Default | Description                                                    |
-| ------------ | ----------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `background` | string or object { r, g, b, alpha } |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `threshold`  | number ≥ 0                          |          |         |                                                                |
-| `lineArt`    | boolean                             |          |         |                                                                |
-| `margin`     | integer ≥ 0                         |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `threshold` | number ≥ 0 |  |  |  |
+| `lineArt` | boolean |  |  |  |
+| `margin` | integer ≥ 0 |  |  |  |
 
 ### `rotate`
 
-| Field        | Type                                | Required | Default | Description                                                    |
-| ------------ | ----------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `angle`      | number                              |          |         |                                                                |
-| `background` | string or object { r, g, b, alpha } |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `angle` | number |  |  |  |
+| `background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
 
 ### `autoOrient`
 
@@ -311,72 +311,72 @@ No fields.
 
 ### `flip`
 
-| Field     | Type    | Required | Default | Description                                    |
-| --------- | ------- | -------- | ------- | ---------------------------------------------- |
-| `enabled` | boolean |          |         | Defaults to true; false disables the operation |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | boolean |  |  | Defaults to true; false disables the operation |
 
 ### `flop`
 
-| Field     | Type    | Required | Default | Description                                    |
-| --------- | ------- | -------- | ------- | ---------------------------------------------- |
-| `enabled` | boolean |          |         | Defaults to true; false disables the operation |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | boolean |  |  | Defaults to true; false disables the operation |
 
 ### `affine`
 
-| Field          | Type                                                                             | Required | Default | Description                                                    |
-| -------------- | -------------------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `matrix`       | [number, number, number, number] or [[number, number], [number, number]]         | yes      |         |                                                                |
-| `background`   | string or object { r, g, b, alpha }                                              |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `idx`          | number                                                                           |          |         |                                                                |
-| `idy`          | number                                                                           |          |         |                                                                |
-| `odx`          | number                                                                           |          |         |                                                                |
-| `ody`          | number                                                                           |          |         |                                                                |
-| `interpolator` | `"nearest"` \| `"bilinear"` \| `"bicubic"` \| `"lbb"` \| `"nohalo"` \| `"vsqbs"` |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `matrix` | [number, number, number, number] or [[number, number], [number, number]] | yes |  |  |
+| `background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `idx` | number |  |  |  |
+| `idy` | number |  |  |  |
+| `odx` | number |  |  |  |
+| `ody` | number |  |  |  |
+| `interpolator` | `"nearest"` \| `"bilinear"` \| `"bicubic"` \| `"lbb"` \| `"nohalo"` \| `"vsqbs"` |  |  |  |
 
 ## Filter and tone ops
 
 ### `sharpen`
 
-| Field   | Type               | Required | Default | Description |
-| ------- | ------------------ | -------- | ------- | ----------- |
-| `sigma` | number 0.000001–10 |          |         |             |
-| `m1`    | number ≥ 0         |          |         |             |
-| `m2`    | number ≥ 0         |          |         |             |
-| `x1`    | number ≥ 0         |          |         |             |
-| `y2`    | number ≥ 0         |          |         |             |
-| `y3`    | number ≥ 0         |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `sigma` | number 0.000001–10 |  |  |  |
+| `m1` | number ≥ 0 |  |  |  |
+| `m2` | number ≥ 0 |  |  |  |
+| `x1` | number ≥ 0 |  |  |  |
+| `y2` | number ≥ 0 |  |  |  |
+| `y3` | number ≥ 0 |  |  |  |
 
 ### `median`
 
-| Field  | Type        | Required | Default | Description |
-| ------ | ----------- | -------- | ------- | ----------- |
-| `size` | integer > 0 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `size` | integer > 0 |  |  |  |
 
 ### `blur`
 
-| Field          | Type                                        | Required | Default | Description |
-| -------------- | ------------------------------------------- | -------- | ------- | ----------- |
-| `sigma`        | number 0.3–1000                             |          |         |             |
-| `minAmplitude` | number 0.001–1                              |          |         |             |
-| `precision`    | `"integer"` \| `"float"` \| `"approximate"` |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `sigma` | number 0.3–1000 |  |  |  |
+| `minAmplitude` | number 0.001–1 |  |  |  |
+| `precision` | `"integer"` \| `"float"` \| `"approximate"` |  |  |  |
 
 ### `dilate`
 
-| Field   | Type        | Required | Default | Description |
-| ------- | ----------- | -------- | ------- | ----------- |
-| `width` | integer > 0 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `width` | integer > 0 |  |  |  |
 
 ### `erode`
 
-| Field   | Type        | Required | Default | Description |
-| ------- | ----------- | -------- | ------- | ----------- |
-| `width` | integer > 0 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `width` | integer > 0 |  |  |  |
 
 ### `flatten`
 
-| Field        | Type                                | Required | Default | Description                                                    |
-| ------------ | ----------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `background` | string or object { r, g, b, alpha } |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
 
 ### `unflatten`
 
@@ -384,132 +384,132 @@ No fields.
 
 ### `gamma`
 
-| Field      | Type       | Required | Default | Description |
-| ---------- | ---------- | -------- | ------- | ----------- |
-| `gamma`    | number 1–3 |          |         |             |
-| `gammaOut` | number 1–3 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `gamma` | number 1–3 |  |  |  |
+| `gammaOut` | number 1–3 |  |  |  |
 
 ### `negate`
 
-| Field   | Type    | Required | Default | Description |
-| ------- | ------- | -------- | ------- | ----------- |
-| `alpha` | boolean |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `alpha` | boolean |  |  |  |
 
 ### `normalise`
 
-| Field   | Type         | Required | Default | Description |
-| ------- | ------------ | -------- | ------- | ----------- |
-| `lower` | number 0–99  |          |         |             |
-| `upper` | number 1–100 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `lower` | number 0–99 |  |  |  |
+| `upper` | number 1–100 |  |  |  |
 
 ### `normalize`
 
-| Field   | Type         | Required | Default | Description |
-| ------- | ------------ | -------- | ------- | ----------- |
-| `lower` | number 0–99  |          |         |             |
-| `upper` | number 1–100 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `lower` | number 0–99 |  |  |  |
+| `upper` | number 1–100 |  |  |  |
 
 ### `clahe`
 
-| Field      | Type          | Required | Default | Description |
-| ---------- | ------------- | -------- | ------- | ----------- |
-| `width`    | integer > 0   | yes      |         |             |
-| `height`   | integer > 0   | yes      |         |             |
-| `maxSlope` | integer 0–100 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `width` | integer > 0 | yes |  |  |
+| `height` | integer > 0 | yes |  |  |
+| `maxSlope` | integer 0–100 |  |  |  |
 
 ### `convolve`
 
-| Field    | Type        | Required | Default | Description |
-| -------- | ----------- | -------- | ------- | ----------- |
-| `width`  | integer > 0 | yes      |         |             |
-| `height` | integer > 0 | yes      |         |             |
-| `kernel` | number[]    | yes      |         |             |
-| `scale`  | number      |          |         |             |
-| `offset` | number      |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `width` | integer > 0 | yes |  |  |
+| `height` | integer > 0 | yes |  |  |
+| `kernel` | number[] | yes |  |  |
+| `scale` | number |  |  |  |
+| `offset` | number |  |  |  |
 
 ### `threshold`
 
-| Field       | Type          | Required | Default | Description |
-| ----------- | ------------- | -------- | ------- | ----------- |
-| `threshold` | integer 0–255 |          |         |             |
-| `greyscale` | boolean       |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `threshold` | integer 0–255 |  |  |  |
+| `greyscale` | boolean |  |  |  |
 
 ### `boolean`
 
-| Field          | Type                               | Required | Default | Description |
-| -------------- | ---------------------------------- | -------- | ------- | ----------- |
-| `operand`      | string                             | yes      |         |             |
-| `operator`     | `"and"` \| `"or"` \| `"eor"`       | yes      |         |             |
-| `raw`          | object { width, height, channels } |          |         |             |
-| `raw.width`    | integer > 0                        | yes      |         |             |
-| `raw.height`   | integer > 0                        | yes      |         |             |
-| `raw.channels` | `1` \| `2` \| `3` \| `4`           | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `operand` | string | yes |  |  |
+| `operator` | `"and"` \| `"or"` \| `"eor"` | yes |  |  |
+| `raw` | object { width, height, channels } |  |  |  |
+| `raw.width` | integer > 0 | yes |  |  |
+| `raw.height` | integer > 0 | yes |  |  |
+| `raw.channels` | `1` \| `2` \| `3` \| `4` | yes |  |  |
 
 ### `linear`
 
-| Field | Type                       | Required | Default | Description |
-| ----- | -------------------------- | -------- | ------- | ----------- |
-| `a`   | number or number[] or null |          |         |             |
-| `b`   | number or number[]         |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `a` | number or number[] or null |  |  |  |
+| `b` | number or number[] |  |  |  |
 
 ### `recomb`
 
-| Field    | Type                                                                                                                                                                                                                       | Required | Default | Description |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `matrix` | [[number, number, number], [number, number, number], [number, number, number]] or [[number, number, number, number], [number, number, number, number], [number, number, number, number], [number, number, number, number]] | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `matrix` | [[number, number, number], [number, number, number], [number, number, number]] or [[number, number, number, number], [number, number, number, number], [number, number, number, number], [number, number, number, number]] | yes |  |  |
 
 ### `modulate`
 
-| Field        | Type       | Required | Default | Description |
-| ------------ | ---------- | -------- | ------- | ----------- |
-| `brightness` | number ≥ 0 |          |         |             |
-| `saturation` | number ≥ 0 |          |         |             |
-| `hue`        | number     |          |         |             |
-| `lightness`  | number     |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `brightness` | number ≥ 0 |  |  |  |
+| `saturation` | number ≥ 0 |  |  |  |
+| `hue` | number |  |  |  |
+| `lightness` | number |  |  |  |
 
 ## Colour and channel ops
 
 ### `tint`
 
-| Field    | Type                                | Required | Default | Description                                                    |
-| -------- | ----------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `colour` | string or object { r, g, b, alpha } | yes      |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `colour` | string or object { r, g, b, alpha } | yes |  | The tint colour: a CSS string such as "#ff000080", or { r, g, b, alpha }. An alpha below 1 blends the tint with the original image by that strength. |
 
 ### `greyscale`
 
-| Field     | Type    | Required | Default | Description                                    |
-| --------- | ------- | -------- | ------- | ---------------------------------------------- |
-| `enabled` | boolean |          |         | Defaults to true; false disables the operation |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | boolean |  |  | Defaults to true; false disables the operation |
 
 ### `grayscale`
 
-| Field     | Type    | Required | Default | Description                                    |
-| --------- | ------- | -------- | ------- | ---------------------------------------------- |
-| `enabled` | boolean |          |         | Defaults to true; false disables the operation |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | boolean |  |  | Defaults to true; false disables the operation |
 
 ### `pipelineColourspace`
 
-| Field         | Type                                                                                                                                                                                                                                        | Required | Default | Description |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes |  |  |
 
 ### `pipelineColorspace`
 
-| Field         | Type                                                                                                                                                                                                                                        | Required | Default | Description |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes |  |  |
 
 ### `toColourspace`
 
-| Field         | Type                                                                                                                                                                                                                                        | Required | Default | Description |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes |  |  |
 
 ### `toColorspace`
 
-| Field         | Type                                                                                                                                                                                                                                        | Required | Default | Description |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `colourspace` | `"b-w"` \| `"cmc"` \| `"cmyk"` \| `"fourier"` \| `"grey16"` \| `"histogram"` \| `"hsv"` \| `"lab"` \| `"labq"` \| `"labs"` \| `"lch"` \| `"matrix"` \| `"multiband"` \| `"rgb"` \| `"rgb16"` \| `"scrgb"` \| `"srgb"` \| `"xyz"` \| `"yxy"` | yes |  |  |
 
 ### `removeAlpha`
 
@@ -517,132 +517,132 @@ No fields.
 
 ### `ensureAlpha`
 
-| Field   | Type       | Required | Default | Description |
-| ------- | ---------- | -------- | ------- | ----------- |
-| `alpha` | number 0–1 |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `alpha` | number 0–1 |  |  |  |
 
 ### `extractChannel`
 
-| Field     | Type                                                                      | Required | Default | Description |
-| --------- | ------------------------------------------------------------------------- | -------- | ------- | ----------- |
-| `channel` | `0` \| `1` \| `2` \| `3` or `"red"` \| `"green"` \| `"blue"` \| `"alpha"` | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `channel` | `0` \| `1` \| `2` \| `3` or `"red"` \| `"green"` \| `"blue"` \| `"alpha"` | yes |  |  |
 
 ### `joinChannel`
 
-| Field                        | Type                                                              | Required | Default | Description                                                    |
-| ---------------------------- | ----------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `images`                     | string or string[]                                                | yes      |         |                                                                |
-| `options`                    | object                                                            |          |         |                                                                |
-| `options.autoOrient`         | boolean                                                           |          |         |                                                                |
-| `options.failOn`             | `"none"` \| `"truncated"` \| `"error"` \| `"warning"`             |          |         |                                                                |
-| `options.limitInputPixels`   | integer > 0 or boolean                                            |          |         |                                                                |
-| `options.limitInputChannels` | integer > 0 or boolean                                            |          |         |                                                                |
-| `options.unlimited`          | boolean                                                           |          |         |                                                                |
-| `options.sequentialRead`     | boolean                                                           |          |         |                                                                |
-| `options.density`            | number > 0, ≤ 100000                                              |          |         |                                                                |
-| `options.ignoreIcc`          | boolean                                                           |          |         |                                                                |
-| `options.pages`              | integer ≥ -1                                                      |          |         |                                                                |
-| `options.page`               | integer ≥ 0                                                       |          |         |                                                                |
-| `options.tiff`               | object { subifd }                                                 |          |         |                                                                |
-| `options.tiff.subifd`        | integer ≥ -1                                                      |          |         |                                                                |
-| `options.svg`                | object { stylesheet, highBitdepth }                               |          |         |                                                                |
-| `options.svg.stylesheet`     | string                                                            |          |         |                                                                |
-| `options.svg.highBitdepth`   | boolean                                                           |          |         |                                                                |
-| `options.pdf`                | object { background }                                             |          |         |                                                                |
-| `options.pdf.background`     | string or object { r, g, b, alpha }                               |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `options.openSlide`          | object { level }                                                  |          |         |                                                                |
-| `options.openSlide.level`    | integer ≥ 0                                                       |          |         |                                                                |
-| `options.jp2`                | object { oneshot }                                                |          |         |                                                                |
-| `options.jp2.oneshot`        | boolean                                                           |          |         |                                                                |
-| `options.subifd`             | integer ≥ -1                                                      |          |         |                                                                |
-| `options.pdfBackground`      | string or object { r, g, b, alpha }                               |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `options.level`              | integer ≥ 0                                                       |          |         |                                                                |
-| `options.animated`           | boolean                                                           |          |         |                                                                |
-| `options.raw`                | object { width, height, channels, premultiplied, pageHeight }     |          |         |                                                                |
-| `options.raw.width`          | integer > 0                                                       | yes      |         |                                                                |
-| `options.raw.height`         | integer > 0                                                       | yes      |         |                                                                |
-| `options.raw.channels`       | `1` \| `2` \| `3` \| `4`                                          | yes      |         |                                                                |
-| `options.raw.premultiplied`  | boolean                                                           |          |         |                                                                |
-| `options.raw.pageHeight`     | integer > 0                                                       |          |         |                                                                |
-| `options.create`             | object { width, height, channels, background, noise, pageHeight } |          |         |                                                                |
-| `options.create.width`       | integer > 0                                                       | yes      |         |                                                                |
-| `options.create.height`      | integer > 0                                                       | yes      |         |                                                                |
-| `options.create.channels`    | `3` \| `4`                                                        | yes      |         |                                                                |
-| `options.create.background`  | string or object { r, g, b, alpha }                               | yes      |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `options.create.noise`       | object { type, mean, sigma }                                      |          |         |                                                                |
-| `options.create.noise.type`  | `"gaussian"`                                                      | yes      |         |                                                                |
-| `options.create.noise.mean`  | number                                                            |          |         |                                                                |
-| `options.create.noise.sigma` | number                                                            |          |         |                                                                |
-| `options.create.pageHeight`  | integer > 0                                                       |          |         |                                                                |
-| `options.text`               | object                                                            |          |         |                                                                |
-| `options.text.text`          | string                                                            | yes      |         |                                                                |
-| `options.text.font`          | string                                                            |          |         |                                                                |
-| `options.text.fontfile`      | string                                                            |          |         |                                                                |
-| `options.text.width`         | integer > 0                                                       |          |         |                                                                |
-| `options.text.height`        | integer > 0                                                       |          |         |                                                                |
-| `options.text.align`         | `"left"` \| `"centre"` \| `"center"` \| `"right"`                 |          |         |                                                                |
-| `options.text.justify`       | boolean                                                           |          |         |                                                                |
-| `options.text.dpi`           | integer > 0                                                       |          |         |                                                                |
-| `options.text.rgba`          | boolean                                                           |          |         |                                                                |
-| `options.text.spacing`       | integer                                                           |          |         |                                                                |
-| `options.text.wrap`          | `"word"` \| `"char"` \| `"word-char"` \| `"none"`                 |          |         |                                                                |
-| `options.join`               | object { across, animated, shim, background, halign, valign }     |          |         |                                                                |
-| `options.join.across`        | integer > 0                                                       |          |         |                                                                |
-| `options.join.animated`      | boolean                                                           |          |         |                                                                |
-| `options.join.shim`          | integer ≥ 0                                                       |          |         |                                                                |
-| `options.join.background`    | string or object { r, g, b, alpha }                               |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `options.join.halign`        | `"left"` \| `"centre"` \| `"center"` \| `"right"`                 |          |         |                                                                |
-| `options.join.valign`        | `"top"` \| `"centre"` \| `"center"` \| `"bottom"`                 |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `images` | string or string[] | yes |  |  |
+| `options` | object |  |  |  |
+| `options.autoOrient` | boolean |  |  |  |
+| `options.failOn` | `"none"` \| `"truncated"` \| `"error"` \| `"warning"` |  |  |  |
+| `options.limitInputPixels` | integer > 0 or boolean |  |  |  |
+| `options.limitInputChannels` | integer > 0 or boolean |  |  |  |
+| `options.unlimited` | boolean |  |  |  |
+| `options.sequentialRead` | boolean |  |  |  |
+| `options.density` | number > 0, ≤ 100000 |  |  |  |
+| `options.ignoreIcc` | boolean |  |  |  |
+| `options.pages` | integer ≥ -1 |  |  |  |
+| `options.page` | integer ≥ 0 |  |  |  |
+| `options.tiff` | object { subifd } |  |  |  |
+| `options.tiff.subifd` | integer ≥ -1 |  |  |  |
+| `options.svg` | object { stylesheet, highBitdepth } |  |  |  |
+| `options.svg.stylesheet` | string |  |  |  |
+| `options.svg.highBitdepth` | boolean |  |  |  |
+| `options.pdf` | object { background } |  |  |  |
+| `options.pdf.background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `options.openSlide` | object { level } |  |  |  |
+| `options.openSlide.level` | integer ≥ 0 |  |  |  |
+| `options.jp2` | object { oneshot } |  |  |  |
+| `options.jp2.oneshot` | boolean |  |  |  |
+| `options.subifd` | integer ≥ -1 |  |  |  |
+| `options.pdfBackground` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `options.level` | integer ≥ 0 |  |  |  |
+| `options.animated` | boolean |  |  |  |
+| `options.raw` | object { width, height, channels, premultiplied, pageHeight } |  |  |  |
+| `options.raw.width` | integer > 0 | yes |  |  |
+| `options.raw.height` | integer > 0 | yes |  |  |
+| `options.raw.channels` | `1` \| `2` \| `3` \| `4` | yes |  |  |
+| `options.raw.premultiplied` | boolean |  |  |  |
+| `options.raw.pageHeight` | integer > 0 |  |  |  |
+| `options.create` | object { width, height, channels, background, noise, pageHeight } |  |  |  |
+| `options.create.width` | integer > 0 | yes |  |  |
+| `options.create.height` | integer > 0 | yes |  |  |
+| `options.create.channels` | `3` \| `4` | yes |  |  |
+| `options.create.background` | string or object { r, g, b, alpha } | yes |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `options.create.noise` | object { type, mean, sigma } |  |  |  |
+| `options.create.noise.type` | `"gaussian"` | yes |  |  |
+| `options.create.noise.mean` | number |  |  |  |
+| `options.create.noise.sigma` | number |  |  |  |
+| `options.create.pageHeight` | integer > 0 |  |  |  |
+| `options.text` | object |  |  |  |
+| `options.text.text` | string | yes |  |  |
+| `options.text.font` | string |  |  |  |
+| `options.text.fontfile` | string |  |  |  |
+| `options.text.width` | integer > 0 |  |  |  |
+| `options.text.height` | integer > 0 |  |  |  |
+| `options.text.align` | `"left"` \| `"centre"` \| `"center"` \| `"right"` |  |  |  |
+| `options.text.justify` | boolean |  |  |  |
+| `options.text.dpi` | integer > 0 |  |  |  |
+| `options.text.rgba` | boolean |  |  |  |
+| `options.text.spacing` | integer |  |  |  |
+| `options.text.wrap` | `"word"` \| `"char"` \| `"word-char"` \| `"none"` |  |  |  |
+| `options.join` | object { across, animated, shim, background, halign, valign } |  |  |  |
+| `options.join.across` | integer > 0 |  |  |  |
+| `options.join.animated` | boolean |  |  |  |
+| `options.join.shim` | integer ≥ 0 |  |  |  |
+| `options.join.background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `options.join.halign` | `"left"` \| `"centre"` \| `"center"` \| `"right"` |  |  |  |
+| `options.join.valign` | `"top"` \| `"centre"` \| `"center"` \| `"bottom"` |  |  |  |
 
 ### `bandbool`
 
-| Field      | Type                         | Required | Default | Description |
-| ---------- | ---------------------------- | -------- | ------- | ----------- |
-| `operator` | `"and"` \| `"or"` \| `"eor"` | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `operator` | `"and"` \| `"or"` \| `"eor"` | yes |  |  |
 
 ### `composite`
 
-| Field                         | Type                                                                                                                                                                                                                                                                                                                                                                                                                 | Required | Default | Description                                                    |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `images`                      | object[]                                                                                                                                                                                                                                                                                                                                                                                                             | yes      |         |                                                                |
-| `images[].autoOrient`         | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].failOn`             | `"none"` \| `"truncated"` \| `"error"` \| `"warning"`                                                                                                                                                                                                                                                                                                                                                                |          |         |                                                                |
-| `images[].limitInputPixels`   | integer > 0 or boolean                                                                                                                                                                                                                                                                                                                                                                                               |          |         |                                                                |
-| `images[].limitInputChannels` | integer > 0 or boolean                                                                                                                                                                                                                                                                                                                                                                                               |          |         |                                                                |
-| `images[].unlimited`          | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].sequentialRead`     | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].density`            | number > 0, ≤ 100000                                                                                                                                                                                                                                                                                                                                                                                                 |          |         |                                                                |
-| `images[].ignoreIcc`          | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].pages`              | integer ≥ -1                                                                                                                                                                                                                                                                                                                                                                                                         |          |         |                                                                |
-| `images[].page`               | integer ≥ 0                                                                                                                                                                                                                                                                                                                                                                                                          |          |         |                                                                |
-| `images[].tiff`               | object { subifd }                                                                                                                                                                                                                                                                                                                                                                                                    |          |         |                                                                |
-| `images[].tiff.subifd`        | integer ≥ -1                                                                                                                                                                                                                                                                                                                                                                                                         |          |         |                                                                |
-| `images[].svg`                | object { stylesheet, highBitdepth }                                                                                                                                                                                                                                                                                                                                                                                  |          |         |                                                                |
-| `images[].svg.stylesheet`     | string                                                                                                                                                                                                                                                                                                                                                                                                               |          |         |                                                                |
-| `images[].svg.highBitdepth`   | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].pdf`                | object { background }                                                                                                                                                                                                                                                                                                                                                                                                |          |         |                                                                |
-| `images[].pdf.background`     | string or object { r, g, b, alpha }                                                                                                                                                                                                                                                                                                                                                                                  |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `images[].openSlide`          | object { level }                                                                                                                                                                                                                                                                                                                                                                                                     |          |         |                                                                |
-| `images[].openSlide.level`    | integer ≥ 0                                                                                                                                                                                                                                                                                                                                                                                                          |          |         |                                                                |
-| `images[].jp2`                | object { oneshot }                                                                                                                                                                                                                                                                                                                                                                                                   |          |         |                                                                |
-| `images[].jp2.oneshot`        | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].subifd`             | integer ≥ -1                                                                                                                                                                                                                                                                                                                                                                                                         |          |         |                                                                |
-| `images[].pdfBackground`      | string or object { r, g, b, alpha }                                                                                                                                                                                                                                                                                                                                                                                  |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `images[].level`              | integer ≥ 0                                                                                                                                                                                                                                                                                                                                                                                                          |          |         |                                                                |
-| `images[].animated`           | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].raw`                | object { width, height, channels, premultiplied, pageHeight }                                                                                                                                                                                                                                                                                                                                                        |          |         |                                                                |
-| `images[].raw.width`          | integer > 0                                                                                                                                                                                                                                                                                                                                                                                                          | yes      |         |                                                                |
-| `images[].raw.height`         | integer > 0                                                                                                                                                                                                                                                                                                                                                                                                          | yes      |         |                                                                |
-| `images[].raw.channels`       | `1` \| `2` \| `3` \| `4`                                                                                                                                                                                                                                                                                                                                                                                             | yes      |         |                                                                |
-| `images[].raw.premultiplied`  | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].raw.pageHeight`     | integer > 0                                                                                                                                                                                                                                                                                                                                                                                                          |          |         |                                                                |
-| `images[].input`              | string or object { create } or object { text }                                                                                                                                                                                                                                                                                                                                                                       | yes      |         |                                                                |
-| `images[].blend`              | `"clear"` \| `"source"` \| `"over"` \| `"in"` \| `"out"` \| `"atop"` \| `"dest"` \| `"dest-over"` \| `"dest-in"` \| `"dest-out"` \| `"dest-atop"` \| `"xor"` \| `"add"` \| `"saturate"` \| `"multiply"` \| `"screen"` \| `"overlay"` \| `"darken"` \| `"lighten"` \| `"color-dodge"` \| `"colour-dodge"` \| `"color-burn"` \| `"colour-burn"` \| `"hard-light"` \| `"soft-light"` \| `"difference"` \| `"exclusion"` |          |         |                                                                |
-| `images[].gravity`            | `"north"` \| `"northeast"` \| `"east"` \| `"southeast"` \| `"south"` \| `"southwest"` \| `"west"` \| `"northwest"` \| `"center"` \| `"centre"` or integer ≥ 0                                                                                                                                                                                                                                                        |          |         |                                                                |
-| `images[].top`                | integer                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].left`               | integer                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].tile`               | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
-| `images[].premultiplied`      | boolean                                                                                                                                                                                                                                                                                                                                                                                                              |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `images` | object[] | yes |  |  |
+| `images[].autoOrient` | boolean |  |  |  |
+| `images[].failOn` | `"none"` \| `"truncated"` \| `"error"` \| `"warning"` |  |  |  |
+| `images[].limitInputPixels` | integer > 0 or boolean |  |  |  |
+| `images[].limitInputChannels` | integer > 0 or boolean |  |  |  |
+| `images[].unlimited` | boolean |  |  |  |
+| `images[].sequentialRead` | boolean |  |  |  |
+| `images[].density` | number > 0, ≤ 100000 |  |  |  |
+| `images[].ignoreIcc` | boolean |  |  |  |
+| `images[].pages` | integer ≥ -1 |  |  |  |
+| `images[].page` | integer ≥ 0 |  |  |  |
+| `images[].tiff` | object { subifd } |  |  |  |
+| `images[].tiff.subifd` | integer ≥ -1 |  |  |  |
+| `images[].svg` | object { stylesheet, highBitdepth } |  |  |  |
+| `images[].svg.stylesheet` | string |  |  |  |
+| `images[].svg.highBitdepth` | boolean |  |  |  |
+| `images[].pdf` | object { background } |  |  |  |
+| `images[].pdf.background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `images[].openSlide` | object { level } |  |  |  |
+| `images[].openSlide.level` | integer ≥ 0 |  |  |  |
+| `images[].jp2` | object { oneshot } |  |  |  |
+| `images[].jp2.oneshot` | boolean |  |  |  |
+| `images[].subifd` | integer ≥ -1 |  |  |  |
+| `images[].pdfBackground` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `images[].level` | integer ≥ 0 |  |  |  |
+| `images[].animated` | boolean |  |  |  |
+| `images[].raw` | object { width, height, channels, premultiplied, pageHeight } |  |  |  |
+| `images[].raw.width` | integer > 0 | yes |  |  |
+| `images[].raw.height` | integer > 0 | yes |  |  |
+| `images[].raw.channels` | `1` \| `2` \| `3` \| `4` | yes |  |  |
+| `images[].raw.premultiplied` | boolean |  |  |  |
+| `images[].raw.pageHeight` | integer > 0 |  |  |  |
+| `images[].input` | string or object { create } or object { text } | yes |  |  |
+| `images[].blend` | `"clear"` \| `"source"` \| `"over"` \| `"in"` \| `"out"` \| `"atop"` \| `"dest"` \| `"dest-over"` \| `"dest-in"` \| `"dest-out"` \| `"dest-atop"` \| `"xor"` \| `"add"` \| `"saturate"` \| `"multiply"` \| `"screen"` \| `"overlay"` \| `"darken"` \| `"lighten"` \| `"color-dodge"` \| `"colour-dodge"` \| `"color-burn"` \| `"colour-burn"` \| `"hard-light"` \| `"soft-light"` \| `"difference"` \| `"exclusion"` |  |  |  |
+| `images[].gravity` | `"north"` \| `"northeast"` \| `"east"` \| `"southeast"` \| `"south"` \| `"southwest"` \| `"west"` \| `"northwest"` \| `"center"` \| `"centre"` or integer ≥ 0 |  |  |  |
+| `images[].top` | integer |  |  |  |
+| `images[].left` | integer |  |  |  |
+| `images[].tile` | boolean |  |  |  |
+| `images[].premultiplied` | boolean |  |  |  |
 
 ## Output, metadata and control ops
 
@@ -688,33 +688,33 @@ Takes the [`raw` options](#raw-options) as fields.
 
 ### `toFormat`
 
-| Field     | Type                                                                                                            | Required | Default | Description                                       |
-| --------- | --------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------------------------- |
-| `format`  | `"jpeg"` \| `"png"` \| `"webp"` \| `"gif"` \| `"avif"` \| `"heif"` \| `"tiff"` \| `"jxl"` \| `"jp2"` \| `"raw"` | yes      |         |                                                   |
-| `options` | object                                                                                                          |          |         | The same options as the op named after the format |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `format` | `"jpeg"` \| `"png"` \| `"webp"` \| `"gif"` \| `"avif"` \| `"heif"` \| `"tiff"` \| `"jxl"` \| `"jp2"` \| `"raw"` | yes |  |  |
+| `options` | object |  |  | The same options as the op named after the format |
 
 ### `tile`
 
-| Field        | Type                                                         | Required | Default | Description                                                    |
-| ------------ | ------------------------------------------------------------ | -------- | ------- | -------------------------------------------------------------- |
-| `size`       | integer > 0, ≤ 8192                                          |          |         |                                                                |
-| `overlap`    | integer 0–8192                                               |          |         |                                                                |
-| `angle`      | `0` \| `90` \| `180` \| `270`                                |          |         |                                                                |
-| `background` | string or object { r, g, b, alpha }                          |          |         | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
-| `depth`      | `"onepixel"` \| `"onetile"` \| `"one"`                       |          |         |                                                                |
-| `skipBlanks` | integer -1–65535                                             |          |         |                                                                |
-| `container`  | `"fs"` \| `"zip"`                                            |          |         |                                                                |
-| `layout`     | `"dz"` \| `"iiif"` \| `"iiif3"` \| `"zoomify"` \| `"google"` |          |         |                                                                |
-| `centre`     | boolean                                                      |          |         |                                                                |
-| `center`     | boolean                                                      |          |         |                                                                |
-| `id`         | string                                                       |          |         |                                                                |
-| `basename`   | string                                                       |          |         |                                                                |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `size` | integer > 0, ≤ 8192 |  |  |  |
+| `overlap` | integer 0–8192 |  |  |  |
+| `angle` | `0` \| `90` \| `180` \| `270` |  |  |  |
+| `background` | string or object { r, g, b, alpha } |  |  | A CSS colour string such as "#ff000080", or { r, g, b, alpha } |
+| `depth` | `"onepixel"` \| `"onetile"` \| `"one"` |  |  |  |
+| `skipBlanks` | integer -1–65535 |  |  |  |
+| `container` | `"fs"` \| `"zip"` |  |  |  |
+| `layout` | `"dz"` \| `"iiif"` \| `"iiif3"` \| `"zoomify"` \| `"google"` |  |  |  |
+| `centre` | boolean |  |  |  |
+| `center` | boolean |  |  |  |
+| `id` | string |  |  |  |
+| `basename` | string |  |  |  |
 
 ### `timeout`
 
-| Field     | Type        | Required | Default | Description |
-| --------- | ----------- | -------- | ------- | ----------- |
-| `seconds` | integer ≥ 0 | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `seconds` | integer ≥ 0 | yes |  |  |
 
 ### `keepMetadata`
 
@@ -726,23 +726,23 @@ No fields.
 
 ### `withExif`
 
-| Field       | Type                              | Required | Default | Description |
-| ----------- | --------------------------------- | -------- | ------- | ----------- |
-| `exif`      | object { IFD0, IFD1, IFD2, IFD3 } | yes      |         |             |
-| `exif.IFD0` | object                            |          |         |             |
-| `exif.IFD1` | object                            |          |         |             |
-| `exif.IFD2` | object                            |          |         |             |
-| `exif.IFD3` | object                            |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `exif` | object { IFD0, IFD1, IFD2, IFD3 } | yes |  |  |
+| `exif.IFD0` | object |  |  |  |
+| `exif.IFD1` | object |  |  |  |
+| `exif.IFD2` | object |  |  |  |
+| `exif.IFD3` | object |  |  |  |
 
 ### `withExifMerge`
 
-| Field       | Type                              | Required | Default | Description |
-| ----------- | --------------------------------- | -------- | ------- | ----------- |
-| `exif`      | object { IFD0, IFD1, IFD2, IFD3 } | yes      |         |             |
-| `exif.IFD0` | object                            |          |         |             |
-| `exif.IFD1` | object                            |          |         |             |
-| `exif.IFD2` | object                            |          |         |             |
-| `exif.IFD3` | object                            |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `exif` | object { IFD0, IFD1, IFD2, IFD3 } | yes |  |  |
+| `exif.IFD0` | object |  |  |  |
+| `exif.IFD1` | object |  |  |  |
+| `exif.IFD2` | object |  |  |  |
+| `exif.IFD3` | object |  |  |  |
 
 ### `keepIccProfile`
 
@@ -750,10 +750,10 @@ No fields.
 
 ### `withIccProfile`
 
-| Field    | Type    | Required | Default | Description                                 |
-| -------- | ------- | -------- | ------- | ------------------------------------------- |
-| `icc`    | string  | yes      |         | A built-in profile name or an ICC file path |
-| `attach` | boolean |          |         |                                             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `icc` | string | yes |  | A built-in profile name or an ICC file path |
+| `attach` | boolean |  |  |  |
 
 ### `keepXmp`
 
@@ -761,25 +761,25 @@ No fields.
 
 ### `withXmp`
 
-| Field | Type   | Required | Default | Description |
-| ----- | ------ | -------- | ------- | ----------- |
-| `xmp` | string | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `xmp` | string | yes |  |  |
 
 ### `withMetadata`
 
-| Field         | Type                              | Required | Default | Description |
-| ------------- | --------------------------------- | -------- | ------- | ----------- |
-| `density`     | number > 0                        |          |         |             |
-| `orientation` | integer 1–8                       |          |         |             |
-| `icc`         | string                            |          |         |             |
-| `exif`        | object { IFD0, IFD1, IFD2, IFD3 } |          |         |             |
-| `exif.IFD0`   | object                            |          |         |             |
-| `exif.IFD1`   | object                            |          |         |             |
-| `exif.IFD2`   | object                            |          |         |             |
-| `exif.IFD3`   | object                            |          |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `density` | number > 0 |  |  |  |
+| `orientation` | integer 1–8 |  |  |  |
+| `icc` | string |  |  |  |
+| `exif` | object { IFD0, IFD1, IFD2, IFD3 } |  |  |  |
+| `exif.IFD0` | object |  |  |  |
+| `exif.IFD1` | object |  |  |  |
+| `exif.IFD2` | object |  |  |  |
+| `exif.IFD3` | object |  |  |  |
 
 ### `withDensity`
 
-| Field     | Type       | Required | Default | Description |
-| --------- | ---------- | -------- | ------- | ----------- |
-| `density` | number > 0 | yes      |         |             |
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `density` | number > 0 | yes |  |  |

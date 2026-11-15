@@ -23,7 +23,7 @@ import {
   readJsonArgument,
   toNumber,
 } from '../cli.ts'
-import type { ArgsOptions, ParsedCommand } from '../cli.ts'
+import type { ArgsOptions, ParsedCommand, RunContext } from '../cli.ts'
 import { formatWritePlan } from '../plan-format.ts'
 
 const USAGE = `Usage: ${PROGRAM} upscale <source> <destination> [options]
@@ -156,9 +156,13 @@ interface UpscaleRun {
 }
 
 /** The Upscayl engine is loaded only here, so other commands never load `opencomic-ai-bin`. */
-async function upscale(options: UpscaleOptions): Promise<UpscaleRun> {
-  const { createUpscaylEngine } =
-    await import('../../../src/lib/images/upscayl-engine.ts')
+async function upscale(
+  options: UpscaleOptions,
+  context: RunContext,
+): Promise<UpscaleRun> {
+  const { createUpscaylEngine } = await import(
+    '../../../src/lib/images/upscayl-engine.ts'
+  )
   const { model, scale } = resolveModel(options)
   const engine = await createUpscaylEngine(
     path.resolve(MODELS_ROOT),
@@ -166,7 +170,11 @@ async function upscale(options: UpscaleOptions): Promise<UpscaleRun> {
     scale,
   )
   try {
-    const images = await upscaleImages(options, engine.upscale)
+    const images = await upscaleImages(
+      options,
+      engine.upscale,
+      context.onProgress,
+    )
     const name = model.kind === 'pinned' ? model.model.name : model.name
     return { model: name, scale, iterations: options.iterations, images }
   } finally {
@@ -174,9 +182,12 @@ async function upscale(options: UpscaleOptions): Promise<UpscaleRun> {
   }
 }
 
-function run(options: UpscaleOptions): Promise<UpscaleRun | UpscalePlan> {
+function run(
+  options: UpscaleOptions,
+  context: RunContext,
+): Promise<UpscaleRun | UpscalePlan> {
   if (options.dryRun) return planUpscale(options, path.resolve(MODELS_ROOT))
-  return upscale(options)
+  return upscale(options, context)
 }
 
 function formatPlan(plan: UpscalePlan): string {

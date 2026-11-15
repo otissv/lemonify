@@ -89,7 +89,7 @@ export const sharpInputOptionsSchema = z.strictObject({
 })
 export type SharpInputOptions = z.infer<typeof sharpInputOptionsSchema>
 
-const BLEND_MODES = [
+export const BLEND_MODES = [
   'clear',
   'source',
   'over',

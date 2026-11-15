@@ -15,7 +15,11 @@ describe('dispatch', () => {
   it.each([[[]], [['--help']], [['-h']]])(
     'shows the overall help for %j',
     (argv) => {
-      expect(dispatch(COMMANDS, argv)).toEqual({ kind: 'help', json: false })
+      expect(dispatch(COMMANDS, argv)).toEqual({
+        kind: 'help',
+        json: false,
+        progress: false,
+      })
     },
   )
 
@@ -27,6 +31,17 @@ describe('dispatch', () => {
       command: commandNamed('upscale'),
       argv: ['in', 'out', '--scale', '2'],
       json: false,
+      progress: false,
+    })
+  })
+
+  it('takes --progress from anywhere and removes it', () => {
+    expect(
+      dispatch(COMMANDS, ['upscale', '--progress', '--job', '{}']),
+    ).toMatchObject({
+      kind: 'run',
+      argv: ['--job', '{}'],
+      progress: true,
     })
   })
 
@@ -71,6 +86,42 @@ describe('COMMANDS', () => {
       'models',
       'formats',
       'schema',
+      'user list',
+      'source add',
+      'source list',
+      'source delete',
+      'document create',
+      'document list',
+      'document show',
+      'document delete',
+      'document undo',
+      'document redo',
+      'document step add',
+      'document step remove',
+      'document step move',
+      'document step set',
+      'document step enable',
+      'document step disable',
+      'export',
+      'workflow create',
+      'workflow show',
+      'workflow list',
+      'workflow update',
+      'workflow delete',
+      'workflow run',
+      'workflow results',
+      'workflow runs',
+      'workflow cancel',
+      'workflow run delete',
+      'result list',
+      'result show',
+      'result delete',
+      'result save',
+      'result clear-unused',
+      'job list',
+      'job show',
+      'job cancel',
+      'worker',
     ])
   })
 

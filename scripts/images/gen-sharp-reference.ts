@@ -7,11 +7,8 @@ import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { renderSharpReference } from '../../src/lib/images/sharp/reference.ts'
-import {
-  SHARP_REFERENCE_FILE,
-  formatSharpReference,
-} from './sharp-reference.ts'
+import { SHARP_REFERENCE_FILE } from './sharp-reference.ts'
 
 const file = path.resolve(SHARP_REFERENCE_FILE)
-await writeFile(file, await formatSharpReference(renderSharpReference(), file))
+await writeFile(file, renderSharpReference())
 console.log(`Wrote ${SHARP_REFERENCE_FILE}`)
