@@ -48,6 +48,8 @@ interface AppStateData {
   sidebarOpen: boolean
   sidebarTab: SidebarTab
   panelPosition: PanelPosition | null
+  /** Whether the tools panel shows only its menu. */
+  panelCollapsed: boolean
   activeTool: Tool
   recentUpscaleModels: ReadonlyArray<string>
   /** Documents whose steps are listed in the sidebar. */
@@ -70,6 +72,7 @@ interface AppStateActions {
   setSidebarOpen: (open: boolean) => void
   setSidebarTab: (tab: SidebarTab) => void
   setPanelPosition: (position: PanelPosition) => void
+  setPanelCollapsed: (collapsed: boolean) => void
   setActiveTool: (tool: Tool) => void
   setShowOriginal: (documentId: string, show: boolean) => void
   rememberUpscaleModel: (name: string) => void
@@ -100,6 +103,7 @@ export const INITIAL_APP_STATE: Readonly<AppStateData> = {
   sidebarOpen: true,
   sidebarTab: SidebarTab.Editor,
   panelPosition: null,
+  panelCollapsed: false,
   activeTool: Tool.Tools,
   recentUpscaleModels: [],
   documentHistory: [],
@@ -178,6 +182,9 @@ export const useAppStore = create<AppState>()(
       },
       setPanelPosition: (panelPosition) => {
         set({ panelPosition })
+      },
+      setPanelCollapsed: (panelCollapsed) => {
+        set({ panelCollapsed })
       },
       setActiveTool: (activeTool) => {
         set({ activeTool })

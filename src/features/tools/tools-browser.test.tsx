@@ -66,7 +66,7 @@ describe('ToolsBrowser', () => {
       screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
     ).toEqual(GROUPS)
     await expandAll(user)
-    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(41)
+    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(38)
     expect(
       screen.queryByRole('button', { name: 'Add Jpeg' }),
     ).not.toBeInTheDocument()

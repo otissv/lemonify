@@ -55,11 +55,18 @@ const CATEGORY_LABELS: Readonly<
   output: 'Output',
 }
 
+/** Sharp accepts these US spellings as aliases; the UI lists only the UK spelling of each op. */
+const US_SPELLING_OPS: ReadonlySet<string> = new Set([
+  'grayscale',
+  'pipelineColorspace',
+  'toColorspace',
+])
+
 export const SHARP_OP_GROUPS: ReadonlyArray<SharpOpGroup> = Object.entries(
   SHARP_OP_CATEGORIES,
 ).map(([category, ops]) => ({
   label: CATEGORY_LABELS[category as keyof typeof SHARP_OP_CATEGORIES],
-  ops,
+  ops: ops.filter((op) => !US_SPELLING_OPS.has(op)),
 }))
 
 const JsonPropertySchema = z.looseObject({

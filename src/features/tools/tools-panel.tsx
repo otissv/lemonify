@@ -55,6 +55,11 @@ export function ToolsPanel({
 }: ToolsPanelProps): React.JSX.Element {
   const activeTool = useAppStore((state) => state.activeTool)
   const setActiveTool = useAppStore((state) => state.setActiveTool)
+  const hasSelectedStep = useAppStore(
+    (state) => state.selectedSteps[documentId] !== undefined,
+  )
+  const shownTool =
+    activeTool === Tool.Options && !hasSelectedStep ? Tool.Tools : activeTool
 
   function handleToolChange(value: string): void {
     if (isTool(value)) setActiveTool(value)
@@ -68,7 +73,7 @@ export function ToolsPanel({
     >
       <Tabs
         orientation="vertical"
-        value={activeTool}
+        value={shownTool}
         onValueChange={handleToolChange}
         className="min-h-0 flex-1 flex-row gap-0"
       >
@@ -101,6 +106,7 @@ export function ToolsPanel({
               <TabsTrigger
                 key={tool}
                 value={tool}
+                disabled={tool === Tool.Options && !hasSelectedStep}
                 aria-label={TOOL_LABELS[tool]}
                 className="size-10 flex-none rounded-none border-0 p-0 after:hidden group-data-[orientation=vertical]/tabs:w-10 group-data-[orientation=vertical]/tabs:justify-center group-data-[variant=line]/tabs-list:data-[state=active]:bg-foreground/15"
                 title={TOOL_LABELS[tool]}

@@ -47,6 +47,14 @@ describe('useAppStore', () => {
     expect(useAppStore.getState().panelPosition).toEqual({ x: 12, y: 34 })
   })
 
+  it('starts with the panel expanded and remembers when it is collapsed', () => {
+    expect(useAppStore.getState().panelCollapsed).toBe(false)
+
+    useAppStore.getState().setPanelCollapsed(true)
+
+    expect(useAppStore.getState().panelCollapsed).toBe(true)
+  })
+
   it('shows the original of a document only while asked to, and forgets it with the document', () => {
     const { setShowOriginal, forgetDocument } = useAppStore.getState()
     expect(useAppStore.getState().showOriginal[FIRST]).toBeUndefined()

@@ -28,10 +28,10 @@ describe('tool catalogue', () => {
     ])
   })
 
-  it('has every editing tool, 9 geometry, 18 filter and 13 colour, plus Upscale', () => {
+  it('has every editing tool, 9 geometry, 18 filter and 10 colour, plus Upscale', () => {
     const counts = TOOL_GROUPS.map(({ tools }) => tools.length)
 
-    expect(counts).toEqual([1, 9, 18, 13])
+    expect(counts).toEqual([1, 9, 18, 10])
   })
 
   it('leaves out the Output group, which Export covers', () => {

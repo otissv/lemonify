@@ -1,4 +1,4 @@
-import { RiDraggable } from '@remixicon/react'
+import { RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react'
 import { useEffect, useId, useRef } from 'react'
 
 import {
@@ -45,6 +45,9 @@ export function FloatingPanel({
   const hintId = useId()
   const position = useAppStore((state) => state.panelPosition)
   const setPosition = useAppStore((state) => state.setPanelPosition)
+  const collapsed = useAppStore((state) => state.panelCollapsed)
+  const setCollapsed = useAppStore((state) => state.setPanelCollapsed)
+  const showBody = children !== undefined && !collapsed
 
   function measure(): { panel: Size; container: Size } {
     const panel = panelRef.current
@@ -104,6 +107,10 @@ export function FloatingPanel({
     event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
+  function handleToggleCollapsed(): void {
+    setCollapsed(!collapsed)
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>): void {
     const next = nudgePosition(currentPosition(), event.key, event.shiftKey)
     if (!next) return
@@ -132,7 +139,7 @@ export function FloatingPanel({
       <div
         className={cn(
           'flex min-h-10 shrink-0 items-center px-1',
-          children !== undefined && 'border-b border-white/15',
+          showBody && 'border-b border-white/15',
         )}
       >
         {menu}
@@ -140,7 +147,7 @@ export function FloatingPanel({
           type="button"
           aria-label="Move panel"
           aria-describedby={hintId}
-          className="flex min-w-6 flex-1 cursor-grab self-stretch touch-none items-center justify-end px-2 text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none active:cursor-grabbing"
+          className="min-w-6 flex-1 cursor-grab self-stretch touch-none px-2 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none active:cursor-grabbing"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -151,10 +158,24 @@ export function FloatingPanel({
             Drag, or use the arrow keys, to move the panel. Hold Shift to move
             further.
           </span>
-          <RiDraggable aria-hidden="true" className="size-4" />
         </button>
+        {children !== undefined && (
+          <button
+            type="button"
+            aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+            aria-expanded={!collapsed}
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/10 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+            onClick={handleToggleCollapsed}
+          >
+            {collapsed ? (
+              <RiArrowDownSLine aria-hidden="true" className="size-4" />
+            ) : (
+              <RiArrowUpSLine aria-hidden="true" className="size-4" />
+            )}
+          </button>
+        )}
       </div>
-      {children}
+      {showBody && children}
     </section>
   )
 }

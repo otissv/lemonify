@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,7 +15,7 @@ import {
   AI_TOOLS_OFFERED,
   DOCUMENT_ID,
 } from '@/test/document-fixtures'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { INITIAL_APP_STATE, Tool, useAppStore } from '@/store/app-store'
 
 vi.mock('@/features/app/app-menu-bar', () => ({
   AppMenuBar: () => <div role="menubar" aria-label="Application" />,
@@ -174,6 +180,78 @@ describe('ToolsPanel', () => {
       })
       expect(menu.parentElement).toBe(handle.parentElement)
       expect(handle.parentElement).toHaveClass('border-b')
+    })
+  })
+
+  describe('options tab', () => {
+    it('is disabled until a step is selected', () => {
+      renderPanel()
+
+      expect(screen.getByRole('tab', { name: 'Options' })).toBeDisabled()
+
+      cleanup()
+      useAppStore.getState().selectStep(DOCUMENT_ID, 'step-1')
+      renderPanel()
+
+      expect(screen.getByRole('tab', { name: 'Options' })).toBeEnabled()
+    })
+
+    it('shows the Tools tab instead when its step goes away', () => {
+      useAppStore.setState({ activeTool: Tool.Options })
+      renderPanel()
+
+      expect(screen.getByRole('tab', { name: 'Tools' })).toHaveAttribute(
+        'data-state',
+        'active',
+      )
+    })
+  })
+
+  describe('collapsing', () => {
+    it('has no drag icon on the handle', () => {
+      renderPanel()
+
+      const handle = screen.getByRole('button', { name: 'Move panel' })
+
+      expect(handle.querySelector('svg')).toBeNull()
+    })
+
+    it('shows only the menu when collapsed, and everything again when expanded', async () => {
+      const user = userEvent.setup()
+      renderPanel()
+      expect(screen.getByRole('tablist')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Collapse panel' }))
+
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+      expect(
+        within(panel()).getByRole('menubar', { name: 'Application' }),
+      ).toBeInTheDocument()
+      expect(useAppStore.getState().panelCollapsed).toBe(true)
+
+      await user.click(screen.getByRole('button', { name: 'Expand panel' }))
+
+      expect(screen.getByRole('tablist')).toBeInTheDocument()
+      expect(useAppStore.getState().panelCollapsed).toBe(false)
+    })
+
+    it('can still be dragged while collapsed', () => {
+      useAppStore.setState({ panelCollapsed: true })
+      renderPanel()
+      const handle = screen.getByRole('button', { name: 'Move panel' })
+
+      fireEvent.pointerDown(handle, {
+        clientX: 500,
+        clientY: 100,
+        pointerId: 1,
+      })
+      fireEvent.pointerMove(handle, {
+        clientX: 400,
+        clientY: 250,
+        pointerId: 1,
+      })
+
+      expect(useAppStore.getState().panelPosition).not.toBeNull()
     })
   })
 

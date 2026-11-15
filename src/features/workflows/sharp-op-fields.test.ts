@@ -10,11 +10,29 @@ import {
 } from '@/features/workflows/sharp-op-fields'
 import { SHARP_OP_NAMES } from '@/lib/images/sharp/ops'
 
+const US_SPELLINGS = ['grayscale', 'pipelineColorspace', 'toColorspace']
+
 describe('SHARP_OP_GROUPS', () => {
-  it('lists every Sharp op exactly once', () => {
+  it('lists every Sharp op once, leaving out the US spelling of an op', () => {
+    const grouped = SHARP_OP_GROUPS.flatMap(({ ops }) => ops)
+    const withoutAliases = SHARP_OP_NAMES.filter(
+      (name) => !US_SPELLINGS.includes(name),
+    )
+
+    expect([...grouped].sort()).toEqual([...withoutAliases].sort())
+  })
+
+  it('offers each alias pair under its UK spelling only', () => {
     const grouped = SHARP_OP_GROUPS.flatMap(({ ops }) => ops)
 
-    expect([...grouped].sort()).toEqual([...SHARP_OP_NAMES].sort())
+    expect(grouped).toEqual(
+      expect.arrayContaining([
+        'greyscale',
+        'pipelineColourspace',
+        'toColourspace',
+      ]),
+    )
+    for (const name of US_SPELLINGS) expect(grouped).not.toContain(name)
   })
 })
 
