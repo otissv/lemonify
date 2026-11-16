@@ -54,3 +54,71 @@ export function pipelineOperandSourceIds(pipeline: Pipeline): string[] {
   }
   return [...ids]
 }
+
+type SourceIds = ReadonlyMap<string, string>
+
+function mapped(id: string, ids: SourceIds): string {
+  const next = ids.get(id)
+  if (next === undefined)
+    throw new RangeError(`The image "${id}" is not known.`)
+  return next
+}
+
+function remapLayers(
+  options: Record<string, unknown>,
+  ids: SourceIds,
+): Record<string, unknown> {
+  const layers = LayersSchema.safeParse(options)
+  if (!layers.success) return options
+  const images = layers.data.images.map((layer) => {
+    const input = IdSchema.safeParse(layer.input)
+    return input.success ? { ...layer, input: mapped(input.data, ids) } : layer
+  })
+  return { ...options, images }
+}
+
+function remapOptions(
+  step: Extract<PipelineStep, { kind: typeof PipelineStepKind.Sharp }>,
+  ids: SourceIds,
+): Record<string, unknown> {
+  const { options } = step
+  if (step.op === 'boolean') {
+    const operand = OperandSchema.safeParse(options)
+    return operand.success
+      ? { ...options, operand: mapped(operand.data.operand, ids) }
+      : options
+  }
+  if (step.op === 'joinChannel') {
+    const join = JoinSchema.safeParse(options)
+    if (!join.success) return options
+    const { images } = join.data
+    return {
+      ...options,
+      images:
+        typeof images === 'string'
+          ? mapped(images, ids)
+          : images.map((id) => mapped(id, ids)),
+    }
+  }
+  if (step.op === 'composite') return remapLayers(options, ids)
+  return options
+}
+
+/**
+ * The same Pipeline with every Source id replaced by its entry in `ids`, for
+ * a Pipeline moved to another place where the images have other ids. Throws a
+ * RangeError naming an image that has no entry.
+ */
+export function remapPipelineSources(
+  pipeline: Pipeline,
+  ids: SourceIds,
+): Pipeline {
+  const steps = pipeline.steps.map((step): PipelineStep => {
+    if (step.kind === PipelineStepKind.Source) {
+      return { ...step, sourceId: mapped(step.sourceId, ids) }
+    }
+    if (step.kind !== PipelineStepKind.Sharp) return step
+    return { ...step, options: remapOptions(step, ids) as typeof step.options }
+  })
+  return { steps }
+}

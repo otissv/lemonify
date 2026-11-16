@@ -9,6 +9,8 @@ import { userListCommand } from './user.ts'
 import {
   documentCreateCommand,
   documentDeleteCommand,
+  documentExportCommand,
+  documentImportCommand,
   documentListCommand,
   documentRedoCommand,
   documentShowCommand,
@@ -66,6 +68,8 @@ export const COMMANDS: readonly ImageCommand[] = [
   documentListCommand,
   documentShowCommand,
   documentDeleteCommand,
+  documentExportCommand,
+  documentImportCommand,
   documentUndoCommand,
   documentRedoCommand,
   documentStepAddCommand,

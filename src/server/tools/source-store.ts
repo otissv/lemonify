@@ -1,3 +1,4 @@
+import { once } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { access, mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
@@ -147,7 +148,7 @@ export class FileSourceStore implements SourceStore {
         bytes += chunk.byteLength
         if (bytes > maxBytes) throw tooLarge(maxBytes)
         hash.update(chunk)
-        if (!out.write(chunk)) await onceDrained(out)
+        if (!out.write(chunk)) await once(out, 'drain')
       }
       await finish(out)
     } catch (error) {
@@ -157,13 +158,6 @@ export class FileSourceStore implements SourceStore {
     }
     return { contentHash: hash.digest('hex'), bytes }
   }
-}
-
-function onceDrained(stream: NodeJS.WritableStream): Promise<void> {
-  return new Promise((resolve, reject) => {
-    stream.once('drain', resolve)
-    stream.once('error', reject)
-  })
 }
 
 function finish(stream: NodeJS.WritableStream): Promise<void> {

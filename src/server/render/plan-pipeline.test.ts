@@ -16,6 +16,7 @@ const SOURCE = { contentHash: 'a'.repeat(64), path: '/data/source' }
 const SECOND = { contentHash: 'b'.repeat(64), path: '/data/second' }
 const OPEN = createSourceStep('base')
 const OPEN_SECOND = createSourceStep('second')
+const OPEN_COPY = createSourceStep('copy')
 const UPSCALE = {
   tool: AiToolId.Upscale,
   settings: { model: 'm', scale: 4, iterations: 1, tta: false },
@@ -25,7 +26,7 @@ function lookups(results: Record<string, string> = {}): PlanLookups {
   return {
     aiResultPath: async (key) => results[key],
     source: async (id) =>
-      ({ base: SOURCE, second: SECOND, gone: undefined })[id],
+      ({ base: SOURCE, second: SECOND, copy: SECOND, gone: undefined })[id],
   }
 }
 
@@ -123,6 +124,24 @@ describe('planPipeline', () => {
       const plain = await planPipeline([OPEN, flip], lookups())
       const withExtra = await planPipeline([OPEN, OPEN_SECOND, flip], lookups())
       expect(planKey(withExtra)).toBe(planKey(plain))
+    })
+
+    it('keys a step that uses a second image by the image’s content, not its id', async () => {
+      const byId = (id: string) =>
+        createSharpStep('boolean', { operand: id, operator: 'and' })
+      const ai = createAiStep(UPSCALE)
+
+      const first = await planPipeline(
+        [OPEN, OPEN_SECOND, byId('second'), ai],
+        lookups(),
+      )
+      const copy = await planPipeline(
+        [OPEN, OPEN_COPY, byId('copy'), ai],
+        lookups(),
+      )
+
+      expect(copy.aiKeys.get(ai.id)).toBe(first.aiKeys.get(ai.id))
+      expect(planKey(copy)).toBe(planKey(first))
     })
 
     it('refuses a plan with no image switched on', async () => {

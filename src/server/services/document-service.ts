@@ -17,6 +17,7 @@ import {
   createSourceStep,
   firstSourceStep,
 } from '@/features/pipeline/pipeline'
+import { PipelineSchema } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { STALE_DOCUMENT_MESSAGE } from '../dao/document-dao.ts'
 import type { DocumentDao, DocumentRecord } from '../dao/document-dao.ts'
@@ -99,6 +100,37 @@ export class DocumentService {
       updatedAt: now,
     }
     await documents.insert(record, [source.id])
+    return this.#view(record)
+  }
+
+  /**
+   * Makes a Document from a Pipeline that already exists, such as one read from
+   * a document file. Every image it uses must be the actor's own.
+   */
+  async createFromPipeline(
+    actor: Actor,
+    name: string,
+    pipeline: Pipeline,
+  ): Promise<DocumentView> {
+    const checked = PipelineSchema.safeParse(pipeline)
+    if (!checked.success) {
+      throw new ValidationError(
+        checked.error.issues[0]?.message ?? 'That pipeline is not valid.',
+      )
+    }
+    const operandSourceIds = await this.#ownedOperands(actor, checked.data)
+    const now = isoNow(this.#deps.clock)
+    const record: DocumentRecord = {
+      id: this.#deps.ids.next(),
+      ownerId: actor.userId,
+      name: cleanName(name),
+      pipeline: checked.data,
+      revision: 0,
+      historyCursor: 0,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await this.#deps.documents.insert(record, operandSourceIds)
     return this.#view(record)
   }
 

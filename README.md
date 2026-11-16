@@ -73,6 +73,8 @@ The stateless commands work on any image with no database or sign-in. The statef
 | `source add`, `list`, `delete`                                                                                        | Upload images as sources, list or delete them                                               |
 | `document create`, `list`, `show`, `delete`, `undo`, `redo`, `step add`, `remove`, `move`, `set`, `enable`, `disable` | Create and edit documents: a pipeline of steps with undo history                            |
 | `export <documentId> --out <path>`                                                                                    | Render a document at full size and write it                                                 |
+| `document export <id> --out <path>`                                                                                   | Write the document itself (pipeline, images, AI results) to a `.lemon` file                 |
+| `document import <file>`                                                                                              | Make a new document from a `.lemon` file                                                    |
 | `workflow create`, `show`, `list`, `update`, `delete`, `run`, `results`, `runs`, `cancel`, `run delete`               | Save a workflow and run it over its sources                                                 |
 | `result list`, `show`, `delete`, `save`, `clear-unused`                                                               | Manage the images that cost work or were asked for                                          |
 | `job list`, `show`, `cancel`                                                                                          | Follow and cancel queued work                                                               |
@@ -82,7 +84,7 @@ A command that waits for its jobs (`export`, `workflow run --follow`) does the w
 
 ## Configuration
 
-Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `LEMONIFY_BASE_URL` and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
+Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `LEMONIFY_BASE_URL` and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
 
 ## Scripts
 

@@ -20,7 +20,7 @@ export interface ToolGroup {
 function imageGroup(): ToolGroup {
   return {
     label: 'Image',
-    tools: [{ kind: 'source', value: OPEN_IMAGE_TOOL, label: 'Open image' }],
+    tools: [{ kind: 'source', value: OPEN_IMAGE_TOOL, label: 'Add image' }],
   }
 }
 

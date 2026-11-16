@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   pipelineOperandSourceIds,
+  remapPipelineSources,
   stepOperandSourceIds,
 } from '@/features/pipeline/image-operands'
-import { createSharpStep } from '@/features/pipeline/pipeline'
+import { createSharpStep, createSourceStep } from '@/features/pipeline/pipeline'
 
 describe('stepOperandSourceIds', () => {
   it('reads the operand of a boolean step', () => {
@@ -56,5 +57,59 @@ describe('pipelineOperandSourceIds', () => {
       createSharpStep('blur', { sigma: 1 }),
     ]
     expect(pipelineOperandSourceIds({ steps })).toEqual(['b', 'a'])
+  })
+})
+
+describe('remapPipelineSources', () => {
+  const MAP = new Map([
+    ['a', 'A'],
+    ['b', 'B'],
+  ])
+
+  it('points Open image steps at the new ids', () => {
+    const open = createSourceStep('a')
+
+    const remapped = remapPipelineSources({ steps: [open] }, MAP)
+
+    expect(remapped.steps[0]).toMatchObject({ id: open.id, sourceId: 'A' })
+  })
+
+  it('renames a boolean operand, joined channels and composite layers', () => {
+    const boolean = createSharpStep('boolean', {
+      operand: 'a',
+      operator: 'and',
+    })
+    const join = createSharpStep('joinChannel', { images: ['a', 'b'] })
+    const single = createSharpStep('joinChannel', { images: 'b' })
+    const composite = createSharpStep('composite', {
+      images: [{ input: 'a', blend: 'over' }, { input: 'b' }],
+    })
+
+    const { steps } = remapPipelineSources(
+      { steps: [boolean, join, single, composite] },
+      MAP,
+    )
+
+    expect(steps.map((step) => stepOperandSourceIds(step))).toEqual([
+      ['A'],
+      ['A', 'B'],
+      ['B'],
+      ['A', 'B'],
+    ])
+    expect(steps[3]).toMatchObject({
+      options: { images: [{ input: 'A', blend: 'over' }, { input: 'B' }] },
+    })
+  })
+
+  it('leaves other steps and other options alone', () => {
+    const blur = createSharpStep('blur', { sigma: 2 })
+
+    expect(remapPipelineSources({ steps: [blur] }, MAP).steps[0]).toEqual(blur)
+  })
+
+  it('says which image is missing from the map', () => {
+    expect(() =>
+      remapPipelineSources({ steps: [createSourceStep('zzz')] }, MAP),
+    ).toThrow(/zzz/)
   })
 })

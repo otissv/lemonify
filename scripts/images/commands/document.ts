@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { z } from 'zod'
 
 import { defineAppCommand } from '../app-command.ts'
@@ -91,5 +93,43 @@ export const documentRedoCommand = defineAppCommand({
     return {
       document: await app.documents.redo(actor, options.id, current.revision),
     }
+  },
+})
+
+export const documentExportCommand = defineAppCommand({
+  name: 'document export',
+  summary: 'Write a document to a file another machine can open',
+  synopsis: '<id> --out <path>',
+  help: `Writes the document itself (its pipeline, the images it uses and the AI results
+already made for it) to one file, so it can be opened elsewhere without running
+the AI steps again. This is not the finished image; use \`export\` for that.
+
+Options:
+  --out <path>         Where to write the file (required); a folder uses the
+                       document's name with a .lemon extension`,
+  shape: { id, out: z.string().min(1) },
+  positionals: ['id'],
+  flags: { out: { type: 'string' } },
+  async run({ app, actor, options }) {
+    const target = await app.bundles.resolveDestination(
+      actor,
+      options.id,
+      path.resolve(options.out),
+    )
+    const exported = await app.bundles.exportDocument(actor, options.id, target)
+    return { path: target, ...exported }
+  },
+})
+
+export const documentImportCommand = defineAppCommand({
+  name: 'document import',
+  summary: 'Open a document file as a new document',
+  synopsis: '<file>',
+  help: `Reads a file made by \`document export\` and makes a new document from it,
+keeping its images and AI results as yours.`,
+  shape: { file: z.string().min(1) },
+  positionals: ['file'],
+  async run({ app, actor, options }) {
+    return app.bundles.importDocument(actor, path.resolve(options.file))
   },
 })

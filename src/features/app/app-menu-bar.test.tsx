@@ -11,6 +11,8 @@ import {
   redoDocument,
   undoDocument,
 } from '@/features/documents/document-functions'
+import { downloadDocument } from '@/features/documents/download-document'
+import { uploadDocumentFile } from '@/features/documents/upload-document-file'
 import { uploadSource } from '@/features/documents/upload-source'
 import { followJob } from '@/features/jobs/follow-job'
 import { createSharpStep } from '@/features/pipeline/pipeline'
@@ -33,6 +35,12 @@ vi.mock('@/features/documents/document-functions', () => ({
   changeDocument: vi.fn(),
   undoDocument: vi.fn(),
   redoDocument: vi.fn(),
+}))
+vi.mock('@/features/documents/download-document', () => ({
+  downloadDocument: vi.fn(),
+}))
+vi.mock('@/features/documents/upload-document-file', () => ({
+  uploadDocumentFile: vi.fn(),
 }))
 vi.mock('@/features/documents/upload-source', () => ({
   uploadSource: vi.fn(),
@@ -181,7 +189,7 @@ describe('AppMenuBar', () => {
 
       const file = await openMenu(user, 'File')
       expect(
-        within(file).queryByRole('menuitem', { name: 'Export' }),
+        within(file).queryByRole('menuitem', { name: 'Export image' }),
       ).not.toBeInTheDocument()
       expect(
         within(file).getByRole('menuitem', { name: 'Close document' }),
@@ -332,7 +340,7 @@ describe('AppMenuBar', () => {
       const file = await openMenu(user, 'File')
       const children = [...file.children]
       const exportIndex = children.findIndex(
-        (child) => child.textContent === 'Export',
+        (child) => child.textContent === 'Export image',
       )
       const closeIndex = children.findIndex(
         (child) => child.textContent === 'Close document',
@@ -424,6 +432,40 @@ describe('AppMenuBar', () => {
       expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
     })
 
+    it('downloads the document as a file from File', async () => {
+      vi.mocked(getDocument).mockResolvedValue(documentView())
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+
+      const file = await openMenu(user, 'File')
+
+      await user.click(
+        within(file).getByRole('menuitem', { name: 'Export document…' }),
+      )
+
+      await waitFor(() => {
+        expect(downloadDocument).toHaveBeenCalledWith(DOCUMENT_ID)
+      })
+    })
+
+    it('opens a document file as a new document from File', async () => {
+      const opened = documentView([], 'imported-1', 'imported.png')
+      vi.mocked(uploadDocumentFile).mockResolvedValue('imported-1')
+      vi.mocked(getDocument).mockResolvedValue(opened)
+      const user = userEvent.setup()
+      const { router } = await renderApp()
+
+      await user.upload(
+        await screen.findByLabelText('Choose a document file'),
+        new File(['x'], 'a.lemon', { type: 'application/zip' }),
+      )
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/documents/imported-1')
+      })
+    })
+
     it('shows the Export panel from File and each panel from View', async () => {
       vi.mocked(getDocument).mockResolvedValue(documentView())
       const user = userEvent.setup()
@@ -431,7 +473,9 @@ describe('AppMenuBar', () => {
       await screen.findByRole('dialog', { name: 'Tools' })
 
       const file = await openMenu(user, 'File')
-      await user.click(within(file).getByRole('menuitem', { name: 'Export' }))
+      await user.click(
+        within(file).getByRole('menuitem', { name: 'Export image' }),
+      )
       expect(useAppStore.getState().activeTool).toBe(Tool.Export)
 
       for (const [name, tool] of [

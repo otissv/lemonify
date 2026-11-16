@@ -6,6 +6,8 @@ import {
   useState,
 } from 'react'
 
+import { DOCUMENT_FILE_EXTENSION } from '@/features/documents/document-file'
+import { useImportDocument } from '@/features/documents/use-import-document'
 import { SourcePickerDialog } from '@/features/documents/source-picker-dialog'
 import {
   ACCEPTED_IMAGE_TYPES,
@@ -18,6 +20,9 @@ export interface ImageOpener {
   /** Shows the images already uploaded, to open one as a new document. */
   showUploadedImages: () => void
   opening: boolean
+  /** Asks the person to choose a document file from this computer, and opens it as a new document. */
+  importDocument: () => void
+  importing: boolean
 }
 
 const ImageOpenerContext = createContext<ImageOpener | null>(null)
@@ -34,6 +39,7 @@ export function ImageOpenerProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const image = useOpenImage()
+  const document = useImportDocument()
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const showUploadedImages = useCallback((): void => {
@@ -45,8 +51,16 @@ export function ImageOpenerProvider({
       openImage: image.choose,
       showUploadedImages,
       opening: image.opening,
+      importDocument: document.choose,
+      importing: document.importing,
     }),
-    [image.choose, image.opening, showUploadedImages],
+    [
+      image.choose,
+      image.opening,
+      document.choose,
+      document.importing,
+      showUploadedImages,
+    ],
   )
 
   return (
@@ -60,12 +74,21 @@ export function ImageOpenerProvider({
         tabIndex={-1}
         onChange={image.handleChange}
       />
-      {image.error && (
+      <input
+        ref={document.inputRef}
+        type="file"
+        accept={DOCUMENT_FILE_EXTENSION}
+        aria-label="Choose a document file"
+        className="sr-only"
+        tabIndex={-1}
+        onChange={document.handleChange}
+      />
+      {(image.error ?? document.error) && (
         <p
           role="alert"
           className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-caption text-destructive shadow-lg"
         >
-          {image.error}
+          {image.error ?? document.error}
         </p>
       )}
       <SourcePickerDialog open={pickerOpen} onOpenChange={setPickerOpen} />

@@ -81,6 +81,11 @@ function pump(id: string): Promise<void> {
   return started
 }
 
+/** Resolves once every edit made so far has been sent, so what the server holds is what the editor shows. */
+export function settleDocument(id: string): Promise<void> {
+  return running.get(id) ?? Promise.resolve()
+}
+
 /** Reads a document from the server into the editor, unless it is already there. */
 export async function loadDocument(id: string): Promise<void> {
   if (useAppStore.getState().documents[id]) return

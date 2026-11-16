@@ -9,6 +9,7 @@ import type { DocumentView } from '@/features/documents/document'
 import {
   applyEdit,
   loadDocument,
+  settleDocument,
   undoEdit,
 } from '@/features/documents/document-sync'
 import { createSharpStep } from '@/features/pipeline/pipeline'
@@ -80,6 +81,32 @@ describe('document sync', () => {
     })
     expect(session().confirmed.revision).toBe(1)
     expect(session().pending).toEqual([])
+  })
+
+  it('says when every edit made so far has reached the server', async () => {
+    const blur = createSharpStep('blur')
+    let reply: (value: DocumentView) => void = () => {}
+    vi.mocked(changeDocument).mockReturnValue(
+      new Promise<DocumentView>((resolve) => {
+        reply = resolve
+      }),
+    )
+    void applyEdit('d1', { type: 'add-step', step: blur, index: 0 })
+
+    let settled = false
+    const waiting = settleDocument('d1').then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    reply(view(1, [blur], true))
+    await waiting
+
+    expect(session().pending).toEqual([])
+  })
+
+  it('has nothing to wait for when no edit is on its way', async () => {
+    await expect(settleDocument('d1')).resolves.toBeUndefined()
   })
 
   it('sends queued edits one at a time, each on the revision before it', async () => {

@@ -22,6 +22,9 @@ const EnvironmentSchema = z.object({
   LEMONIFY_MAX_UPLOAD_BYTES: positiveInteger(Number.MAX_SAFE_INTEGER).default(
     100 * MEGABYTE,
   ),
+  LEMONIFY_MAX_BUNDLE_BYTES: positiveInteger(Number.MAX_SAFE_INTEGER).default(
+    GIGABYTE,
+  ),
   LEMONIFY_AI_BATCH_SIZE: positiveInteger(1000).default(8),
   LEMONIFY_JOB_RETENTION_DAYS: positiveInteger(3650).default(30),
   LEMONIFY_MAX_RESULT_BYTES_PER_USER: positiveInteger(
@@ -43,6 +46,7 @@ export type Config = {
   groupSharePercent: number
   maxWaitingJobsPerUser: number
   maxUploadBytes: number
+  maxBundleBytes: number
   aiBatchSize: number
   jobRetentionDays: number
   maxResultBytesPerUser: number
@@ -94,6 +98,7 @@ export function loadConfig(
     groupSharePercent: env.LEMONIFY_GROUP_SHARE,
     maxWaitingJobsPerUser: env.LEMONIFY_MAX_WAITING_JOBS_PER_USER,
     maxUploadBytes: env.LEMONIFY_MAX_UPLOAD_BYTES,
+    maxBundleBytes: env.LEMONIFY_MAX_BUNDLE_BYTES,
     aiBatchSize: env.LEMONIFY_AI_BATCH_SIZE,
     jobRetentionDays: env.LEMONIFY_JOB_RETENTION_DAYS,
     maxResultBytesPerUser: env.LEMONIFY_MAX_RESULT_BYTES_PER_USER,

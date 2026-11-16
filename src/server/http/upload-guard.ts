@@ -1,5 +1,8 @@
 import { LimitError, ValidationError } from '../errors.ts'
-import { SOURCE_MEDIA_TYPES } from '../tools/image-inspector.ts'
+import {
+  SOURCE_MEDIA_TYPES,
+  isSourceMediaType,
+} from '../tools/image-inspector.ts'
 import type { SourceMediaType } from '../tools/image-inspector.ts'
 
 export const FILE_NAME_HEADER = 'x-file-name'
@@ -45,10 +48,6 @@ export function sniffMediaType(head: Uint8Array): SourceMediaType | undefined {
     return 'image/avif'
   }
   return undefined
-}
-
-function isSourceMediaType(value: string): value is SourceMediaType {
-  return SOURCE_MEDIA_TYPES.some((type) => type === value)
 }
 
 function declaredType(request: Request): SourceMediaType {

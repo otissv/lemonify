@@ -15,8 +15,10 @@ import { Route as ApiSourcesRouteImport } from './routes/api/sources'
 import { Route as DocumentsIdRouteImport } from './routes/documents.$id'
 import { Route as WorkflowsIdRouteImport } from './routes/workflows.$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiDocumentsImportRouteImport } from './routes/api/documents.import'
 import { Route as ApiResultsIdRouteImport } from './routes/api/results.$id'
 import { Route as ApiSourcesIdRouteImport } from './routes/api/sources.$id'
+import { Route as ApiDocumentsIdBundleRouteImport } from './routes/api/documents.$id.bundle'
 import { Route as ApiDocumentsIdRendersKindKeyRouteImport } from './routes/api/documents.$id.renders.$kind.$key'
 
 const IndexRoute = IndexRouteImport.update({
@@ -49,6 +51,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDocumentsImportRoute = ApiDocumentsImportRouteImport.update({
+  id: '/api/documents/import',
+  path: '/api/documents/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiResultsIdRoute = ApiResultsIdRouteImport.update({
   id: '/api/results/$id',
   path: '/api/results/$id',
@@ -58,6 +65,11 @@ const ApiSourcesIdRoute = ApiSourcesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => ApiSourcesRoute,
+} as any)
+const ApiDocumentsIdBundleRoute = ApiDocumentsIdBundleRouteImport.update({
+  id: '/api/documents/$id/bundle',
+  path: '/api/documents/$id/bundle',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDocumentsIdRendersKindKeyRoute =
   ApiDocumentsIdRendersKindKeyRouteImport.update({
@@ -73,8 +85,10 @@ export interface FileRoutesByFullPath {
   '/documents/$id': typeof DocumentsIdRoute
   '/workflows/$id': typeof WorkflowsIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/documents/import': typeof ApiDocumentsImportRoute
   '/api/results/$id': typeof ApiResultsIdRoute
   '/api/sources/$id': typeof ApiSourcesIdRoute
+  '/api/documents/$id/bundle': typeof ApiDocumentsIdBundleRoute
   '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
 }
 export interface FileRoutesByTo {
@@ -84,8 +98,10 @@ export interface FileRoutesByTo {
   '/documents/$id': typeof DocumentsIdRoute
   '/workflows/$id': typeof WorkflowsIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/documents/import': typeof ApiDocumentsImportRoute
   '/api/results/$id': typeof ApiResultsIdRoute
   '/api/sources/$id': typeof ApiSourcesIdRoute
+  '/api/documents/$id/bundle': typeof ApiDocumentsIdBundleRoute
   '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
 }
 export interface FileRoutesById {
@@ -96,8 +112,10 @@ export interface FileRoutesById {
   '/documents/$id': typeof DocumentsIdRoute
   '/workflows/$id': typeof WorkflowsIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/documents/import': typeof ApiDocumentsImportRoute
   '/api/results/$id': typeof ApiResultsIdRoute
   '/api/sources/$id': typeof ApiSourcesIdRoute
+  '/api/documents/$id/bundle': typeof ApiDocumentsIdBundleRoute
   '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
 }
 export interface FileRouteTypes {
@@ -109,8 +127,10 @@ export interface FileRouteTypes {
     | '/documents/$id'
     | '/workflows/$id'
     | '/api/auth/$'
+    | '/api/documents/import'
     | '/api/results/$id'
     | '/api/sources/$id'
+    | '/api/documents/$id/bundle'
     | '/api/documents/$id/renders/$kind/$key'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -120,8 +140,10 @@ export interface FileRouteTypes {
     | '/documents/$id'
     | '/workflows/$id'
     | '/api/auth/$'
+    | '/api/documents/import'
     | '/api/results/$id'
     | '/api/sources/$id'
+    | '/api/documents/$id/bundle'
     | '/api/documents/$id/renders/$kind/$key'
   id:
     | '__root__'
@@ -131,8 +153,10 @@ export interface FileRouteTypes {
     | '/documents/$id'
     | '/workflows/$id'
     | '/api/auth/$'
+    | '/api/documents/import'
     | '/api/results/$id'
     | '/api/sources/$id'
+    | '/api/documents/$id/bundle'
     | '/api/documents/$id/renders/$kind/$key'
   fileRoutesById: FileRoutesById
 }
@@ -143,7 +167,9 @@ export interface RootRouteChildren {
   DocumentsIdRoute: typeof DocumentsIdRoute
   WorkflowsIdRoute: typeof WorkflowsIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiDocumentsImportRoute: typeof ApiDocumentsImportRoute
   ApiResultsIdRoute: typeof ApiResultsIdRoute
+  ApiDocumentsIdBundleRoute: typeof ApiDocumentsIdBundleRoute
   ApiDocumentsIdRendersKindKeyRoute: typeof ApiDocumentsIdRendersKindKeyRoute
 }
 
@@ -191,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/documents/import': {
+      id: '/api/documents/import'
+      path: '/api/documents/import'
+      fullPath: '/api/documents/import'
+      preLoaderRoute: typeof ApiDocumentsImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/results/$id': {
       id: '/api/results/$id'
       path: '/api/results/$id'
@@ -204,6 +237,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/sources/$id'
       preLoaderRoute: typeof ApiSourcesIdRouteImport
       parentRoute: typeof ApiSourcesRoute
+    }
+    '/api/documents/$id/bundle': {
+      id: '/api/documents/$id/bundle'
+      path: '/api/documents/$id/bundle'
+      fullPath: '/api/documents/$id/bundle'
+      preLoaderRoute: typeof ApiDocumentsIdBundleRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/documents/$id/renders/$kind/$key': {
       id: '/api/documents/$id/renders/$kind/$key'
@@ -234,7 +274,9 @@ const rootRouteChildren: RootRouteChildren = {
   DocumentsIdRoute: DocumentsIdRoute,
   WorkflowsIdRoute: WorkflowsIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiDocumentsImportRoute: ApiDocumentsImportRoute,
   ApiResultsIdRoute: ApiResultsIdRoute,
+  ApiDocumentsIdBundleRoute: ApiDocumentsIdBundleRoute,
   ApiDocumentsIdRendersKindKeyRoute: ApiDocumentsIdRendersKindKeyRoute,
 }
 export const routeTree = rootRouteImport

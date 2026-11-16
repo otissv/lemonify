@@ -99,6 +99,46 @@ describe('sources, documents and export through the CLI', () => {
   })
 })
 
+describe('document files through the CLI', () => {
+  it('exports a document to a file and imports it as a new document', async () => {
+    const image = await makeImage('dog.png')
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      image,
+    )
+    const { document } = await cli<Doc>('document', 'create', source.id)
+    await cli<Doc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--op',
+      'rotate',
+      '--options',
+      '{"angle":90}',
+    )
+
+    const folder = await cli<{ path: string; sources: number }>(
+      'document',
+      'export',
+      document.id,
+      '--out',
+      workDir,
+    )
+    expect(folder.path).toBe(path.join(workDir, 'dog.lemon'))
+    expect(folder.sources).toBe(1)
+    expect(existsSync(folder.path)).toBe(true)
+
+    const imported = await cli<Doc>('document', 'import', folder.path)
+    expect(imported.document.id).not.toBe(document.id)
+    expect(imported.document.pipeline.steps).toHaveLength(2)
+
+    const listed = await cli<{ documents: unknown[] }>('document', 'list')
+    expect(listed.documents).toHaveLength(2)
+  })
+})
+
 describe('workflows through the CLI', () => {
   it('runs a workflow with --follow and writes the images with a manifest', async () => {
     const { source } = await cli<{ source: { id: string } }>(

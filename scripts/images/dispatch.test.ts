@@ -94,6 +94,8 @@ describe('COMMANDS', () => {
       'document list',
       'document show',
       'document delete',
+      'document export',
+      'document import',
       'document undo',
       'document redo',
       'document step add',

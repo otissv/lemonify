@@ -93,7 +93,7 @@ describe('ToolsBrowser', () => {
     await expandAll(user)
     await user.click(screen.getByRole('button', { name: 'Add Blur' }))
 
-    await user.click(screen.getByRole('button', { name: 'Add Open image' }))
+    await user.click(screen.getByRole('button', { name: 'Add Add image' }))
     await user.click(
       await screen.findByRole('button', {
         name: 'Use an uploaded image for image',

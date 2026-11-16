@@ -4,7 +4,10 @@ import type {
   PipelineStep,
   SharpStep,
 } from '@/features/pipeline/pipeline'
-import { stepOperandSourceIds } from '@/features/pipeline/image-operands'
+import {
+  remapPipelineSources,
+  stepOperandSourceIds,
+} from '@/features/pipeline/image-operands'
 import { stepProblem } from '@/features/pipeline/step-problems'
 
 import { ValidationError } from '../errors.ts'
@@ -50,8 +53,10 @@ export interface PipelinePlan {
   basePath: string
   /** Sharp steps to apply to the base, with second images already resolved to paths. */
   sharpSteps: ReadonlyArray<SharpStep>
-  /** Every step the plan covers, in order; its render key names the image the plan makes. */
+  /** Every step the plan covers, in order. */
   applied: ReadonlyArray<AppliedStep>
+  /** The same steps as the render key sees them: second images named by their content, not their id, so a key means the same on every machine. */
+  appliedIdentity: ReadonlyArray<AppliedStep>
   /** Enabled AI Steps with no Result yet, in order, each with the key its Result is stored under. The first is what to run next; later steps wait. */
   pending: ReadonlyArray<PendingAiStep>
   /** Steps left out because they are not set up. */
@@ -63,8 +68,18 @@ export interface PipelinePlan {
 interface UsableSteps {
   base: PlanSource | undefined
   usable: Array<AppliedStep>
+  identity: Map<string, AppliedStep>
   resolved: Map<string, SharpStep>
   skipped: Array<StepProblem>
+}
+
+/** The step with its second images named by their content hash, which is the same wherever the image is stored. */
+function contentIdentity(
+  step: SharpStep,
+  hashes: ReadonlyMap<string, string>,
+): SharpStep {
+  const [renamed] = remapPipelineSources({ steps: [step] }, hashes).steps
+  return renamed?.kind === PipelineStepKind.Sharp ? renamed : step
 }
 
 /** Steps that can be applied, in order, with the first opened image as the base. Open image steps open images and are not applied. */
@@ -76,6 +91,8 @@ async function usableSteps(
   const resolved = new Map<string, SharpStep>()
   const skipped: Array<StepProblem> = []
   const opened = new Set<string>()
+  const hashes = new Map<string, string>()
+  const identity = new Map<string, AppliedStep>()
   let base: PlanSource | undefined
   const pathOf = async (id: string): Promise<string | undefined> =>
     (await lookups.source(id))?.path
@@ -88,6 +105,7 @@ async function usableSteps(
         continue
       }
       opened.add(step.sourceId)
+      hashes.set(step.sourceId, source.contentHash)
       base ??= source
       continue
     }
@@ -111,10 +129,11 @@ async function usableSteps(
         continue
       }
       resolved.set(step.id, operands.step)
+      identity.set(step.id, contentIdentity(step, hashes))
     }
     usable.push(step)
   }
-  return { base, usable, resolved, skipped }
+  return { base, usable, identity, resolved, skipped }
 }
 
 /**
@@ -131,6 +150,7 @@ export async function planPipeline(
   const {
     base: source,
     usable,
+    identity,
     resolved,
     skipped,
   } = await usableSteps(steps, lookups)
@@ -138,13 +158,19 @@ export async function planPipeline(
   let basePath = source.path
   let sharpSteps: Array<SharpStep> = []
   const applied: Array<AppliedStep> = []
+  const appliedIdentity: Array<AppliedStep> = []
+  const identityOf = (step: AppliedStep): AppliedStep =>
+    identity.get(step.id) ?? step
   const pending: Array<PendingAiStep> = []
   const aiKeys = new Map<string, string>()
   for (const [index, step] of usable.entries()) {
     if (step.kind === PipelineStepKind.Ai) {
       aiKeys.set(
         step.id,
-        renderKey(source.contentHash, usable.slice(0, index + 1)),
+        renderKey(
+          source.contentHash,
+          usable.slice(0, index + 1).map(identityOf),
+        ),
       )
     }
     if (pending.length > 0) {
@@ -158,6 +184,7 @@ export async function planPipeline(
       const ready = resolved.get(step.id)
       if (ready) sharpSteps.push(ready)
       applied.push(step)
+      appliedIdentity.push(identityOf(step))
       continue
     }
     const key = aiKeys.get(step.id)
@@ -170,12 +197,14 @@ export async function planPipeline(
     basePath = result
     sharpSteps = []
     applied.push(step)
+    appliedIdentity.push(step)
   }
   return {
     sourceHash: source.contentHash,
     basePath,
     sharpSteps,
     applied,
+    appliedIdentity,
     pending,
     skipped,
     aiKeys,
@@ -184,5 +213,5 @@ export async function planPipeline(
 
 /** The render key of everything a plan applies. */
 export function planKey(plan: PipelinePlan): string {
-  return renderKey(plan.sourceHash, plan.applied)
+  return renderKey(plan.sourceHash, plan.appliedIdentity)
 }

@@ -207,6 +207,8 @@ export class FakeAiEngine implements AiEngine {
   readonly batches: AiBatch[] = []
   failWith: Error | undefined
   gate: Promise<void> | undefined
+  /** What each image is written as; a short text by default, which is not an image. */
+  output: Uint8Array | undefined
   catalogueOf: AiCatalogue = { defaultModel: 'fake', models: [] }
 
   run(batch: AiBatch, onProgress: AiProgressListener): RunningAi {
@@ -222,7 +224,7 @@ export class FakeAiEngine implements AiEngine {
       if (this.failWith) throw new AiEngineError(this.failWith.message)
       const done: Array<{ id: string; width: number; height: number }> = []
       for (const request of batch.requests) {
-        await writeFile(request.output, `ai:${request.id}`)
+        await writeFile(request.output, this.output ?? `ai:${request.id}`)
         done.push({
           id: request.id,
           width: FAKE_SIZE * 4,

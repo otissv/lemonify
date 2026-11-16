@@ -32,6 +32,29 @@ function incoming(): string[] {
 }
 
 describe('FileSourceStore', () => {
+  it('stages a large image without piling up listeners on the file it writes', async () => {
+    const warnings: Error[] = []
+    const collect = (warning: Error): void => {
+      warnings.push(warning)
+    }
+    process.on('warning', collect)
+    async function* large(): AsyncGenerator<Uint8Array> {
+      for (let index = 0; index < 40; index++) yield new Uint8Array(256 * 1024)
+    }
+    try {
+      const staged = await new FileSourceStore(root).stage(large(), 1e9)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(staged.bytes).toBe(40 * 256 * 1024)
+      expect(warnings.map(({ name }) => name)).not.toContain(
+        'MaxListenersExceededWarning',
+      )
+      await staged.discard()
+    } finally {
+      process.off('warning', collect)
+    }
+  })
+
   it('hashes and counts the bytes while staging, across chunks', async () => {
     const store = new FileSourceStore(root)
     const staged = await store.stage(chunks('hel', 'lo'), 1000)

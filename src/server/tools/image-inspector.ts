@@ -14,6 +14,10 @@ export const SOURCE_MEDIA_TYPES = [
 
 export type SourceMediaType = (typeof SOURCE_MEDIA_TYPES)[number]
 
+export function isSourceMediaType(value: string): value is SourceMediaType {
+  return SOURCE_MEDIA_TYPES.some((type) => type === value)
+}
+
 export type ImageInfo = {
   mediaType: SourceMediaType
   width: number

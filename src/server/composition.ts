@@ -41,6 +41,7 @@ import { Scheduler } from './jobs/scheduler.ts'
 import { DocumentPlanner } from './render/document-planner.ts'
 import { DocumentService } from './services/document-service.ts'
 import { JobService } from './services/job-service.ts'
+import { DocumentBundleService } from './services/document-bundle-service.ts'
 import { RenderService } from './services/render-service.ts'
 import { ResultService } from './services/result-service.ts'
 import { SourceService } from './services/source-service.ts'
@@ -70,6 +71,7 @@ export type App = {
   documents: DocumentService
   results: ResultService
   renders: RenderService
+  bundles: DocumentBundleService
   jobs: JobService
   workflows: WorkflowService
   aiTools: AiToolRegistry
@@ -152,10 +154,11 @@ export async function createApp(
     ids,
     maxBytesPerUser: config.maxResultBytesPerUser,
   })
+  const inspector = new SharpImageInspector()
   const sources = new SourceService({
     sources: sourceDao,
     store: sourceStore,
-    inspector: new SharpImageInspector(),
+    inspector,
     clock,
     ids,
     maxUploadBytes: config.maxUploadBytes,
@@ -179,6 +182,18 @@ export async function createApp(
     sources: sourceDao,
     sourceStore,
     results,
+  })
+
+  const bundles = new DocumentBundleService({
+    documents: documentDao,
+    documentService: documents,
+    sources,
+    results,
+    planner,
+    inspector,
+    logger,
+    workRoot: workDir(config),
+    maxBundleBytes: config.maxBundleBytes,
   })
 
   let scheduler: Scheduler | undefined
@@ -283,6 +298,7 @@ export async function createApp(
     documents,
     results,
     renders,
+    bundles,
     jobs,
     workflows,
     aiTools,

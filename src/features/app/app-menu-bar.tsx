@@ -12,6 +12,7 @@ import {
   MenubarShortcut,
   MenubarTrigger,
 } from '@/components/ui/menubar'
+import { downloadDocument } from '@/features/documents/download-document'
 import { previousDocumentId } from '@/features/documents/document-history'
 import { useImageOpener } from '@/features/app/image-opener'
 import { signOut } from '@/features/auth/auth-client'
@@ -94,6 +95,10 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
     void navigate({ to: '/documents/$id', params: { id: previous } })
   }, [documentId, documents, closeDocumentVisit, navigate])
 
+  const handleExportDocument = useCallback((): void => {
+    if (documentId !== undefined) void downloadDocument(documentId)
+  }, [documentId])
+
   const handleUndo = useCallback((): void => {
     if (documentId !== undefined) void undoEdit(documentId)
   }, [documentId])
@@ -137,10 +142,19 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
             <MenubarItem onSelect={opener.showUploadedImages}>
               Uploaded images
             </MenubarItem>
+            <MenubarItem
+              disabled={opener.importing}
+              onSelect={opener.importDocument}
+            >
+              Import document…
+            </MenubarItem>
             {documentId !== undefined && (
               <>
                 <MenubarSeparator />
-                <PanelItem tool={Tool.Export} label="Export" />
+                <PanelItem tool={Tool.Export} label="Export image" />
+                <MenubarItem onSelect={handleExportDocument}>
+                  Export document…
+                </MenubarItem>
               </>
             )}
             <MenubarSeparator />
