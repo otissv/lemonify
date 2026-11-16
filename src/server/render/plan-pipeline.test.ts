@@ -45,6 +45,18 @@ describe('planPipeline', () => {
     expect(planKey(plan)).toBe(renderKey(SOURCE.contentHash, [blur]))
   })
 
+  it('hands a step’s blend to the engine and keys the picture by it', async () => {
+    const blend = { mode: 'multiply' as const, opacity: 50 }
+    const blur = { ...createSharpStep('blur', { sigma: 2 }), blend }
+    const plain = createSharpStep('blur', { sigma: 2 })
+
+    const blended = await planPipeline([IMAGE, blur], lookups())
+    const unblended = await planPipeline([IMAGE, plain], lookups())
+
+    expect(blended.steps[0]).toMatchObject({ blend })
+    expect(planKey(blended)).not.toBe(planKey(unblended))
+  })
+
   it('leaves out steps that are switched off', async () => {
     const off = { ...createSharpStep('flip'), enabled: false }
     const plan = await planPipeline([IMAGE, off], lookups())

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { AiToolId, aiToolSchema } from '../../../src/features/ai/ai-tools.ts'
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
 import { layerSettingsSchema } from '../../../src/features/pipeline/layer.ts'
+import { stepBlendSchema } from '../../../src/features/pipeline/step-blend.ts'
 import {
   createAiStep,
   createLayerStep,
@@ -48,6 +49,7 @@ function requireStep(current: DocumentView, stepId: string) {
 function newStep(input: {
   op?: string
   options?: Record<string, z.infer<ReturnType<typeof z.json>>>
+  blend?: Record<string, z.infer<ReturnType<typeof z.json>>>
   ai?: AiToolId
   settings?: Record<string, z.infer<ReturnType<typeof z.json>>>
   layer?: string
@@ -59,7 +61,9 @@ function newStep(input: {
     }
   }
   if (input.op !== undefined) {
-    return createSharpStep(input.op, input.options ?? {})
+    const step = createSharpStep(input.op, input.options ?? {})
+    if (input.blend === undefined) return step
+    return { ...step, blend: stepBlendSchema.parse(input.blend) }
   }
   return createAiStep(
     aiToolSchema({}).parse({ tool: input.ai, settings: input.settings }),
@@ -70,7 +74,7 @@ export const documentStepAddCommand = defineAppCommand({
   name: 'document step add',
   summary: 'Add a Sharp, AI or layer step to a document',
   synopsis:
-    '<documentId> (--op <name> [--options <json>] | --ai <tool> --settings <json> | --layer <sourceId> [--settings <json>]) [--index <n>]',
+    '<documentId> (--op <name> [--options <json>] [--blend <json>] | --ai <tool> --settings <json> | --layer <sourceId> [--settings <json>]) [--index <n>]',
   help: `Adds a step to the end of the pipeline, or at --index. A Sharp step is an operation by name
 (\`${'pnpm images sharp --help'}\` and \`pnpm images schema sharp\` list them) with its
 options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings; a layer
@@ -84,9 +88,14 @@ colour-dodge, colour-burn, hard-light, soft-light, difference, exclusion), fit
 (-180 to 180), anchor (centre or a compass point such as northwest), x and y
 (whole pixels). Boolean and joinChannel steps name their own second image.
 
+A filter or colour step can be blended with the picture as it was before the
+step: --blend takes a mode (the same as a layer's blend) and an opacity (0-100),
+e.g. '{"mode":"multiply","opacity":50}'.
+
 Options:
   --op <name>          A Sharp operation, e.g. blur or resize
   --options <json>     The operation's options (${JSON_VALUE})
+  --blend <json>       Blend of a filter or colour step: mode and opacity (${JSON_VALUE})
   --ai <tool>          An AI tool
   --layer <sourceId>   Add this source as a layer
   --settings <json>    The tool's settings, or the layer's (${JSON_VALUE})
@@ -95,6 +104,7 @@ Options:
     documentId: id,
     op: z.string().min(1).optional(),
     options: json.optional(),
+    blend: json.optional(),
     ai: z.enum(AiToolId).optional(),
     settings: json.optional(),
     layer: id.optional(),
@@ -104,18 +114,22 @@ Options:
   flags: {
     op: { type: 'string' },
     options: { type: 'string', json: true },
+    blend: { type: 'string', json: true },
     ai: { type: 'string' },
     settings: { type: 'string', json: true },
     layer: { type: 'string' },
     index: { type: 'string' },
   },
   async run(context) {
-    const { op, options, ai, settings, layer, index } = context.options
+    const { op, options, blend, ai, settings, layer, index } = context.options
     const given = [op, ai, layer].filter((value) => value !== undefined)
     if (given.length !== 1) {
       throw new ValidationError('Give one of --op, --ai or --layer.')
     }
-    const step = newStep({ op, options, ai, settings, layer })
+    if (blend !== undefined && op === undefined) {
+      throw new ValidationError('--blend goes with --op.')
+    }
+    const step = newStep({ op, options, blend, ai, settings, layer })
     return change(context, (current) => ({
       type: 'add-step',
       step,
@@ -159,35 +173,40 @@ export const documentStepMoveCommand = defineAppCommand({
 
 export const documentStepSetCommand = defineAppCommand({
   name: 'document step set',
-  summary: "Replace a step's options, settings or image",
+  summary: "Replace a step's options, blend, settings or image",
   synopsis:
-    '<documentId> <stepId> (--options <json> | --settings <json> | --source <sourceId>)',
-  help: `Replaces the options of a Sharp step, the settings of an AI step or of a layer
-(every layer setting not given goes back to its default), or the image of a
-layer.
+    '<documentId> <stepId> (--options <json> | --blend <json> | --settings <json> | --source <sourceId>)',
+  help: `Replaces the options of a Sharp step, the blend of a filter or colour step,
+the settings of an AI step or of a layer (every layer setting not given goes
+back to its default), or the image of a layer. A blend of {} takes the blend
+away.
 
 Options:
   --options <json>     New options for a Sharp step (${JSON_VALUE})
+  --blend <json>       New blend, mode and opacity, for a filter or colour step (${JSON_VALUE})
   --settings <json>    New settings for an AI step or a layer (${JSON_VALUE})
   --source <sourceId>  The source a layer shows`,
   shape: {
     documentId: id,
     stepId: id,
     options: json.optional(),
+    blend: json.optional(),
     settings: json.optional(),
     source: id.optional(),
   },
   positionals: ['documentId', 'stepId'],
   flags: {
     options: { type: 'string', json: true },
+    blend: { type: 'string', json: true },
     settings: { type: 'string', json: true },
     source: { type: 'string' },
   },
   run: (context) =>
     change(context, (current) => {
-      const { stepId, options, settings, source } = context.options
+      const { stepId, options, blend, settings, source } = context.options
       return setChange(requireStep(current, stepId), {
         options,
+        blend,
         settings,
         source,
       })
@@ -196,6 +215,7 @@ Options:
 
 type Given = {
   options: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
+  blend: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
   settings: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
   source: string | undefined
 }
@@ -209,6 +229,13 @@ function requireGiven<T>(value: T | undefined, flag: string, what: string): T {
 
 function setChange(step: PipelineStep, given: Given): DocumentChange {
   const stepId = step.id
+  if (given.blend !== undefined) {
+    return {
+      type: 'set-blend',
+      stepId,
+      blend: stepBlendSchema.parse(given.blend),
+    }
+  }
   switch (step.kind) {
     case PipelineStepKind.Layer:
       if (given.source !== undefined) {

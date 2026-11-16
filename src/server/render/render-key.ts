@@ -19,7 +19,12 @@ export type KeyedStep = SharpStep | LayerStep | AiStep
 function stepIdentity(step: KeyedStep): unknown {
   switch (step.kind) {
     case PipelineStepKind.Sharp:
-      return { kind: step.kind, op: step.op, options: step.options }
+      return {
+        kind: step.kind,
+        op: step.op,
+        options: step.options,
+        blend: step.blend,
+      }
     case PipelineStepKind.Layer: {
       const { id: _id, enabled: _enabled, name: _name, ...identity } = step
       return identity

@@ -103,7 +103,15 @@ export const filterOpSchemas = [
     gamma: z.number().min(GAMMA_MIN).max(GAMMA_MAX).optional(),
     gammaOut: z.number().min(GAMMA_MIN).max(GAMMA_MAX).optional(),
   }),
-  z.strictObject({ op: z.literal('negate'), alpha: z.boolean().optional() }),
+  z.strictObject({
+    op: z.literal('negate'),
+    alpha: z
+      .boolean()
+      .optional()
+      .describe(
+        'Also invert the transparency. Off by default, so a see-through picture stays as see-through as it was.',
+      ),
+  }),
   z.strictObject({ op: z.literal('normalise'), ...normaliseFields }),
   z.strictObject({ op: z.literal('normalize'), ...normaliseFields }),
   z.strictObject({
@@ -180,7 +188,7 @@ export function applyFilterOp(image: Sharp, step: FilterOp): Sharp {
     case 'gamma':
       return image.gamma(step.gamma, step.gammaOut)
     case 'negate':
-      return image.negate({ alpha: step.alpha })
+      return image.negate({ alpha: step.alpha ?? false })
     case 'normalise':
     case 'normalize':
       return image.normalise({ lower: step.lower, upper: step.upper })

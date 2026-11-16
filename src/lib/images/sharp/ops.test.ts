@@ -74,9 +74,11 @@ describe('sharpOpSchema', () => {
     for (const name of SHARP_OP_NAMES) expect(schema).toContain(`"${name}"`)
   })
 
-  it('covers every chainable Sharp operation', () => {
+  it('covers every chainable Sharp operation, and the scale and opacity of the picture', () => {
     expect([...SHARP_OP_NAMES].sort()).toEqual(
       [
+        'opacity',
+        'scale',
         'affine',
         'autoOrient',
         'avif',
@@ -142,6 +144,43 @@ describe('sharpOpSchema', () => {
         'withXmp',
       ].sort(),
     )
+  })
+})
+
+describe('negate', () => {
+  it.each<[SharpOp]>([[{ op: 'negate' }], [{ op: 'negate', alpha: false }]])(
+    'inverts the colours of %j',
+    async (op) => {
+      const image = sharp({
+        create: { width: 2, height: 2, channels: 3, background: '#ff0000' },
+      })
+      const { data } = await applySharpOps(image, [op])
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      expect([...data.subarray(0, 3)]).toEqual([0, 255, 255])
+    },
+  )
+})
+
+describe('negate and transparency', () => {
+  it('keeps the transparency of the picture unless asked to invert it', async () => {
+    const make = () =>
+      sharp({
+        create: {
+          width: 2,
+          height: 2,
+          channels: 4,
+          background: { r: 255, g: 0, b: 0, alpha: 1 },
+        },
+      })
+    const alphaOf = async (op: SharpOp): Promise<number> => {
+      const { data } = await applySharpOps(make(), [op])
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      return data[3] ?? -1
+    }
+    expect(await alphaOf({ op: 'negate' })).toBe(255)
+    expect(await alphaOf({ op: 'negate', alpha: true })).toBe(0)
   })
 })
 

@@ -8,6 +8,7 @@ import {
   filePathSchema,
   unitIntervalSchema,
 } from './common.ts'
+import { SharpOperationError } from './errors.ts'
 import { overlaySchema, sharpInputOptionsSchema } from './input-options.ts'
 
 const toggle = z
@@ -21,6 +22,16 @@ export const colourOpSchemas = [
     colour: colourSchema.describe(
       'The tint colour: a CSS string such as "#ff000080", or { r, g, b, alpha }. An alpha below 1 blends the tint with the original image by that strength.',
     ),
+  }),
+  z.strictObject({
+    op: z.literal('opacity'),
+    percent: z
+      .number()
+      .min(0)
+      .max(100)
+      .describe(
+        'How much of the picture shows, as a percentage. Multiplies its own transparency, so what is already see-through stays see-through.',
+      ),
   }),
   z.strictObject({ op: z.literal('greyscale'), enabled: toggle }),
   z.strictObject({ op: z.literal('grayscale'), enabled: toggle }),
@@ -70,6 +81,11 @@ export function applyColourOp(image: Sharp, step: ColourOp): Sharp {
   switch (step.op) {
     case 'tint':
       return image.tint(step.colour)
+    case 'opacity':
+      throw new SharpOperationError(
+        'opacity',
+        'it needs the pixels of the picture at this step; apply it with applySharpOpsBlended',
+      )
     case 'greyscale':
     case 'grayscale':
       return image.greyscale(step.enabled)

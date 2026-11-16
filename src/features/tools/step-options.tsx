@@ -11,8 +11,15 @@ import {
   renameStep,
   setLayerSettings,
   setSharpOptions,
+  setStepBlend,
   setStepSource,
 } from '@/features/pipeline/pipeline-actions'
+import {
+  DEFAULT_STEP_BLEND,
+  supportsBlend,
+} from '@/features/pipeline/step-blend'
+import type { StepBlend } from '@/features/pipeline/step-blend'
+import { StepBlendForm } from '@/features/tools/step-blend-form'
 import { StepNameField } from '@/features/tools/step-name-field'
 import { LayerSettingsForm } from '@/features/tools/layer-settings-form'
 import { formatSize } from '@/lib/format-size'
@@ -119,9 +126,34 @@ function SharpStepOptions({
   )
 
   return (
+    <>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them */}
+      <div onBlur={flush}>
+        <SharpOptionsForm op={step.op} options={draft} onChange={change} />
+      </div>
+      {supportsBlend(step.op) && (
+        <SharpBlendOptions documentId={documentId} step={step} />
+      )}
+    </>
+  )
+}
+
+function SharpBlendOptions({
+  documentId,
+  step,
+}: SharpStepOptionsProps): React.JSX.Element {
+  const stepId = step.id
+  const { draft, change, flush } = useStepDraft<StepBlend>(
+    step.blend ?? DEFAULT_STEP_BLEND,
+    (blend) => {
+      setStepBlend(documentId, stepId, blend)
+    },
+  )
+
+  return (
     // biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them
     <div onBlur={flush}>
-      <SharpOptionsForm op={step.op} options={draft} onChange={change} />
+      <StepBlendForm blend={draft} onChange={change} />
     </div>
   )
 }

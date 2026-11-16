@@ -260,6 +260,54 @@ describe('StepOptions', () => {
     })
   })
 
+  describe('a filter or colour step’s blend', () => {
+    function showBlur(): { id: string } {
+      const blur = createSharpStep('blur', { sigma: 2 })
+      const view = documentView([blur])
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+      return blur
+    }
+
+    it('is offered under the step’s own options, and saved as one change', async () => {
+      const user = userEvent.setup()
+      const blur = showBlur()
+
+      expect(screen.getByRole('heading', { name: 'Blend' })).toBeVisible()
+      await user.click(screen.getByRole('combobox', { name: 'Blend mode' }))
+      await user.click(screen.getByRole('option', { name: 'Multiply' }))
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: {
+              type: 'set-blend',
+              stepId: blur.id,
+              blend: { mode: 'multiply', opacity: 100 },
+            },
+          }),
+        })
+      })
+    })
+
+    it('is not offered for a geometry step, which changes the size of the picture', () => {
+      const flip = createSharpStep('flip')
+      loadDocumentIntoEditor(documentView([flip]))
+      useAppStore.getState().selectStep(DOCUMENT_ID, flip.id)
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      expect(
+        screen.queryByRole('heading', { name: 'Blend' }),
+      ).not.toBeInTheDocument()
+    })
+  })
+
   describe('a layer', () => {
     beforeEach(() => {
       useSourcesStore.setState(INITIAL_SOURCES_STATE)

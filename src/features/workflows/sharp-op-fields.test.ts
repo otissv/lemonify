@@ -182,3 +182,38 @@ describe('missingSharpOptions', () => {
     expect(missingSharpOptions('sharpen', {})).toEqual([])
   })
 })
+
+describe('the scale and opacity tools', () => {
+  it('ask for a percentage, which scale can also give for the height', () => {
+    expect(
+      sharpOpFields('scale').map(({ name, kind, required }) => [
+        name,
+        kind,
+        required,
+      ]),
+    ).toEqual([
+      ['percent', OpFieldKind.Number, true],
+      ['verticalPercent', OpFieldKind.Number, false],
+    ])
+    expect(
+      sharpOpFields('opacity').map(({ name, kind, required }) => [
+        name,
+        kind,
+        required,
+      ]),
+    ).toEqual([['percent', OpFieldKind.Number, true]])
+    expect(missingSharpOptions('scale', {})).toEqual(['percent'])
+    expect(missingSharpOptions('opacity', {})).toEqual(['percent'])
+  })
+
+  it('check the range, in words', () => {
+    expect(
+      Object.keys(sharpOptionProblems('scale', { percent: 5000 })),
+    ).toEqual(['percent'])
+    expect(
+      Object.keys(sharpOptionProblems('opacity', { percent: 500 })),
+    ).toEqual(['percent'])
+    expect(sharpOptionProblems('scale', { percent: 50 })).toEqual({})
+    expect(sharpOptionProblems('opacity', { percent: 0 })).toEqual({})
+  })
+})

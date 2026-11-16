@@ -200,6 +200,112 @@ describe('layers through the CLI', () => {
   })
 })
 
+describe('blend, scale and opacity through the CLI', () => {
+  async function pixel(file: string, x: number, y: number): Promise<number[]> {
+    const { data, info } = await sharp(file)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const start = (y * info.width + x) * info.channels
+    return [...data.subarray(start, start + info.channels)]
+  }
+
+  async function documentOf(): Promise<Doc['document']> {
+    const base = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('flat.png'),
+    )
+    const { document } = await cli<Doc>('document', 'create', base.source.id)
+    return document
+  }
+
+  it('blends a colour step with the picture before it, and can take the blend off', async () => {
+    const document = await documentOf()
+    const added = await cli<Doc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--op',
+      'negate',
+      '--blend',
+      '{"mode":"normal","opacity":50}',
+    )
+    const step = added.document.pipeline.steps.at(-1)
+    expect(step).toMatchObject({
+      op: 'negate',
+      blend: { mode: 'normal', opacity: 50 },
+    })
+
+    const out = path.join(workDir, 'blended.png')
+    await cli('export', document.id, '--out', out, '--format', 'png')
+    const [r, g, b] = await pixel(out, 4, 4)
+    expect([r, g, b]).toEqual([127, 127, 127])
+    expect(Math.abs(g - 127)).toBeLessThanOrEqual(2)
+    expect(Math.abs(b - 127)).toBeLessThanOrEqual(2)
+
+    const cleared = await cli<Doc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      step?.id ?? '',
+      '--blend',
+      '{}',
+    )
+    expect(cleared.document.pipeline.steps.at(-1)).not.toHaveProperty('blend')
+  })
+
+  it('refuses a blend on a step that cannot have one', async () => {
+    const document = await documentOf()
+    await expect(
+      cli(
+        'document',
+        'step',
+        'add',
+        document.id,
+        '--op',
+        'resize',
+        '--options',
+        '{"width":8}',
+        '--blend',
+        '{"opacity":50}',
+      ),
+    ).rejects.toThrow(/blend/i)
+  })
+
+  it('scales the picture by a percentage and fades it with the opacity tool', async () => {
+    const document = await documentOf()
+    await cli(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--op',
+      'scale',
+      '--options',
+      '{"percent":50}',
+    )
+    await cli(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--op',
+      'opacity',
+      '--options',
+      '{"percent":50}',
+    )
+    const out = path.join(workDir, 'scaled.png')
+    await cli('export', document.id, '--out', out, '--format', 'png')
+    const meta = await sharp(out).metadata()
+    expect([meta.width, meta.height]).toEqual([32, 24])
+    const [, , , a] = await pixel(out, 4, 4)
+    expect(Math.abs(a - 128)).toBeLessThanOrEqual(2)
+  })
+})
+
 describe('workflows through the CLI', () => {
   it('runs a workflow with --follow and writes the images with a manifest', async () => {
     const { source } = await cli<{ source: { id: string } }>(

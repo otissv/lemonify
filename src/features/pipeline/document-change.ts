@@ -13,6 +13,11 @@ import {
 } from '@/features/pipeline/pipeline'
 import type { Pipeline, PipelineStep } from '@/features/pipeline/pipeline'
 import { aiToolSchema } from '@/features/ai/ai-tools'
+import {
+  isDefaultBlend,
+  stepBlendSchema,
+  supportsBlend,
+} from '@/features/pipeline/step-blend'
 import { layerSettingsSchema } from '@/features/pipeline/layer'
 import type { LayerSettings } from '@/features/pipeline/layer'
 
@@ -62,6 +67,12 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     type: z.literal('set-enabled'),
     stepId: z.string().min(1),
     enabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal('set-blend'),
+    stepId: z.string().min(1),
+    /** Null takes the blend away. */
+    blend: stepBlendSchema.nullable(),
   }),
   z.strictObject({
     type: z.literal('rename-step'),
@@ -154,6 +165,15 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         enabled: step.enabled,
       }
     }
+    case 'set-blend': {
+      const { step } = requireStep(pipeline, change.stepId)
+      if (step.kind !== PipelineStepKind.Sharp) throw wrongKind()
+      return {
+        type: 'set-blend',
+        stepId: change.stepId,
+        blend: step.blend ?? null,
+      }
+    }
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)
       return {
@@ -221,6 +241,20 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
     case 'set-enabled':
       requireStep(pipeline, change.stepId)
       return setStepEnabled(pipeline, change.stepId, change.enabled)
+    case 'set-blend': {
+      const { step } = requireStep(pipeline, change.stepId)
+      if (step.kind !== PipelineStepKind.Sharp || !supportsBlend(step.op)) {
+        throw new InvalidChangeError(
+          'Only filters and colour tools can have a blend.',
+        )
+      }
+      const { blend: _previous, ...unblended } = step
+      const { blend } = change
+      if (blend === null || isDefaultBlend(blend)) {
+        return replaceStep(pipeline, unblended)
+      }
+      return replaceStep(pipeline, { ...unblended, blend })
+    }
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)
       const name = change.name.trim()

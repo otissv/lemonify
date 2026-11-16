@@ -8,12 +8,13 @@ import type { Sharp } from 'sharp'
 import { ExportFormat } from '@/features/export/export-settings'
 import type { ExportSettings } from '@/features/export/export-settings'
 import type { SharpStep } from '@/features/pipeline/pipeline'
+import type { StepBlend } from '@/features/pipeline/step-blend'
 import { applySharpOpsBlended } from '@/lib/images/sharp/blend-tint'
 import { applySharpOps, sharpOpSchema } from '@/lib/images/sharp/ops'
 import type { SharpOp } from '@/lib/images/sharp/ops'
 import { OUTPUT_OPTION_SCHEMAS } from '@/lib/images/sharp/output-options'
 
-import { compositeLayer } from './layer-compositor.ts'
+import { blendPictures, compositeLayer } from './layer-compositor.ts'
 import type { EngineLayer, RawImage } from './layer-compositor.ts'
 import { RenderError, plainReason } from './render-error.ts'
 
@@ -164,6 +165,19 @@ function fromPixels(image: RawImage): Sharp {
   })
 }
 
+/** The picture with one step applied and its result blended over the picture as it was. */
+async function blended(
+  image: Sharp,
+  op: SharpOp,
+  blend: StepBlend,
+): Promise<Sharp> {
+  const before = await pixelsOf(image)
+  const after = await pixelsOf(
+    await applySharpOpsBlended(fromPixels(before), [op], 'pixels'),
+  )
+  return fromPixels(await blendPictures(before, after, blend))
+}
+
 /**
  * Applies the steps in order. Sharp does not run the operations of one
  * pipeline in the order they are listed (it resizes before it composites, for
@@ -188,8 +202,14 @@ async function applySteps(
       continue
     }
     const op = sharpOpSchema.parse({ ...step.options, op: step.op })
-    stage.push(op)
     all.push(op)
+    if (step.blend !== undefined) {
+      pipeline = await applySharpOpsBlended(pipeline, stage, 'pixels')
+      stage = []
+      pipeline = await blended(pipeline, op, step.blend)
+      continue
+    }
+    stage.push(op)
   }
   pipeline = await applySharpOpsBlended(pipeline, stage, 'pixels')
   return applySharpOps(pipeline, all, 'output')

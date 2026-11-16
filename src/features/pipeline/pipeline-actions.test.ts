@@ -7,6 +7,7 @@ import {
   replaceImage,
   renameStep,
   setLayerSettings,
+  setStepBlend,
 } from '@/features/pipeline/pipeline-actions'
 import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
 import {
@@ -147,6 +148,35 @@ describe('replaceImage', () => {
 
   it('does nothing when the document is not open', () => {
     replaceImage(DOCUMENT_ID, 'other')
+
+    expect(applyEdit).not.toHaveBeenCalled()
+  })
+})
+
+describe('setStepBlend', () => {
+  const BLEND = { mode: 'multiply', opacity: 40 } as const
+
+  it('sets the blend of a filter or colour step as one change', () => {
+    const blur = createSharpStep('blur')
+    loadDocumentIntoEditor(documentView([blur]))
+
+    setStepBlend(DOCUMENT_ID, blur.id, BLEND)
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'set-blend',
+      stepId: blur.id,
+      blend: BLEND,
+    })
+  })
+
+  it('does nothing for a geometry step, a layer, or a step that is gone', () => {
+    const flip = createSharpStep('flip')
+    const layer = createLayerStep('logo')
+    loadDocumentIntoEditor(documentView([flip, layer]))
+
+    for (const id of [flip.id, layer.id, 'gone']) {
+      setStepBlend(DOCUMENT_ID, id, BLEND)
+    }
 
     expect(applyEdit).not.toHaveBeenCalled()
   })

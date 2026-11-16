@@ -27,6 +27,24 @@ describe('renderKey', () => {
     expect(renderKey(HASH, [a])).toBe(renderKey(HASH, [b]))
   })
 
+  it('changes with a step’s blend, and a step without one keeps the key it always had', () => {
+    const blur = createSharpStep('blur', { sigma: 3 })
+    const blended = {
+      ...blur,
+      blend: { mode: 'multiply' as const, opacity: 50 },
+    }
+    const fainter = {
+      ...blur,
+      blend: { mode: 'multiply' as const, opacity: 40 },
+    }
+
+    expect(renderKey(HASH, [blended])).not.toBe(renderKey(HASH, [blur]))
+    expect(renderKey(HASH, [blended])).not.toBe(renderKey(HASH, [fainter]))
+    expect(renderKey(HASH, [{ ...blur, blend: undefined }])).toBe(
+      renderKey(HASH, [blur]),
+    )
+  })
+
   it('changes with the Source, the options, the order and the steps', () => {
     const blur = createSharpStep('blur', { sigma: 3 })
     const sharper = createSharpStep('blur', { sigma: 4 })

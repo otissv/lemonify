@@ -15,6 +15,8 @@ import {
   DEFAULT_LAYER_SETTINGS,
   MAX_LAYER_OPACITY,
 } from '@/features/pipeline/layer'
+import { DEFAULT_STEP_BLEND } from '@/features/pipeline/step-blend'
+import type { StepBlend } from '@/features/pipeline/step-blend'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type { LayerStep, PipelineStep } from '@/features/pipeline/pipeline'
 import {
@@ -81,6 +83,15 @@ function layerSummary(
   return parts.join(' · ')
 }
 
+/** "multiply 50%": how a step's result is blended, naming only what differs from normal and 100%. */
+function blendSummary(blend: StepBlend): string {
+  const parts: string[] = []
+  if (blend.mode !== DEFAULT_STEP_BLEND.mode) parts.push(blend.mode)
+  if (blend.opacity !== DEFAULT_STEP_BLEND.opacity)
+    parts.push(`${blend.opacity}%`)
+  return parts.join(' ')
+}
+
 function statusOf(
   step: PipelineStep,
   sourceName: string | undefined,
@@ -101,11 +112,12 @@ function statusOf(
   }
   if (step.kind === PipelineStepKind.Sharp) {
     const count = Object.keys(step.options).length
-    const text =
+    const options =
       count === 0
         ? 'Default options'
         : `${count} ${count === 1 ? 'option' : 'options'} set`
-    return { text, problem: false, running: false }
+    const parts = step.blend ? [options, blendSummary(step.blend)] : [options]
+    return { text: parts.join(' · '), problem: false, running: false }
   }
   if (run?.stepId === step.id) return runStatus(run)
   if (outOfDate) return { text: 'Not run yet', problem: false, running: false }

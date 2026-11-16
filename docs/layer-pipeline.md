@@ -36,6 +36,12 @@ The defaults put an image in the middle of the canvas, shrunk if it is larger, f
 
 **Compositing keeps transparency.** Transparent and partly transparent pixels in the layer, and in the picture under it, are blended by their alpha, so a PNG with a cut-out shows what is behind it. The canvas shows a checkerboard behind the picture so that transparency can be seen, and exporting to a format that cannot hold transparency (JPEG) flattens the picture onto white.
 
+## Blend on a tool, and the Scale and Opacity tools
+
+A filter or colour step can be blended with the picture as it was before the step. It has the same blend modes as a layer and an opacity from 0 to 100; the default (normal, 100) is the plain step and is not stored. Geometry and AI steps cannot be blended: geometry changes the size of the picture, so there is nothing to compare, and an AI step makes a new picture of its own. A blended step is applied on its own: the engine renders the picture before and after it, fades the result by the opacity, and composites it over the earlier picture with the mode. The blend is part of the step's identity, so it changes the render key.
+
+Scale (Geometry) resizes the picture by a percentage, where Resize is in pixels. Opacity (Colour) makes the whole picture more see-through, multiplying the transparency it already has. Sharp has no operation for either that keeps the order of the steps, so both are applied to pixels with the layers and blended steps. Negate keeps the picture's transparency unless `alpha` is set, so it gives the same result wherever it sits in the pipeline.
+
 ## How it is rendered
 
 The planner turns the pipeline into a base image and an ordered list of engine steps: Sharp steps, and layers with their image resolved to a file. The engine applies them in order. Sharp does not run its operations in the order they are listed within one pipeline (it resizes before it composites, for instance), so the engine renders the picture to pixels at every layer and builds the next stage from those pixels. The layer's image is oriented, sized by `fit` and `scale`, rotated, given its opacity, cut to the part that is over the canvas, and composited with its blend mode.

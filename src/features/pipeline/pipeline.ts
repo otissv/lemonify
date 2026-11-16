@@ -11,7 +11,7 @@ import {
   layerSettingsSchema,
 } from '@/features/pipeline/layer'
 import { SHARP_OP_CATEGORIES } from '@/lib/images/sharp/ops'
-
+import { stepBlendSchema, supportsBlend } from '@/features/pipeline/step-blend'
 /** The kinds of step a file's pipeline can hold; the same values as the workflow's steps. */
 export const PipelineStepKind = {
   Sharp: WorkflowNodeKind.Sharp,
@@ -44,13 +44,19 @@ const name = z.string().trim().min(1).max(MAX_STEP_NAME_LENGTH).optional()
  * schemas so both stay in step.
  */
 export const PipelineStepSchema = z.discriminatedUnion('kind', [
-  SharpNodeSchema.omit({ position: true }).extend({
-    op: z
-      .string()
-      .refine((op) => EDITING_OP_NAMES.includes(op), 'Not an editing tool'),
-    enabled,
-    name,
-  }),
+  SharpNodeSchema.omit({ position: true })
+    .extend({
+      op: z
+        .string()
+        .refine((op) => EDITING_OP_NAMES.includes(op), 'Not an editing tool'),
+      enabled,
+      name,
+      blend: stepBlendSchema.optional(),
+    })
+    .refine((step) => step.blend === undefined || supportsBlend(step.op), {
+      message: 'Only filters and colour tools can have a blend.',
+      path: ['blend'],
+    }),
   aiStepSchema({ id: z.uuid(), enabled, name }),
   z.strictObject({
     id: z.uuid(),

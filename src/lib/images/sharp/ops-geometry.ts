@@ -1,6 +1,7 @@
 import type { Sharp } from 'sharp'
 import { z } from 'zod'
 
+import { SharpOperationError } from './errors.ts'
 import {
   GRAVITIES,
   colourSchema,
@@ -62,6 +63,22 @@ export const geometryOpSchemas = [
     fastShrinkOnLoad: z.boolean().optional(),
   }),
   z.strictObject({
+    op: z.literal('scale'),
+    percent: z
+      .number()
+      .min(1)
+      .max(1000)
+      .describe(
+        'How big the picture becomes, as a percentage of its size at this step. Both ways unless verticalPercent is given.',
+      ),
+    verticalPercent: z
+      .number()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe('A different percentage for the height.'),
+  }),
+  z.strictObject({
     op: z.literal('extend'),
     top: nonNegativeIntSchema.optional(),
     left: nonNegativeIntSchema.optional(),
@@ -112,6 +129,11 @@ export function applyGeometryOp(image: Sharp, step: GeometryOp): Sharp {
       const { op: _op, ...options } = step
       return image.resize(options)
     }
+    case 'scale':
+      throw new SharpOperationError(
+        'scale',
+        'it needs the size of the picture at this step; apply it with applySharpOpsBlended',
+      )
     case 'extend': {
       const { op: _op, ...options } = step
       return image.extend(options)

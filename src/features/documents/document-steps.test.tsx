@@ -158,6 +158,16 @@ describe('DocumentSteps', () => {
     expect(screen.getByRole('button', { name: 'Hide Soften' })).toBeVisible()
   })
 
+  it('says how a step is blended, naming only what differs from the defaults', async () => {
+    const blended = {
+      ...createSharpStep('blur', { sigma: 2 }),
+      blend: { mode: 'multiply' as const, opacity: 50 },
+    }
+    const list = await showSteps([blended], userEvent.setup())
+
+    expect(within(list).getByText('1 option set · multiply 50%')).toBeVisible()
+  })
+
   it('shows a layer with its image, opacity and blend', async () => {
     const layer = {
       ...createLayerStep('second'),

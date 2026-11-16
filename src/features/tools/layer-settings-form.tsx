@@ -3,27 +3,20 @@ import { useEffect, useId, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Slider } from '@/components/ui/slider'
-import {
   LAYER_ANCHORS,
-  LAYER_BLENDS,
   LAYER_FITS,
   MAX_LAYER_OFFSET,
-  MAX_LAYER_OPACITY,
   MAX_LAYER_ROTATION,
   MAX_LAYER_SCALE,
-  MIN_LAYER_OPACITY,
   MIN_LAYER_SCALE,
 } from '@/features/pipeline/layer'
+import {
+  BlendModeSelect,
+  OpacitySlider,
+  OptionSelect,
+} from '@/features/tools/blend-controls'
 import type {
   LayerAnchor,
-  LayerBlend,
   LayerFit,
   LayerSettings,
 } from '@/features/pipeline/layer'
@@ -31,21 +24,6 @@ import type {
 interface LayerSettingsFormProps {
   settings: LayerSettings
   onChange: (settings: LayerSettings) => void
-}
-
-const BLEND_LABELS: Readonly<Record<LayerBlend, string>> = {
-  normal: 'Normal',
-  multiply: 'Multiply',
-  screen: 'Screen',
-  overlay: 'Overlay',
-  darken: 'Darken',
-  lighten: 'Lighten',
-  'colour-dodge': 'Colour dodge',
-  'colour-burn': 'Colour burn',
-  'hard-light': 'Hard light',
-  'soft-light': 'Soft light',
-  difference: 'Difference',
-  exclusion: 'Exclusion',
 }
 
 const FIT_LABELS: Readonly<Record<LayerFit, string>> = {
@@ -128,47 +106,6 @@ function NumberField({
   )
 }
 
-interface OptionSelectProps<T extends string> {
-  label: string
-  value: T
-  labels: Readonly<Record<T, string>>
-  options: ReadonlyArray<T>
-  onChange: (value: T) => void
-}
-
-function OptionSelect<T extends string>({
-  label,
-  value,
-  labels,
-  options,
-  onChange,
-}: OptionSelectProps<T>): React.JSX.Element {
-  const id = useId()
-
-  function handleValueChange(next: string): void {
-    const chosen = options.find((option) => option === next)
-    if (chosen !== undefined) onChange(chosen)
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <Label id={id}>{label}</Label>
-      <Select value={value} onValueChange={handleValueChange}>
-        <SelectTrigger aria-labelledby={id} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {labels[option]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
-}
-
 interface AnchorGridProps {
   anchor: LayerAnchor
   onChange: (anchor: LayerAnchor) => void
@@ -207,38 +144,17 @@ export function LayerSettingsForm({
   settings,
   onChange,
 }: LayerSettingsFormProps): React.JSX.Element {
-  const opacityId = useId()
-
-  function handleOpacityChange(values: Array<number>): void {
-    const opacity = values.at(0)
-    if (opacity !== undefined) onChange({ ...settings, opacity })
-  }
-
   return (
     <div className="flex flex-col gap-4 p-4">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <Label id={opacityId}>Opacity</Label>
-          <span className="text-body-md text-muted-foreground">
-            {settings.opacity}%
-          </span>
-        </div>
-        <Slider
-          thumbLabel="Opacity"
-          aria-describedby={opacityId}
-          min={MIN_LAYER_OPACITY}
-          max={MAX_LAYER_OPACITY}
-          step={1}
-          value={[settings.opacity]}
-          onValueChange={handleOpacityChange}
-        />
-      </div>
+      <OpacitySlider
+        value={settings.opacity}
+        onChange={(opacity) => {
+          onChange({ ...settings, opacity })
+        }}
+      />
 
-      <OptionSelect
-        label="Blend mode"
+      <BlendModeSelect
         value={settings.blend}
-        labels={BLEND_LABELS}
-        options={LAYER_BLENDS}
         onChange={(blend) => {
           onChange({ ...settings, blend })
         }}

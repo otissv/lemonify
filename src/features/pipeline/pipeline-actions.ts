@@ -1,6 +1,8 @@
 import { applyEdit } from '@/features/documents/document-sync'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import type { LayerSettings } from '@/features/pipeline/layer'
+import { supportsBlend } from '@/features/pipeline/step-blend'
+import type { StepBlend } from '@/features/pipeline/step-blend'
 import {
   PipelineStepKind,
   canvasLayer,
@@ -131,6 +133,17 @@ export function renameStep(
 ): void {
   if (stepOf(documentId, stepId) === undefined) return
   void applyEdit(documentId, { type: 'rename-step', stepId, name })
+}
+
+/** Sets how the result of a filter or colour step is blended with the picture before it (the defaults take the blend away), as one undoable change; nothing if the step is gone or cannot have one. */
+export function setStepBlend(
+  documentId: string,
+  stepId: string,
+  blend: StepBlend,
+): void {
+  const step = stepOf(documentId, stepId)
+  if (step?.kind !== PipelineStepKind.Sharp || !supportsBlend(step.op)) return
+  void applyEdit(documentId, { type: 'set-blend', stepId, blend })
 }
 
 /** Sets how a layer is drawn, as one undoable change; nothing if the step is gone or is not a layer. */

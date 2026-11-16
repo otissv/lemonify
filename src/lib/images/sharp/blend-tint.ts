@@ -4,19 +4,13 @@ import type { Sharp } from 'sharp'
 import { SharpOperationError } from './errors.ts'
 import { applySharpOp, applySharpOps, isOutputOp } from './ops.ts'
 import type { SharpOp, SharpOpStage } from './ops.ts'
+import { applyPixelOp, fromRaw, isPixelOp, toRaw } from './pixel-ops.ts'
 
 const MAX_CHANNEL = 255
 const COLOUR_CHANNELS = 3
 const WITH_ALPHA = 4
 
 type TintOp = Extract<SharpOp, { op: 'tint' }>
-
-interface RawImage {
-  data: Buffer
-  width: number
-  height: number
-  channels: number
-}
 
 function isTint(step: SharpOp): step is TintOp {
   return step.op === 'tint'
@@ -54,26 +48,6 @@ export function mixTint(
   return mixed
 }
 
-async function toRaw(image: Sharp): Promise<RawImage> {
-  const { data, info } = await image
-    .toColourspace('srgb')
-    .raw()
-    .toBuffer({ resolveWithObject: true })
-  return {
-    data,
-    width: info.width,
-    height: info.height,
-    channels: info.channels,
-  }
-}
-
-function fromRaw(raw: RawImage): Sharp {
-  const { data, width, height, channels } = raw
-  return sharp(data, {
-    raw: { width, height, channels: channels as 3 | 4 },
-  })
-}
-
 async function blendTint(
   pipeline: Sharp,
   colour: TintOp['colour'],
@@ -97,6 +71,7 @@ async function runStep(
       const strength = await tintStrength(step.colour)
       if (strength < 1) return await blendTint(pipeline, step.colour, strength)
     }
+    if (isPixelOp(step)) return await applyPixelOp(pipeline, step)
     return applySharpOp(pipeline, step)
   } catch (error) {
     throw new SharpOperationError(`ops[${index}] (${step.op})`, error)
@@ -104,8 +79,9 @@ async function runStep(
 }
 
 /**
- * Like `applySharpOps`, but a `tint` whose colour has an alpha below 1 is
- * blended into the image by that alpha. Sharp's own tint ignores alpha, so
+ * Like `applySharpOps`, but it also applies the ops that need the picture's
+ * size or pixels (`scale`, `opacity`), and a `tint` whose colour has an alpha
+ * below 1 is blended into the image by that alpha. Sharp's own tint ignores alpha, so
  * the steps before such a tint are rendered first and the result is mixed
  * with its tinted copy; the later steps then continue from the mix. Output
  * steps are applied last, wherever they are listed. Rendering the image

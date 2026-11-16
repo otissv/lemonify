@@ -28,10 +28,22 @@ describe('tool catalogue', () => {
     ])
   })
 
-  it('has every editing tool, 9 geometry, 18 filter and 9 colour, plus Upscale', () => {
+  it('has every editing tool, 10 geometry, 18 filter and 10 colour, plus Upscale', () => {
     const counts = TOOL_GROUPS.map(({ tools }) => tools.length)
 
-    expect(counts).toEqual([1, 9, 18, 9])
+    expect(counts).toEqual([1, 10, 18, 10])
+  })
+
+  it('has Scale in Geometry, next to Resize, and Opacity in Colour', () => {
+    const group = (name: string) =>
+      TOOL_GROUPS.find(({ label }) => label === name)?.tools.map(
+        ({ label }) => label,
+      )
+
+    expect(group('Geometry')).toEqual(
+      expect.arrayContaining(['Resize', 'Scale']),
+    )
+    expect(group('Colour')).toContain('Opacity')
   })
 
   it('leaves out Composite, which layers do in a document', () => {

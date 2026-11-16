@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ExportFormat } from '@/features/export/export-settings'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { createSharpStep } from '@/features/pipeline/pipeline'
+import type { StepBlend } from '@/features/pipeline/step-blend'
 
 import {
   EngineTargetKind,
@@ -185,6 +186,135 @@ describe('SharpImageEngine', () => {
       output: input,
     })
     expect((await sharp(input).metadata()).format).toBe('png')
+  })
+
+  describe('blend on a step', () => {
+    async function colourFile(
+      name: string,
+      colour: string,
+      size: number,
+    ): Promise<string> {
+      const file = path.join(directory, name)
+      await sharp({
+        create: { width: size, height: size, channels: 3, background: colour },
+      })
+        .png()
+        .toFile(file)
+      return file
+    }
+
+    async function render(
+      steps: Parameters<typeof engine.render>[0]['steps'],
+      base: string,
+    ): Promise<{ raw: Buffer; width: number }> {
+      const output = path.join(directory, 'out.png')
+      const info = await engine.render({
+        input: base,
+        steps,
+        target: { kind: EngineTargetKind.Intermediate },
+        output,
+      })
+      return {
+        raw: await sharp(output).raw().ensureAlpha().toBuffer(),
+        width: info.width,
+      }
+    }
+
+    const pixel = ({ raw }: { raw: Buffer }, x = 0, y = 0, size = 8) => [
+      ...raw.subarray((y * size + x) * 4, (y * size + x) * 4 + 4),
+    ]
+    const negate = (blend?: StepBlend) => ({
+      ...createSharpStep('negate', { alpha: false }),
+      ...(blend ? { blend } : {}),
+    })
+
+    it('puts the result over the picture before the step, at the blend’s opacity', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+
+      const half = await render([negate({ mode: 'normal', opacity: 50 })], base)
+      const none = await render([negate({ mode: 'normal', opacity: 0 })], base)
+      const full = await render(
+        [negate({ mode: 'normal', opacity: 100 })],
+        base,
+      )
+
+      const [r, g, b, a] = pixel(half)
+      expect(Math.abs((r ?? 0) - 128)).toBeLessThanOrEqual(2)
+      expect(Math.abs((g ?? 0) - 128)).toBeLessThanOrEqual(2)
+      expect(Math.abs((b ?? 0) - 128)).toBeLessThanOrEqual(2)
+      expect(a).toBe(255)
+      expect(pixel(none)).toEqual([255, 0, 0, 255])
+      expect(pixel(full)).toEqual([0, 255, 255, 255])
+    })
+
+    it('blends with the mode it is given', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+
+      const multiplied = await render(
+        [negate({ mode: 'multiply', opacity: 100 })],
+        base,
+      )
+      const screened = await render(
+        [negate({ mode: 'screen', opacity: 100 })],
+        base,
+      )
+
+      expect(pixel(multiplied)).toEqual([0, 0, 0, 255])
+      expect(pixel(screened)).toEqual([255, 255, 255, 255])
+    })
+
+    it('does the same as no blend when there is none, or it is the default', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+
+      const plain = await render([negate()], base)
+      const normal = await render(
+        [negate({ mode: 'normal', opacity: 100 })],
+        base,
+      )
+
+      expect(pixel(plain)).toEqual([0, 255, 255, 255])
+      expect(pixel(normal)).toEqual(pixel(plain))
+    })
+
+    it('blends against the picture as the layers before it left it, and the steps after it go on from the blend', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+      const layer = await colourFile('layer.png', '#0000ff', 2)
+
+      const result = await render(
+        [
+          {
+            kind: 'layer' as const,
+            path: layer,
+            ...DEFAULT_LAYER_SETTINGS,
+          },
+          negate({ mode: 'multiply', opacity: 100 }),
+          createSharpStep('negate', { alpha: false }),
+        ],
+        base,
+      )
+
+      expect(pixel(result, 4, 4)).toEqual([255, 255, 255, 255])
+      expect(pixel(result, 0, 0)).toEqual([255, 255, 255, 255])
+    })
+  })
+
+  describe('the scale and opacity tools', () => {
+    it('scale changes the size of the picture, and opacity makes it see-through', async () => {
+      const output = path.join(directory, 'scaled.png')
+      const info = await engine.render({
+        input,
+        steps: [
+          createSharpStep('scale', { percent: 10 }),
+          createSharpStep('opacity', { percent: 50 }),
+        ],
+        target: { kind: EngineTargetKind.Intermediate },
+        output,
+      })
+
+      expect([info.width, info.height]).toEqual([300, 200])
+      const raw = await sharp(output).raw().ensureAlpha().toBuffer()
+      expect([...raw.subarray(0, 4)]).toEqual([255, 0, 0, 128])
+    })
   })
 
   describe('layers', () => {

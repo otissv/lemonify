@@ -269,6 +269,13 @@ The same fields are taken by `formatOptions.<format>` and by the format op of th
 | `withoutReduction` | boolean |  |  |  |
 | `fastShrinkOnLoad` | boolean |  |  |  |
 
+### `scale`
+
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `percent` | number 1–1000 | yes |  | How big the picture becomes, as a percentage of its size at this step. Both ways unless verticalPercent is given. |
+| `verticalPercent` | number 1–1000 |  |  | A different percentage for the height. |
+
 ### `extend`
 
 | Field | Type | Required | Default | Description |
@@ -393,7 +400,7 @@ No fields.
 
 | Field | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `alpha` | boolean |  |  |  |
+| `alpha` | boolean |  |  | Also invert the transparency. Off by default, so a see-through picture stays as see-through as it was. |
 
 ### `normalise`
 
@@ -474,6 +481,12 @@ No fields.
 | Field | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `colour` | string or object { r, g, b, alpha } | yes |  | The tint colour: a CSS string such as "#ff000080", or { r, g, b, alpha }. An alpha below 1 blends the tint with the original image by that strength. |
+
+### `opacity`
+
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `percent` | number 0–100 | yes |  | How much of the picture shows, as a percentage. Multiplies its own transparency, so what is already see-through stays see-through. |
 
 ### `greyscale`
 
