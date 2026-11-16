@@ -62,6 +62,7 @@ describe('DocumentView', () => {
     await renderApp(`/documents/${DOCUMENT_ID}`)
 
     const picture = await screen.findByRole('img', { name: 'one.png' })
+    fireEvent.load(picture)
 
     expect(picture.closest('[data-slot="canvas"]')).toHaveClass(
       'bg-checkerboard',
