@@ -93,12 +93,25 @@ describe('DocumentSteps', () => {
   it('says there are no edits for a document with no steps', async () => {
     const user = userEvent.setup()
     await renderApp(`/documents/${DOCUMENT_ID}`)
-    vi.mocked(getDocument).mockResolvedValue(documentView())
+    vi.mocked(getDocument).mockResolvedValue({
+      ...documentView(),
+      pipeline: { steps: [] },
+    })
     await user.click(
       await screen.findByRole('button', { name: 'Show steps of one.png' }),
     )
 
     expect(await screen.findByText('No edits yet.')).toBeVisible()
+  })
+
+  it('lists the Open image step first, with the name of the image it opens', async () => {
+    const list = await showSteps([BLUR], userEvent.setup())
+
+    const [open] = within(list).getAllByRole('listitem')
+    expect(
+      within(open as HTMLElement).getByText('Open image'),
+    ).toBeInTheDocument()
+    expect(within(open as HTMLElement).getByText('one.png')).toBeInTheDocument()
   })
 
   it('lists the steps in order with what is set on each', async () => {
@@ -165,7 +178,7 @@ describe('DocumentSteps', () => {
         data: {
           id: DOCUMENT_ID,
           revision: 0,
-          change: { type: 'move-step', stepId: BLUR.id, to: 1 },
+          change: { type: 'move-step', stepId: BLUR.id, to: 2 },
         },
       })
     })

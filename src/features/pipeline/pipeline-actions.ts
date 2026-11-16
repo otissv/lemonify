@@ -69,6 +69,16 @@ export function setSharpOptions(
   void applyEdit(documentId, { type: 'set-options', stepId, options })
 }
 
+/** Makes an Open image step open another image, as one undoable change; nothing if the step is gone. */
+export function setStepSource(
+  documentId: string,
+  stepId: string,
+  sourceId: string,
+): void {
+  if (stepOf(documentId, stepId)?.kind !== PipelineStepKind.Source) return
+  void applyEdit(documentId, { type: 'set-source', stepId, sourceId })
+}
+
 /** Sets the settings of an AI step, as one undoable change; nothing if the step is gone. */
 export function setAiSettings(
   documentId: string,

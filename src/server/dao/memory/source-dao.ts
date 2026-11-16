@@ -37,9 +37,6 @@ export class MemorySourceDao implements SourceDao {
   }
 
   async isReferenced(sourceId: string): Promise<boolean> {
-    for (const document of this.#store.documents.values()) {
-      if (document.sourceId === sourceId) return true
-    }
     for (const operands of this.#store.operands.values()) {
       if (operands.has(sourceId)) return true
     }

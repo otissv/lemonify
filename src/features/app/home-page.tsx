@@ -139,7 +139,9 @@ export function HomePage(): React.JSX.Element {
                       className="size-4 shrink-0 self-center"
                     />
                     <span className="truncate">{document.name}</span>
-                    <RecentDetail text={document.source.fileName} />
+                    {document.source && (
+                      <RecentDetail text={document.source.fileName} />
+                    )}
                     <span
                       className={cn(
                         'ml-auto shrink-0 text-caption text-muted-foreground',

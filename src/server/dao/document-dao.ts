@@ -7,7 +7,6 @@ export const STALE_DOCUMENT_MESSAGE =
 export type DocumentRecord = {
   id: string
   ownerId: string
-  sourceId: string
   name: string
   pipeline: Pipeline
   revision: number
@@ -49,7 +48,8 @@ export type MovedCursor = {
  * overwrite each other.
  */
 export interface DocumentDao {
-  insert(document: DocumentRecord): Promise<void>
+  /** Stores the Document and links the Sources its Pipeline uses, in one transaction. */
+  insert(document: DocumentRecord, sourceIds: string[]): Promise<void>
   findById(id: string): Promise<DocumentRecord | null>
   /** Most recently changed first. */
   listByOwner(ownerId: string): Promise<DocumentRecord[]>
@@ -68,6 +68,6 @@ export interface DocumentDao {
     documentId: string,
     position: number,
   ): Promise<HistoryEntryRecord | null>
-  /** Documents that use the Source as their image or as a second image. */
+  /** Documents whose Pipeline uses the Source, as an opened image or a second image. */
   listBySource(sourceId: string): Promise<DocumentRecord[]>
 }

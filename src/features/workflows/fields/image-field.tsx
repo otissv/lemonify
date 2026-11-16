@@ -2,10 +2,7 @@ import { RiCloseLine } from '@remixicon/react'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
-import {
-  sourceFileName,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { useImageNames } from '@/features/workflows/fields/image-choices'
 import type { ControlProps } from '@/features/workflows/fields/control-props'
 import { ImagePicker } from '@/features/workflows/fields/image-picker'
 
@@ -18,7 +15,7 @@ interface ChosenProps {
 }
 
 function Chosen({ ids, label, onRemove }: ChosenProps): React.JSX.Element {
-  const sources = useSourcesStore((state) => state.sources)
+  const nameOf = useImageNames()
   if (ids.length === 0)
     return (
       <p className="text-caption text-muted-foreground">No image chosen.</p>
@@ -27,13 +24,11 @@ function Chosen({ ids, label, onRemove }: ChosenProps): React.JSX.Element {
     <ul aria-label={label} className="flex flex-col gap-1">
       {ids.map((id) => (
         <li key={id} className="flex items-center justify-between gap-2">
-          <span className="truncate text-body-md">
-            {sourceFileName(sources, id)}
-          </span>
+          <span className="truncate text-body-md">{nameOf(id)}</span>
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={`Remove ${sourceFileName(sources, id)}`}
+            aria-label={`Remove ${nameOf(id)}`}
             onClick={() => {
               onRemove(id)
             }}

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { DocumentView } from '@/features/documents/document'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import { MAX_HISTORY_ENTRIES } from '@/features/pipeline/document-change'
-import { createSharpStep } from '@/features/pipeline/pipeline'
+import { createSharpStep, createSourceStep } from '@/features/pipeline/pipeline'
 import { MemoryDocumentDao } from '../dao/memory/document-dao'
 import { MemorySourceDao } from '../dao/memory/source-dao'
 import { MemoryStore } from '../dao/memory/store'
@@ -38,12 +39,19 @@ async function addSource(
   })
 }
 
-function addBlur(stepId: string, index = 0): DocumentChange {
+/** Adds a blur after the Open image step a new Document starts with. */
+function addBlur(stepId: string, index = 1): DocumentChange {
   return {
     type: 'add-step',
     step: { ...createSharpStep('blur'), id: stepId },
     index,
   }
+}
+
+function blurIds(view: DocumentView): string[] {
+  return view.pipeline.steps
+    .filter((step) => step.kind === 'sharp')
+    .map((step) => step.id)
 }
 
 const STEP_A = '00000000-0000-4000-8000-00000000000a'
@@ -71,16 +79,23 @@ beforeEach(async () => {
 })
 
 describe('create, list and get', () => {
-  it('creates a Document with an empty Pipeline named after its image', async () => {
+  it('creates a Document whose Pipeline opens its image, named after the image', async () => {
     const view = await service.create(ANN, 'src-1')
+    expect(view.pipeline.steps).toEqual([
+      expect.objectContaining({
+        kind: 'source',
+        sourceId: 'src-1',
+        enabled: true,
+      }),
+    ])
     expect(view).toMatchObject({
       id: 'doc-1',
       name: 'cat',
-      pipeline: { steps: [] },
       revision: 0,
       canUndo: false,
       canRedo: false,
       source: { id: 'src-1', fileName: 'cat.png', width: 4, height: 3 },
+      sources: [{ id: 'src-1' }],
     })
   })
 
@@ -144,7 +159,7 @@ describe('change', () => {
     const created = await service.create(ANN, 'src-1')
     const changed = await service.change(ANN, created.id, 0, addBlur(STEP_A))
     expect(changed.revision).toBe(1)
-    expect(changed.pipeline.steps).toHaveLength(1)
+    expect(changed.pipeline.steps).toHaveLength(2)
     expect(changed).toMatchObject({ canUndo: true, canRedo: false })
   })
 
@@ -225,23 +240,20 @@ describe('undo and redo', () => {
   it('walks back and forward through the changes', async () => {
     const created = await service.create(ANN, 'src-1')
     await service.change(ANN, created.id, 0, addBlur(STEP_A))
-    await service.change(ANN, created.id, 1, addBlur(STEP_B, 1))
+    await service.change(ANN, created.id, 1, addBlur(STEP_B, 2))
 
     const undone = await service.undo(ANN, created.id, 2)
-    expect(undone.pipeline.steps.map((s) => s.id)).toEqual([STEP_A])
+    expect(blurIds(undone)).toEqual([STEP_A])
     expect(undone).toMatchObject({ canUndo: true, canRedo: true, revision: 3 })
 
     const undoneAgain = await service.undo(ANN, created.id, 3)
-    expect(undoneAgain.pipeline.steps).toEqual([])
+    expect(blurIds(undoneAgain)).toEqual([])
     expect(undoneAgain.canUndo).toBe(false)
 
     const redone = await service.redo(ANN, created.id, 4)
-    expect(redone.pipeline.steps.map((s) => s.id)).toEqual([STEP_A])
+    expect(blurIds(redone)).toEqual([STEP_A])
     const redoneAgain = await service.redo(ANN, created.id, 5)
-    expect(redoneAgain.pipeline.steps.map((s) => s.id)).toEqual([
-      STEP_A,
-      STEP_B,
-    ])
+    expect(blurIds(redoneAgain)).toEqual([STEP_A, STEP_B])
     expect(redoneAgain.canRedo).toBe(false)
   })
 
@@ -260,7 +272,7 @@ describe('undo and redo', () => {
     await service.change(ANN, created.id, 0, addBlur(STEP_A))
     await service.undo(ANN, created.id, 1)
     const changed = await service.change(ANN, created.id, 2, addBlur(STEP_C))
-    expect(changed.pipeline.steps.map((s) => s.id)).toEqual([STEP_C])
+    expect(blurIds(changed)).toEqual([STEP_C])
     expect(changed.canRedo).toBe(false)
   })
 
@@ -285,7 +297,7 @@ describe('undo and redo', () => {
     await service.change(ANN, created.id, 0, {
       type: 'add-step',
       step,
-      index: 0,
+      index: 1,
     })
     expect(await sourceDao.isReferenced('src-2')).toBe(true)
     await service.undo(ANN, created.id, 1)
@@ -303,7 +315,7 @@ describe('undo and redo', () => {
         ANN,
         created.id,
         revision,
-        addBlur(id, i),
+        addBlur(id, i + 1),
       )
       revision = view.revision
     }
@@ -330,5 +342,75 @@ describe('delete', () => {
     const created = await service.create(ANN, 'src-1')
     await expect(service.delete(BEA, created.id)).rejects.toThrow(NotFoundError)
     expect(cleanups).toEqual([])
+  })
+})
+
+describe('Open image steps', () => {
+  it('lists every image the Pipeline opens, the first being the document image', async () => {
+    await addSource('src-2', 'ann', 'mask.png')
+    const created = await service.create(ANN, 'src-1')
+    const opened = await service.change(ANN, created.id, 0, {
+      type: 'add-step',
+      step: createSourceStep('src-2'),
+      index: 1,
+    })
+
+    expect(opened.sources.map(({ id }) => id)).toEqual(['src-1', 'src-2'])
+    expect(opened.source?.id).toBe('src-1')
+    expect(await sourceDao.isReferenced('src-2')).toBe(true)
+  })
+
+  it('links the image of an Open image step, and unlinks it when the step goes', async () => {
+    await addSource('src-2')
+    const created = await service.create(ANN, 'src-1')
+    const step = createSourceStep('src-2')
+    await service.change(ANN, created.id, 0, {
+      type: 'add-step',
+      step,
+      index: 1,
+    })
+    await service.change(ANN, created.id, 1, {
+      type: 'remove-step',
+      stepId: step.id,
+    })
+
+    expect(await sourceDao.isReferenced('src-2')).toBe(false)
+    expect(await sourceDao.isReferenced('src-1')).toBe(true)
+  })
+
+  it('opens another image in place, and refuses another User’s image', async () => {
+    await addSource('src-2')
+    await addSource('src-b', 'bea')
+    const created = await service.create(ANN, 'src-1')
+    const [open] = created.pipeline.steps
+    if (open === undefined) throw new Error('no step')
+
+    const changed = await service.change(ANN, created.id, 0, {
+      type: 'set-source',
+      stepId: open.id,
+      sourceId: 'src-2',
+    })
+    expect(changed.source?.id).toBe('src-2')
+    await expect(
+      service.change(ANN, created.id, 1, {
+        type: 'set-source',
+        stepId: open.id,
+        sourceId: 'src-b',
+      }),
+    ).rejects.toThrow(NotFoundError)
+  })
+
+  it('has no document image when no Open image step is left', async () => {
+    const created = await service.create(ANN, 'src-1')
+    const [open] = created.pipeline.steps
+    if (open === undefined) throw new Error('no step')
+    const emptied = await service.change(ANN, created.id, 0, {
+      type: 'remove-step',
+      stepId: open.id,
+    })
+
+    expect(emptied.source).toBeNull()
+    expect(emptied.sources).toEqual([])
+    expect((await service.list(ANN))[0]?.source).toBeNull()
   })
 })

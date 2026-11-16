@@ -1,3 +1,8 @@
+import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import type { PipelineStep } from '@/features/pipeline/pipeline'
+
+import type { DocumentRecord } from '../../dao/document-dao.ts'
+import { ValidationError } from '../../errors.ts'
 import { RenderKind } from '../../tools/render-store.ts'
 import { WrongJobKindError, runEach } from '../job-handler.ts'
 import type { JobHandler, JobItem, JobReport } from '../job-handler.ts'
@@ -6,15 +11,31 @@ import { ensureRender } from './preview-handler.ts'
 import type { RenderHandlerDependencies } from './preview-handler.ts'
 
 /**
- * Renders a small picture of the Document after each of the asked-for steps.
- * A step that is switched off, not set up, or after an AI step that has no
- * Result yet has no picture (its key is null).
+ * Renders a small picture of the Document after each of the asked-for steps,
+ * and of its own image for an Open image step. A step that is switched off,
+ * not set up, or after an AI step that has no Result yet has no picture (its
+ * key is null).
  */
 export class ThumbnailHandler implements JobHandler {
   readonly #deps: RenderHandlerDependencies
 
   constructor(deps: RenderHandlerDependencies) {
     this.#deps = deps
+  }
+
+  /** The key of a small picture of `steps`, or null when they cannot make one. An Open image step shows its own image. */
+  async #thumbnailKey(
+    document: DocumentRecord,
+    steps: ReadonlyArray<PipelineStep>,
+  ): Promise<string | null> {
+    try {
+      const plan = await this.#deps.planner.plan(document, { steps })
+      if (plan.pending.length > 0 || plan.skipped.length > 0) return null
+      return await ensureRender(this.#deps, RenderKind.Thumbnail, plan)
+    } catch (error) {
+      if (error instanceof ValidationError) return null
+      throw error
+    }
   }
 
   run(items: ReadonlyArray<JobItem>): Promise<ReadonlyArray<JobReport>> {
@@ -39,14 +60,12 @@ export class ThumbnailHandler implements JobHandler {
             thumbnails.push({ stepId, key: null })
             continue
           }
-          const plan = await planner.plan(document, {
-            steps: steps.slice(0, index + 1),
-          })
-          if (plan.pending.length > 0 || plan.skipped.length > 0) {
-            thumbnails.push({ stepId, key: null })
-            continue
-          }
-          const key = await ensureRender(this.#deps, RenderKind.Thumbnail, plan)
+          const key = await this.#thumbnailKey(
+            document,
+            step.kind === PipelineStepKind.Source
+              ? [step]
+              : steps.slice(0, index + 1),
+          )
           thumbnails.push({ stepId, key })
         }
         return {

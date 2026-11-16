@@ -32,10 +32,10 @@ export class MemoryDocumentDao implements DocumentDao {
     return document
   }
 
-  async insert(document: DocumentRecord): Promise<void> {
+  async insert(document: DocumentRecord, sourceIds: string[]): Promise<void> {
     this.#store.documents.set(document.id, document)
     this.#store.entries.set(document.id, [])
-    this.#store.operands.set(document.id, new Set())
+    this.#store.operands.set(document.id, new Set(sourceIds))
   }
 
   async findById(id: string): Promise<DocumentRecord | null> {
@@ -122,8 +122,7 @@ export class MemoryDocumentDao implements DocumentDao {
     return [...this.#store.documents.values()]
       .filter(
         (document) =>
-          document.sourceId === sourceId ||
-          (this.#store.operands.get(document.id)?.has(sourceId) ?? false),
+          this.#store.operands.get(document.id)?.has(sourceId) ?? false,
       )
       .sort(
         (a, b) =>

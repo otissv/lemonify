@@ -6,9 +6,18 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { PreviewStatus } from '@/features/documents/document-render'
 import { changeDocument } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
-import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
+import {
+  createAiStep,
+  createSharpStep,
+  createSourceStep,
+} from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { addStepAfter } from '@/features/pipeline/pipeline-actions'
+import { listSources } from '@/features/sources/source-functions'
+import {
+  INITIAL_SOURCES_STATE,
+  useSourcesStore,
+} from '@/features/workflows/sources-store'
 import { requestAiStep } from '@/features/render/render-functions'
 import { StepOptions } from '@/features/tools/step-options'
 import {
@@ -17,6 +26,7 @@ import {
   documentView,
   echoChanges,
   loadDocumentIntoEditor,
+  openImageStep,
 } from '@/test/document-fixtures'
 import {
   INITIAL_APP_STATE,
@@ -36,6 +46,9 @@ vi.mock('@/features/render/render-functions', () => ({
   requestAiStep: vi.fn(),
 }))
 vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
+vi.mock('@/features/sources/source-functions', () => ({
+  listSources: vi.fn(),
+}))
 vi.mock('@/features/jobs/job-functions', () => ({ cancelJob: vi.fn() }))
 
 const SETTINGS = { model: 'siax', scale: 4, iterations: 1, tta: false }
@@ -45,7 +58,7 @@ function upscaleStep(): PipelineStep {
 }
 
 function firstStep(): PipelineStep | undefined {
-  return currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps.at(0)
+  return currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps.at(1)
 }
 
 function showOptionsOf(step?: PipelineStep): void {
@@ -71,6 +84,95 @@ describe('StepOptions', () => {
     expect(
       screen.getByText('Select a step in the sidebar, or add one from Tools.'),
     ).toBeVisible()
+  })
+
+  describe('an Open image step', () => {
+    function showOpenImage(extra: ReadonlyArray<PipelineStep> = []): void {
+      const view = documentView(extra)
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      useAppStore
+        .getState()
+        .selectStep(DOCUMENT_ID, openImageStep(view.source.id).id)
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+    }
+
+    beforeEach(() => {
+      useSourcesStore.setState(INITIAL_SOURCES_STATE)
+      vi.mocked(listSources).mockResolvedValue([])
+    })
+
+    it('shows the image it opens, with no heading', () => {
+      showOpenImage()
+
+      expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+      expect(screen.getByText('one.png')).toBeVisible()
+    })
+
+    it('lists the image’s size, type and weight, and no explanation', () => {
+      showOpenImage()
+
+      expect(screen.getByText('10 × 10 px · PNG · 100 B')).toBeVisible()
+      expect(
+        screen.queryByText(/first Open image step/),
+      ).not.toBeInTheDocument()
+    })
+
+    it('puts the list of your images on the side of the upload button, in one group', async () => {
+      vi.mocked(listSources).mockResolvedValue([documentView().source])
+      showOpenImage()
+
+      const group = screen.getByRole('group', { name: 'image' })
+      expect(
+        within(group).getByRole('button', { name: 'Upload image…' }),
+      ).toBeInTheDocument()
+      expect(
+        await within(group).findByRole('button', {
+          name: 'Use an uploaded image for image',
+        }),
+      ).toHaveAttribute('data-variant', 'secondary')
+    })
+  })
+
+  describe('a step that uses a second image', () => {
+    it('offers only the images opened before it', async () => {
+      const mask = {
+        ...documentView().source,
+        id: 'src-mask',
+        fileName: 'mask.png',
+      }
+      const unopened = { ...mask, id: 'src-x', fileName: 'unopened.png' }
+      vi.mocked(listSources).mockResolvedValue([mask, unopened])
+      const view = {
+        ...documentView([createSourceStep('src-mask')]),
+        sources: [documentView().source, mask],
+      }
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      const user = userEvent.setup()
+      const boolean = createSharpStep('boolean')
+      addStepAfter(DOCUMENT_ID, boolean)
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Use an opened image for operand',
+        }),
+      )
+
+      expect(
+        await screen.findByRole('menuitem', { name: 'mask.png' }),
+      ).toBeVisible()
+      expect(screen.getByRole('menuitem', { name: 'one.png' })).toBeVisible()
+      expect(
+        screen.queryByRole('menuitem', { name: 'unopened.png' }),
+      ).not.toBeInTheDocument()
+      expect(screen.queryByText(/Upload operand/)).not.toBeInTheDocument()
+    })
   })
 
   describe('a Sharp step', () => {

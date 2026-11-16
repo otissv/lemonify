@@ -1,6 +1,5 @@
 import type { DocumentDao, DocumentRecord } from '../dao/document-dao.ts'
 import type { SourceDao } from '../dao/source-dao.ts'
-import { DataIntegrityError } from '../errors.ts'
 import { StaleJobError } from '../jobs/job-handler.ts'
 import type { ResultService } from '../services/result-service.ts'
 import type { SourceStore } from '../tools/source-store.ts'
@@ -25,7 +24,7 @@ export type DocumentPlannerDependencies = {
 
 /**
  * Gets a Document ready for rendering: loads it as the Job saw it and plans
- * its Pipeline over the Source it was made from. Used by every handler and
+ * its Pipeline over the images its Open image steps open. Used by every handler and
  * by the services that decide what to queue, so a plan means one thing.
  */
 export class DocumentPlanner {
@@ -57,7 +56,7 @@ export class DocumentPlanner {
 
   /**
    * Plans `steps` (the whole Pipeline unless a shorter list is given) on the
-   * Document's Source. With `assumeAiResults`, every AI step counts as having a
+   * images the Pipeline opens. With `assumeAiResults`, every AI step counts as having a
    * Result, which is how the keys of all of them are learned.
    */
   async plan(
@@ -65,19 +64,7 @@ export class DocumentPlanner {
     options: PlanOptions = {},
   ): Promise<PipelinePlan> {
     const { steps = document.pipeline.steps, assumeAiResults = false } = options
-    const { sources, sourceStore } = this.#deps
-    const source = await sources.findById(document.sourceId)
-    if (source === null) {
-      throw new DataIntegrityError('The image of this document is missing.')
-    }
-    return planPipeline(
-      {
-        contentHash: source.contentHash,
-        path: sourceStore.pathOf(source.contentHash),
-      },
-      steps,
-      this.#lookups(document.ownerId, assumeAiResults),
-    )
+    return planPipeline(steps, this.#lookups(document.ownerId, assumeAiResults))
   }
 
   #lookups(ownerId: string, assumeAiResults: boolean): PlanLookups {
@@ -85,10 +72,13 @@ export class DocumentPlanner {
     return {
       aiResultPath: async (key) =>
         assumeAiResults ? ASSUMED : results.findPath(ownerId, key),
-      sourcePath: async (sourceId) => {
+      source: async (sourceId) => {
         const source = await sources.findById(sourceId)
         if (source === null || source.ownerId !== ownerId) return undefined
-        return sourceStore.pathOf(source.contentHash)
+        return {
+          contentHash: source.contentHash,
+          path: sourceStore.pathOf(source.contentHash),
+        }
       },
     }
   }

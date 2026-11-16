@@ -21,6 +21,7 @@ function view(steps: ReturnType<typeof createSharpStep>[]): DocumentView {
       width: 10,
       height: 10,
     },
+    sources: [],
     pipeline: { steps },
     revision: 3,
     canUndo: false,

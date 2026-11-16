@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 
-import type { DocumentView } from '@/features/documents/document'
+import type { DocumentView, SourceSummary } from '@/features/documents/document'
 import { refreshPreview } from '@/features/documents/document-render-sync'
 import type { StepProblem } from '@/features/documents/document-render'
 import { shownPipeline } from '@/features/documents/document-session'
@@ -8,6 +8,7 @@ import {
   previewImageUrl,
   sourceImageUrl,
 } from '@/features/documents/image-urls'
+import { PipelineStepKind, hasEdits } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { PreviewStatus, useAppStore } from '@/store/app-store'
 
@@ -17,10 +18,12 @@ export const PREVIEW_DELAY_MS = 120
 export interface PipelinePreview {
   document: DocumentView
   pipeline: Pipeline
-  /** The picture to show: the rendered result, or the source while there are no steps. */
-  imageUrl: string
-  /** The image as uploaded. */
-  originalUrl: string
+  /** The image the pipeline edits: the first Open image step that is switched on. Undefined when none is. */
+  source: SourceSummary | undefined
+  /** The picture to show: the rendered result, or the image itself while there are no edits. Undefined without an image. */
+  imageUrl: string | undefined
+  /** The image as opened, before any edit. */
+  originalUrl: string | undefined
   status: PreviewStatus
   error: string | undefined
   /** Enabled AI steps that still need running. */
@@ -29,16 +32,33 @@ export interface PipelinePreview {
   problems: ReadonlyArray<StepProblem>
 }
 
+/** The first Open image step that is switched on, as far as the document's images are known. */
+export function activeSource(
+  pipeline: Pipeline,
+  sources: ReadonlyArray<SourceSummary>,
+): SourceSummary | undefined {
+  for (const step of pipeline.steps) {
+    if (step.kind !== PipelineStepKind.Source || !step.enabled) continue
+    const known = sources.find(({ id }) => id === step.sourceId)
+    if (known !== undefined) return known
+  }
+  return undefined
+}
+
 /**
  * Keeps the document's preview up to date: asks the server for it shortly
  * after the server has confirmed the latest change, as long as the pipeline has
- * steps (without any, the source is what is shown).
+ * edits and an image (without edits, the image itself is what is shown).
  */
 export function usePreviewLoading(documentId: string, enabled: boolean): void {
   const session = useAppStore((state) => state.documents[documentId])
   const settled = session !== undefined && session.pending.length === 0
   const revision = session?.confirmed.revision
-  const hasSteps = (session?.confirmed.pipeline.steps.length ?? 0) > 0
+  const pipeline = session?.confirmed.pipeline
+  const hasSteps =
+    pipeline !== undefined &&
+    hasEdits(pipeline) &&
+    activeSource(pipeline, session?.confirmed.sources ?? []) !== undefined
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the revision is what makes the preview ask again
   useEffect(() => {
@@ -62,20 +82,24 @@ export function usePreview(documentId: string): PipelinePreview | undefined {
   return useMemo(() => {
     if (!session) return undefined
     const pipeline = shownPipeline(session)
-    const { source } = session.confirmed
+    const source = activeSource(pipeline, session.confirmed.sources)
+    const edited = hasEdits(pipeline) && source !== undefined
     const rendered =
-      pipeline.steps.length > 0 && current?.key !== undefined
+      edited && current?.key !== undefined
         ? previewImageUrl(documentId, current.key)
         : undefined
+    const original =
+      source === undefined ? undefined : sourceImageUrl(source.id)
     return {
       document: session.confirmed,
       pipeline,
-      imageUrl: rendered ?? sourceImageUrl(source.id),
-      originalUrl: sourceImageUrl(source.id),
+      source,
+      imageUrl: rendered ?? original,
+      originalUrl: original,
       status: current?.status ?? PreviewStatus.Rendering,
       error: current?.error,
-      pending: pipeline.steps.length > 0 ? (current?.pendingStepIds ?? []) : [],
-      problems: pipeline.steps.length > 0 ? (current?.problems ?? []) : [],
+      pending: edited ? (current?.pendingStepIds ?? []) : [],
+      problems: edited ? (current?.problems ?? []) : [],
     }
   }, [session, current, documentId])
 }

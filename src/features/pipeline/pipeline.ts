@@ -12,6 +12,8 @@ import { SHARP_OP_CATEGORIES } from '@/lib/images/sharp/ops'
 export const PipelineStepKind = {
   Sharp: WorkflowNodeKind.Sharp,
   Ai: AI_STEP_KIND,
+  /** Opens an image: the first one switched on is the picture the others edit. */
+  Source: 'source',
 } as const
 
 /**
@@ -39,6 +41,12 @@ export const PipelineStepSchema = z.discriminatedUnion('kind', [
     enabled,
   }),
   aiStepSchema({ id: z.uuid(), enabled }),
+  z.strictObject({
+    id: z.uuid(),
+    kind: z.literal(PipelineStepKind.Source),
+    sourceId: z.string().min(1),
+    enabled,
+  }),
 ])
 
 export const PipelineSchema = z.object({
@@ -53,6 +61,10 @@ export const PipelineSchema = z.object({
 export type PipelineStep = z.output<typeof PipelineStepSchema>
 export type Pipeline = z.output<typeof PipelineSchema>
 export type SharpStep = Extract<PipelineStep, { kind: 'sharp' }>
+export type SourceStep = Extract<
+  PipelineStep,
+  { kind: typeof PipelineStepKind.Source }
+>
 export type AiStep = Extract<PipelineStep, { kind: typeof AI_STEP_KIND }>
 
 export function createSharpStep(
@@ -66,6 +78,27 @@ export function createSharpStep(
     options,
     enabled: true,
   }
+}
+
+export function createSourceStep(sourceId: string): SourceStep {
+  return {
+    id: crypto.randomUUID(),
+    kind: PipelineStepKind.Source,
+    sourceId,
+    enabled: true,
+  }
+}
+
+/** Whether a pipeline has a step that changes the picture; Open image steps only choose images. */
+export function hasEdits(pipeline: Pipeline): boolean {
+  return pipeline.steps.some((step) => step.kind !== PipelineStepKind.Source)
+}
+
+/** The step that opens the document's image: the first Open image step, switched on or not. */
+export function firstSourceStep(pipeline: Pipeline): SourceStep | undefined {
+  return pipeline.steps.find(
+    (step): step is SourceStep => step.kind === PipelineStepKind.Source,
+  )
 }
 
 export function createAiStep(content: AiContent<AiStep>): AiStep {

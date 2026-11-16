@@ -80,14 +80,10 @@ export class SqliteSourceDao implements SourceDao {
   }
 
   async isReferenced(sourceId: string): Promise<boolean> {
-    const asImage = await this.#database('documents')
-      .where({ source_id: sourceId })
-      .first('id')
-    if (asImage !== undefined) return true
-    const asOperand = await this.#database('document_operands')
+    const link = await this.#database('document_operands')
       .where({ source_id: sourceId })
       .first('document_id')
-    return asOperand !== undefined
+    return link !== undefined
   }
 
   async delete(id: string): Promise<void> {

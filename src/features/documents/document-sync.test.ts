@@ -41,6 +41,7 @@ function view(
       width: 10,
       height: 10,
     },
+    sources: [],
     pipeline: { steps },
     revision,
     canUndo,

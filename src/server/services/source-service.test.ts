@@ -145,7 +145,6 @@ describe('SourceService.delete', () => {
     memory.documents.set('doc', {
       id: 'doc',
       ownerId: 'ann',
-      sourceId: source.id,
       name: 'n',
       pipeline: { steps: [] },
       revision: 0,
@@ -153,6 +152,7 @@ describe('SourceService.delete', () => {
       createdAt: '',
       updatedAt: '',
     })
+    memory.operands.set('doc', new Set([source.id]))
     await expect(service.delete(ANN, source.id)).rejects.toThrow(ConflictError)
   })
 })

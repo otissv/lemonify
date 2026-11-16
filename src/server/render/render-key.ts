@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import type { PipelineStep } from '@/features/pipeline/pipeline'
+import type { AiStep, SharpStep } from '@/features/pipeline/pipeline'
 
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)
@@ -13,7 +13,7 @@ function sortKeys(value: unknown): unknown {
   return sorted
 }
 
-function stepIdentity(step: PipelineStep): unknown {
+function stepIdentity(step: SharpStep | AiStep): unknown {
   if (step.kind === PipelineStepKind.Sharp) {
     return { kind: step.kind, op: step.op, options: step.options }
   }
@@ -28,7 +28,7 @@ function stepIdentity(step: PipelineStep): unknown {
  */
 export function renderKey(
   sourceHash: string,
-  steps: ReadonlyArray<PipelineStep>,
+  steps: ReadonlyArray<SharpStep | AiStep>,
 ): string {
   const identity = sortKeys({
     source: sourceHash,

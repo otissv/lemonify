@@ -49,6 +49,9 @@ function isSidebarTab(value: string): value is SidebarTab {
   return Object.values<string>(SidebarTab).includes(value)
 }
 
+/** Hover is darker than the row's active background, which now sits behind these buttons. */
+const ROW_BUTTON_CLASS = 'group-data-[active=true]/row:hover:bg-black/25'
+
 function DocumentItem({
   document,
   active,
@@ -83,10 +86,14 @@ function DocumentItem({
 
   return (
     <SidebarMenuItem>
-      <div className="flex items-center gap-1">
+      <div
+        data-active={active}
+        className="group/row flex items-center gap-1 rounded-md data-[active=true]:bg-sidebar-accent"
+      >
         <Button
           variant="ghost"
           size="icon-xs"
+          className={ROW_BUTTON_CLASS}
           aria-expanded={expanded}
           aria-label={`${expanded ? 'Hide' : 'Show'} steps of ${document.name}`}
           onClick={handleToggle}
@@ -100,12 +107,13 @@ function DocumentItem({
         <SidebarMenuButton
           asChild
           isActive={active}
-          className="flex-1 text-foreground hover:text-foreground"
+          className="flex-1 text-foreground hover:text-foreground data-[active=true]:bg-transparent"
         >
           <Link
             to="/documents/$id"
             params={{ id: document.id }}
-            title={document.source.fileName}
+            title={document.source?.fileName}
+            onClick={handleToggle}
           >
             <RiImageLine aria-hidden="true" />
             <span className="truncate">{document.name}</span>
@@ -114,6 +122,7 @@ function DocumentItem({
         <Button
           variant="ghost"
           size="icon-xs"
+          className={ROW_BUTTON_CLASS}
           aria-label={`Delete ${document.name}`}
           onClick={() => void handleDelete()}
         >
@@ -138,7 +147,7 @@ function DocumentList({ query }: { query: string }): React.JSX.Element | null {
   if (documents.length === 0) return null
   const shown = filterByQuery(documents, query, (document) => [
     document.name,
-    document.source.fileName,
+    document.source?.fileName ?? '',
   ])
 
   if (shown.length === 0) {

@@ -41,7 +41,7 @@ describe('SqliteDocumentDao', () => {
     const sources = new SqliteSourceDao(database)
     const documents = new SqliteDocumentDao(database)
     await sources.insert(source())
-    await documents.insert(documentRecord())
+    await documents.insert(documentRecord(), ['src-1'])
     await database('documents')
       .where({ id: 'doc-1' })
       .update({ pipeline: '{"steps":"nope"}' })
@@ -61,9 +61,7 @@ describe('SqliteDocumentDao', () => {
     const database = await createTestDatabase()
     await insertTestUser(database, 'ann')
     await expect(
-      new SqliteDocumentDao(database).insert(
-        documentRecord({ sourceId: 'nope' }),
-      ),
+      new SqliteDocumentDao(database).insert(documentRecord(), ['nope']),
     ).rejects.toThrow(/FOREIGN KEY/)
     await database.destroy()
   })

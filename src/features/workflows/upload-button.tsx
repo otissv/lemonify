@@ -4,10 +4,15 @@ import { useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { SourceSummary } from '@/features/documents/document'
 import { useSourcesStore } from '@/features/workflows/sources-store'
+import { cn } from '@/lib/utils'
 import { errorMessage } from '@/lib/error-message'
 
 interface UploadButtonProps {
   label: string
+  /** Extra classes for the button, for example to join it to a neighbour. */
+  buttonClassName?: string
+  /** Extra classes for the wrapper around the button and its error message. */
+  className?: string
   onUploaded: (sources: ReadonlyArray<SourceSummary>) => void
 }
 
@@ -16,6 +21,8 @@ const UPLOAD_FAILED = 'The image could not be uploaded.'
 /** Uploads one or more images from this computer as Sources, and says why one failed. */
 export function UploadButton({
   label,
+  buttonClassName,
+  className,
   onUploaded,
 }: UploadButtonProps): React.JSX.Element {
   const upload = useSourcesStore((state) => state.upload)
@@ -48,7 +55,7 @@ export function UploadButton({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn('flex flex-col gap-2', className)}>
       <input
         ref={input}
         type="file"
@@ -61,6 +68,7 @@ export function UploadButton({
       <Button
         variant="secondary"
         size="sm"
+        className={buttonClassName}
         disabled={busy}
         aria-describedby={error ? errorId : undefined}
         onClick={handleClick}

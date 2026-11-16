@@ -24,11 +24,12 @@ function layerIds(options: Record<string, unknown>): string[] {
 }
 
 /**
- * The Source ids a step reads besides the image it is applied to: a boolean
- * operand, joined channels, or composite layers. Other images are always
- * Sources of the same User, never paths.
+ * The Source ids a step reads: the image an Open image step opens, or the
+ * second images of a boolean operand, joined channels or composite layers.
+ * Images are always Sources of the same User, never paths.
  */
 export function stepOperandSourceIds(step: PipelineStep): string[] {
+  if (step.kind === PipelineStepKind.Source) return [step.sourceId]
   if (step.kind !== PipelineStepKind.Sharp) return []
   if (step.op === 'boolean') {
     const operand = OperandSchema.safeParse(step.options)
@@ -45,7 +46,7 @@ export function stepOperandSourceIds(step: PipelineStep): string[] {
   return []
 }
 
-/** Every distinct Source a Pipeline uses as a second image, in order of first use. */
+/** Every distinct Source a Pipeline uses, in order of first use. */
 export function pipelineOperandSourceIds(pipeline: Pipeline): string[] {
   const ids = new Set<string>()
   for (const step of pipeline.steps) {

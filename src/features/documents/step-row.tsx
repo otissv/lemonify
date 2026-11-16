@@ -32,6 +32,8 @@ export interface StepRowProps {
   thumbnail: string | undefined
   /** The server has no result for this AI step yet. */
   outOfDate: boolean
+  /** For an Open image step: the file name of the image it opens. */
+  sourceName: string | undefined
   /** Why the server left this step out of the picture, if it did. */
   skipped: string | undefined
   run: AiRun | undefined
@@ -61,6 +63,7 @@ function runStatus(run: AiRun): StepStatus {
 
 function statusOf(
   step: PipelineStep,
+  sourceName: string | undefined,
   outOfDate: boolean,
   skipped: string | undefined,
   run: AiRun | undefined,
@@ -68,6 +71,13 @@ function statusOf(
   const problem = stepProblem(step) ?? skipped
   if (problem !== undefined)
     return { text: problem, problem: true, running: false }
+  if (step.kind === PipelineStepKind.Source) {
+    return {
+      text: sourceName ?? 'Image not available',
+      problem: sourceName === undefined,
+      running: false,
+    }
+  }
   if (step.kind === PipelineStepKind.Sharp) {
     const count = Object.keys(step.options).length
     const text =
@@ -90,6 +100,7 @@ export function StepRow({
   selected,
   dragging,
   thumbnail,
+  sourceName,
   outOfDate,
   skipped,
   run,
@@ -99,7 +110,7 @@ export function StepRow({
   onMove,
 }: StepRowProps): React.JSX.Element {
   const label = pipelineStepLabel(step)
-  const status = statusOf(step, outOfDate, skipped, run)
+  const status = statusOf(step, sourceName, outOfDate, skipped, run)
 
   function handleSelect(): void {
     onSelect(step.id)

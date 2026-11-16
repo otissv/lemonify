@@ -1,6 +1,9 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
+import type { SourceSummary } from '@/features/documents/document'
+import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { thumbnailImageUrl } from '@/features/documents/image-urls'
 import { useDocument } from '@/features/documents/use-document'
 import { StepRow } from '@/features/documents/step-row'
@@ -12,6 +15,14 @@ import {
 import { usePreview } from '@/features/pipeline/use-preview'
 import { useStepThumbnails } from '@/features/pipeline/use-step-thumbnails'
 import { Tool, useAppStore } from '@/store/app-store'
+
+function sourceNameOf(
+  step: PipelineStep,
+  sources: ReadonlyArray<SourceSummary> | undefined,
+): string | undefined {
+  if (step.kind !== PipelineStepKind.Source) return undefined
+  return sources?.find(({ id }) => id === step.sourceId)?.fileName
+}
 
 interface DocumentStepsProps {
   documentId: string
@@ -118,6 +129,7 @@ export function DocumentSteps({
                   ? undefined
                   : thumbnailImageUrl(documentId, key)
               }
+              sourceName={sourceNameOf(step, preview?.document.sources)}
               outOfDate={preview?.pending.includes(step.id) ?? false}
               skipped={
                 preview?.problems.find(({ stepId }) => stepId === step.id)

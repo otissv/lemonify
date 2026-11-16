@@ -392,11 +392,11 @@ describe('option controls', () => {
       show('boolean')
 
       await user.click(
-        await screen.findByRole('combobox', {
+        await screen.findByRole('button', {
           name: 'Use an uploaded image for operand',
         }),
       )
-      await user.click(screen.getByRole('option', { name: 'one.png' }))
+      await user.click(await screen.findByRole('menuitem', { name: 'one.png' }))
 
       expect(latest).toEqual({ operand: 'src-one' })
     })

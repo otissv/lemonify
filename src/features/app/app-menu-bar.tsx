@@ -16,6 +16,7 @@ import { previousDocumentId } from '@/features/documents/document-history'
 import { useImageOpener } from '@/features/app/image-opener'
 import { signOut } from '@/features/auth/auth-client'
 import { canRedoNow, canUndoNow } from '@/features/documents/document-session'
+import { hasEdits } from '@/features/pipeline/pipeline'
 import { redoEdit, undoEdit } from '@/features/documents/document-sync'
 import { Tool, useAppStore } from '@/store/app-store'
 
@@ -62,7 +63,7 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
   const session = useAppStore((state) =>
     documentId === undefined ? undefined : state.documents[documentId],
   )
-  const hasSteps = (session?.confirmed.pipeline.steps.length ?? 0) > 0
+  const hasSteps = session !== undefined && hasEdits(session.confirmed.pipeline)
   const showOriginal = useAppStore((state) =>
     documentId === undefined
       ? false

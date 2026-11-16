@@ -19,7 +19,6 @@ import type {
 type DocumentRow = {
   id: string
   owner_id: string
-  source_id: string
   name: string
   pipeline: string
   revision: number
@@ -54,7 +53,6 @@ function toRecord(row: DocumentRow): DocumentRecord {
   return {
     id: row.id,
     ownerId: row.owner_id,
-    sourceId: row.source_id,
     name: row.name,
     pipeline: pipeline.data,
     revision: row.revision,
@@ -124,17 +122,19 @@ export class SqliteDocumentDao implements DocumentDao {
     this.#database = database
   }
 
-  async insert(document: DocumentRecord): Promise<void> {
-    await this.#database('documents').insert({
-      id: document.id,
-      owner_id: document.ownerId,
-      source_id: document.sourceId,
-      name: document.name,
-      pipeline: JSON.stringify(document.pipeline),
-      revision: document.revision,
-      history_cursor: document.historyCursor,
-      created_at: document.createdAt,
-      updated_at: document.updatedAt,
+  async insert(document: DocumentRecord, sourceIds: string[]): Promise<void> {
+    await this.#database.transaction(async (trx) => {
+      await trx('documents').insert({
+        id: document.id,
+        owner_id: document.ownerId,
+        name: document.name,
+        pipeline: JSON.stringify(document.pipeline),
+        revision: document.revision,
+        history_cursor: document.historyCursor,
+        created_at: document.createdAt,
+        updated_at: document.updatedAt,
+      })
+      await linkOperands(trx, document.id, sourceIds)
     })
   }
 
@@ -226,8 +226,7 @@ export class SqliteDocumentDao implements DocumentDao {
 
   async listBySource(sourceId: string): Promise<DocumentRecord[]> {
     const rows: DocumentRow[] = await this.#database('documents')
-      .where({ source_id: sourceId })
-      .orWhereIn(
+      .whereIn(
         'id',
         this.#database('document_operands')
           .where({ source_id: sourceId })

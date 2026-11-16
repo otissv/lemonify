@@ -48,7 +48,6 @@ export function documentRecord(
   return {
     id: 'doc-1',
     ownerId: 'ann',
-    sourceId: 'src-1',
     name: 'One',
     pipeline: { steps: [] },
     revision: 0,
@@ -76,7 +75,7 @@ async function setup(create: () => Promise<LibraryFixture>) {
   await fixture.seedUser('ann')
   await fixture.seedUser('bea')
   await fixture.sources.insert(source())
-  await fixture.documents.insert(documentRecord())
+  await fixture.documents.insert(documentRecord(), ['src-1'])
   return fixture
 }
 
@@ -188,10 +187,12 @@ export function libraryDaoContract(
       await sources.insert(
         source({ id: 'src-b', ownerId: 'bea', contentHash: 'hb' }),
       )
-      await documents.insert(documentRecord({ id: 'doc-2', updatedAt: T2 }))
-      await documents.insert(
-        documentRecord({ id: 'doc-3', ownerId: 'bea', sourceId: 'src-b' }),
-      )
+      await documents.insert(documentRecord({ id: 'doc-2', updatedAt: T2 }), [
+        'src-1',
+      ])
+      await documents.insert(documentRecord({ id: 'doc-3', ownerId: 'bea' }), [
+        'src-b',
+      ])
       await seedUser('ann')
       expect((await documents.listByOwner('ann')).map((d) => d.id)).toEqual([
         'doc-2',
@@ -367,14 +368,14 @@ export function libraryDaoContract(
     it('lists the Documents that use a Source as their image or an operand', async () => {
       const { documents, sources, close } = await setup(create)
       await sources.insert(source({ id: 'src-2', contentHash: 'hash-2' }))
-      await documents.insert(
-        documentRecord({ id: 'doc-2', sourceId: 'src-2', updatedAt: T1 }),
-      )
+      await documents.insert(documentRecord({ id: 'doc-2', updatedAt: T1 }), [
+        'src-2',
+      ])
       await documents.applyChange({
         id: 'doc-1',
         expectedRevision: 0,
         pipeline: pipelineWith('s1'),
-        operandSourceIds: ['src-2'],
+        operandSourceIds: ['src-1', 'src-2'],
         patch: addPatch('s1'),
         maxEntries: MAX_ENTRIES,
         now: T2,

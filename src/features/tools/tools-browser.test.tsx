@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { changeDocument } from '@/features/documents/document-functions'
+import { listSources } from '@/features/sources/source-functions'
+import {
+  INITIAL_SOURCES_STATE,
+  useSourcesStore,
+} from '@/features/workflows/sources-store'
 import { ToolsBrowser } from '@/features/tools/tools-browser'
 import {
   AI_CATALOGUES,
@@ -19,6 +24,9 @@ import {
   useAppStore,
 } from '@/store/app-store'
 
+vi.mock('@/features/sources/source-functions', () => ({
+  listSources: vi.fn(),
+}))
 vi.mock('@/features/documents/document-functions', () => ({
   getDocument: vi.fn(),
   changeDocument: vi.fn(),
@@ -27,14 +35,18 @@ vi.mock('@/features/documents/document-functions', () => ({
 }))
 
 function steps() {
-  return currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps ?? []
+  const all = currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps ?? []
+  return all.filter((step) => step.kind !== 'source')
 }
 
 function stepNames(): Array<string> {
-  return steps().map((step) => (step.kind === 'sharp' ? step.op : step.tool))
+  return steps().map((step) => {
+    if (step.kind === 'sharp') return step.op
+    return step.kind === 'ai' ? step.tool : 'source'
+  })
 }
 
-const GROUPS = ['AI', 'Geometry', 'Filters', 'Colour']
+const GROUPS = ['Image', 'AI', 'Geometry', 'Filters', 'Colour']
 
 async function expandAll(
   user: ReturnType<typeof userEvent.setup>,
@@ -47,7 +59,11 @@ async function expandAll(
 describe('ToolsBrowser', () => {
   beforeEach(() => {
     useAppStore.setState(INITIAL_APP_STATE)
+    useSourcesStore.setState(INITIAL_SOURCES_STATE)
     vi.resetAllMocks()
+    vi.mocked(listSources).mockResolvedValue([
+      { ...documentView().source, id: 'src-2', fileName: 'two.png' },
+    ])
     const view = documentView()
     echoChanges(vi.mocked(changeDocument), view)
     loadDocumentIntoEditor(view)
@@ -60,15 +76,39 @@ describe('ToolsBrowser', () => {
     )
   })
 
-  it('lists every tool in the groups AI, Geometry, Filters and Colour', async () => {
+  it('lists every tool in the groups Image, AI, Geometry, Filters and Colour', async () => {
     const user = userEvent.setup()
     expect(
       screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
     ).toEqual(GROUPS)
     await expandAll(user)
-    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(38)
+    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(39)
     expect(
       screen.queryByRole('button', { name: 'Add Jpeg' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('adds an Open image step for one of your images, after the selected step', async () => {
+    const user = userEvent.setup()
+    await expandAll(user)
+    await user.click(screen.getByRole('button', { name: 'Add Blur' }))
+
+    await user.click(screen.getByRole('button', { name: 'Add Open image' }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Use an uploaded image for image',
+      }),
+    )
+    await user.click(await screen.findByRole('menuitem', { name: 'two.png' }))
+
+    const all = currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps
+    expect(all?.map(({ kind }) => kind)).toEqual(['source', 'sharp', 'source'])
+    expect(all?.at(2)).toMatchObject({ sourceId: 'src-2' })
+    expect(useAppStore.getState().activeTool).toBe(Tool.Options)
+    expect(
+      screen.queryByRole('button', {
+        name: 'Use an uploaded image for image',
+      }),
     ).not.toBeInTheDocument()
   })
 
@@ -212,7 +252,7 @@ describe('ToolsBrowser', () => {
 
       expect(
         screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
-      ).toEqual(['AI', 'Geometry', 'Filters', 'Colour'])
+      ).toEqual(GROUPS)
     })
 
     it('shows matching tools of a closed group while searching', async () => {

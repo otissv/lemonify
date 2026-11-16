@@ -24,10 +24,21 @@ export function DocumentView({ id }: DocumentViewProps): React.JSX.Element {
 
   if (!session || !preview) return <div className="size-full" />
 
-  const { source, name } = preview.document
+  const { name } = preview.document
+  const { source } = preview
+  const url = showOriginal ? preview.originalUrl : preview.imageUrl
+  if (source === undefined || url === undefined) {
+    return (
+      <div className="flex size-full items-center justify-center">
+        <p role="status" className="text-body-md text-muted-foreground">
+          No image is open. Switch on an Open image step, or add one from Tools.
+        </p>
+      </div>
+    )
+  }
   return (
     <img
-      src={showOriginal ? preview.originalUrl : preview.imageUrl}
+      src={url}
       alt={name}
       width={source.width}
       height={source.height}

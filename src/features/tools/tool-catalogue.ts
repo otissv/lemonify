@@ -3,14 +3,25 @@ import type { AiToolId, AiToolSummary } from '@/features/ai/ai-tools'
 import { EDITING_OP_NAMES } from '@/features/pipeline/pipeline'
 import { SHARP_OP_GROUPS, opLabel } from '@/features/workflows/sharp-op-fields'
 
+/** The value of the tool that adds an Open image step. */
+export const OPEN_IMAGE_TOOL = 'open-image'
+
 /** A tool that can be added to a document's pipeline as a step: a Sharp operation or an AI tool. */
 export type ToolEntry =
+  | { kind: 'source'; value: typeof OPEN_IMAGE_TOOL; label: string }
   | { kind: 'sharp'; value: string; label: string }
   | { kind: 'ai'; value: AiToolId; label: string }
 
 export interface ToolGroup {
   label: string
   tools: ReadonlyArray<ToolEntry>
+}
+
+function imageGroup(): ToolGroup {
+  return {
+    label: 'Image',
+    tools: [{ kind: 'source', value: OPEN_IMAGE_TOOL, label: 'Open image' }],
+  }
 }
 
 function aiGroup(tools: ReadonlyArray<AiToolSummary>): ToolGroup {
@@ -38,12 +49,16 @@ function editingGroups(): Array<ToolGroup> {
   return groups
 }
 
-/** Every tool that edits an image, grouped: the server's AI tools, then Sharp's Geometry, Filters and Colour. The Output group is left to Export. */
+/** Every tool that adds a step, grouped: Open image, the server's AI tools, then Sharp's Geometry, Filters and Colour. The Output group is left to Export. */
 export function toolGroups(
   aiTools: ReadonlyArray<AiToolSummary>,
 ): Array<ToolGroup> {
   const ai = aiGroup(aiTools)
-  return [...(ai.tools.length > 0 ? [ai] : []), ...editingGroups()]
+  return [
+    imageGroup(),
+    ...(ai.tools.length > 0 ? [ai] : []),
+    ...editingGroups(),
+  ]
 }
 
 /** The tools whose name contains `query` (ignoring case and spaces); groups with none are left out. */

@@ -18,10 +18,7 @@ import type {
   JsonValue,
 } from '@/features/workflows/fields/control-props'
 import { ImagePicker } from '@/features/workflows/fields/image-picker'
-import {
-  sourceFileName,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { useImageNames } from '@/features/workflows/fields/image-choices'
 import { BLEND_MODES } from '@/lib/images/sharp/input-options'
 
 const DEFAULT_CHOICE = '__default__'
@@ -56,9 +53,9 @@ function LayerEditor({
   onRemove,
 }: LayerEditorProps): React.JSX.Element {
   const id = useId()
-  const sources = useSourcesStore((state) => state.sources)
+  const nameOf = useImageNames()
   const input = typeof layer.input === 'string' ? layer.input : undefined
-  const title = input ? sourceFileName(sources, input) : 'Generated image'
+  const title = input ? nameOf(input) : 'Generated image'
   const number = (key: 'top' | 'left') =>
     function handleNumber(event: React.ChangeEvent<HTMLInputElement>): void {
       const text = event.target.value

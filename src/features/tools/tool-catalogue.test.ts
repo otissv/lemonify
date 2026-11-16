@@ -19,8 +19,9 @@ function names(
 }
 
 describe('tool catalogue', () => {
-  it('groups the tools as AI, Geometry, Filters and Colour', () => {
+  it('groups the tools as Image, AI, Geometry, Filters and Colour', () => {
     expect(TOOL_GROUPS.map(({ label }) => label)).toEqual([
+      'Image',
       'AI',
       'Geometry',
       'Filters',
@@ -28,10 +29,10 @@ describe('tool catalogue', () => {
     ])
   })
 
-  it('has every editing tool, 9 geometry, 18 filter and 10 colour, plus Upscale', () => {
+  it('has Open image, every editing tool, 9 geometry, 18 filter and 10 colour, plus Upscale', () => {
     const counts = TOOL_GROUPS.map(({ tools }) => tools.length)
 
-    expect(counts).toEqual([1, 9, 18, 10])
+    expect(counts).toEqual([1, 1, 9, 18, 10])
   })
 
   it('leaves out the Output group, which Export covers', () => {
@@ -68,6 +69,7 @@ describe('tool catalogue', () => {
 
     it('has no AI group when the server offers no AI tools', () => {
       expect(toolGroups([]).map(({ label }) => label)).toEqual([
+        'Image',
         'Geometry',
         'Filters',
         'Colour',

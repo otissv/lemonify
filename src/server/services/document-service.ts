@@ -3,6 +3,7 @@ import type {
   DocumentView,
 } from '@/features/documents/document'
 import { MAX_DOCUMENT_NAME_LENGTH } from '@/features/documents/document'
+import type { SourceSummary } from '@/features/documents/document'
 import {
   InvalidChangeError,
   MAX_HISTORY_ENTRIES,
@@ -11,10 +12,15 @@ import {
 } from '@/features/pipeline/document-change'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import { pipelineOperandSourceIds } from '@/features/pipeline/image-operands'
+import {
+  PipelineStepKind,
+  createSourceStep,
+  firstSourceStep,
+} from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { STALE_DOCUMENT_MESSAGE } from '../dao/document-dao.ts'
 import type { DocumentDao, DocumentRecord } from '../dao/document-dao.ts'
-import type { SourceDao, SourceRecord } from '../dao/source-dao.ts'
+import type { SourceDao } from '../dao/source-dao.ts'
 import type { Actor } from '../domain/actor.ts'
 import { isoNow } from '../domain/clock.ts'
 import type { Clock, IdGenerator } from '../domain/clock.ts'
@@ -84,29 +90,27 @@ export class DocumentService {
     const record: DocumentRecord = {
       id: ids.next(),
       ownerId: actor.userId,
-      sourceId: source.id,
       name:
         name === undefined ? nameFromFile(source.fileName) : cleanName(name),
-      pipeline: { steps: [] },
+      pipeline: { steps: [createSourceStep(source.id)] },
       revision: 0,
       historyCursor: 0,
       createdAt: now,
       updatedAt: now,
     }
-    await documents.insert(record)
-    return this.#view(record, source)
+    await documents.insert(record, [source.id])
+    return this.#view(record)
   }
 
   async list(actor: Actor): Promise<DocumentSummary[]> {
-    const { documents, sources } = this.#deps
+    const { documents } = this.#deps
     const summaries: DocumentSummary[] = []
     for (const record of await documents.listByOwner(actor.userId)) {
-      const source = await sources.findById(record.sourceId)
-      if (source === null) continue
+      const [source] = await this.#openedSources(record.pipeline)
       summaries.push({
         id: record.id,
         name: record.name,
-        source: toSourceSummary(source),
+        source: source ?? null,
         revision: record.revision,
         updatedAt: record.updatedAt,
       })
@@ -247,19 +251,33 @@ export class DocumentService {
     return ids
   }
 
-  async #view(
-    record: DocumentRecord,
-    known?: SourceRecord,
-  ): Promise<DocumentView> {
-    const { documents, sources } = this.#deps
-    const source = known ?? (await sources.findById(record.sourceId))
-    if (source === null) throw new ValidationError(MISSING_IMAGE)
+  /** The images the Open image steps open, in order, leaving out any that are gone. */
+  async #openedSources(pipeline: Pipeline): Promise<SourceSummary[]> {
+    const summaries: SourceSummary[] = []
+    const seen = new Set<string>()
+    for (const step of pipeline.steps) {
+      if (step.kind !== PipelineStepKind.Source || seen.has(step.sourceId)) {
+        continue
+      }
+      seen.add(step.sourceId)
+      const source = await this.#deps.sources.findById(step.sourceId)
+      if (source !== null) summaries.push(toSourceSummary(source))
+    }
+    return summaries
+  }
+
+  async #view(record: DocumentRecord): Promise<DocumentView> {
+    const { documents } = this.#deps
+    const sources = await this.#openedSources(record.pipeline)
+    const first = firstSourceStep(record.pipeline)
+    const source = sources.find(({ id }) => id === first?.sourceId) ?? null
     const undo = await documents.findEntry(record.id, record.historyCursor - 1)
     const redo = await documents.findEntry(record.id, record.historyCursor)
     return {
       id: record.id,
       name: record.name,
-      source: toSourceSummary(source),
+      source,
+      sources,
       pipeline: record.pipeline,
       revision: record.revision,
       canUndo: undo !== null,

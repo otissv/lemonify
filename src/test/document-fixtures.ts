@@ -3,10 +3,11 @@ import type { Mock } from 'vitest'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { AiOutput, AiToolId, WorkerPool } from '@/features/ai/ai-tools'
 import type { AiToolSummary } from '@/features/ai/ai-tools'
-import type { DocumentView } from '@/features/documents/document'
+import type { DocumentView, SourceSummary } from '@/features/documents/document'
 import { applyChange } from '@/features/pipeline/document-change'
 import type { DocumentChange } from '@/features/pipeline/document-change'
-import type { PipelineStep } from '@/features/pipeline/pipeline'
+import { createSourceStep } from '@/features/pipeline/pipeline'
+import type { PipelineStep, SourceStep } from '@/features/pipeline/pipeline'
 import { useAppStore } from '@/store/app-store'
 
 export const DOCUMENT_ID = '6f1c6c4e-0f43-4a8f-9a57-2d2f0f8f2b11'
@@ -45,23 +46,33 @@ export const AI_CATALOGUES: AiCatalogues = [
   },
 ]
 
+/** The Open image step every document starts with, with an id that stays the same between calls. */
+export function openImageStep(sourceId: string): SourceStep {
+  return {
+    ...createSourceStep(sourceId),
+    id: '00000000-0000-4000-8000-0000000000aa',
+  }
+}
+
 export function documentView(
   steps: ReadonlyArray<PipelineStep> = [],
   id: string = DOCUMENT_ID,
   name = 'one.png',
-): DocumentView {
+): DocumentView & { source: SourceSummary } {
+  const source = {
+    id: `source-${id}`,
+    fileName: name,
+    mediaType: 'image/png',
+    bytes: 100,
+    width: 10,
+    height: 10,
+  }
   return {
     id,
     name,
-    source: {
-      id: `source-${id}`,
-      fileName: name,
-      mediaType: 'image/png',
-      bytes: 100,
-      width: 10,
-      height: 10,
-    },
-    pipeline: { steps: [...steps] },
+    source,
+    sources: [source],
+    pipeline: { steps: [openImageStep(source.id), ...steps] },
     revision: 0,
     canUndo: false,
     canRedo: false,

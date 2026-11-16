@@ -74,7 +74,7 @@ describe('sources, documents and export through the CLI', () => {
       '--options',
       '{"angle":90}',
     )
-    expect(added.document.pipeline.steps).toHaveLength(1)
+    expect(added.document.pipeline.steps).toHaveLength(2)
 
     const out = path.join(workDir, 'out.png')
     const exported = await cli<{ path: string }>(
@@ -90,9 +90,9 @@ describe('sources, documents and export through the CLI', () => {
     expect([meta.width, meta.height]).toEqual([48, 64])
 
     const undone = await cli<Doc>('document', 'undo', document.id)
-    expect(undone.document.pipeline.steps).toHaveLength(0)
+    expect(undone.document.pipeline.steps).toHaveLength(1)
     const redone = await cli<Doc>('document', 'redo', document.id)
-    expect(redone.document.pipeline.steps).toHaveLength(1)
+    expect(redone.document.pipeline.steps).toHaveLength(2)
 
     const listed = await cli<{ results: unknown[] }>('result', 'list')
     expect(listed.results).toHaveLength(1)
@@ -149,5 +149,45 @@ describe('workflows through the CLI', () => {
     await expect(
       cli('workflow', 'run', 'nope', '--out', path.join(workDir, 'x')),
     ).rejects.toThrow(/--follow/)
+  })
+
+  it('opens a second image as a pipeline step and swaps it', async () => {
+    const base = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('base.png'),
+    )
+    const mask = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('mask.png'),
+    )
+    const { document } = await cli<Doc>('document', 'create', base.source.id)
+    expect(document.pipeline.steps).toHaveLength(1)
+
+    const added = await cli<Doc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--source',
+      mask.source.id,
+    )
+    const opened = added.document.pipeline.steps.at(-1)
+    expect(added.document.pipeline.steps).toHaveLength(2)
+
+    const swapped = await cli<Doc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      opened?.id ?? '',
+      '--source',
+      base.source.id,
+    )
+    expect(swapped.document.pipeline.steps.at(-1)).toMatchObject({
+      kind: 'source',
+      sourceId: base.source.id,
+    })
   })
 })

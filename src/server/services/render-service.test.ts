@@ -194,7 +194,8 @@ describe('thumbnails', () => {
       await t.app.renders.requestThumbnails(t.ann, document.id),
     )
     if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
-    const [one, two] = done.result.thumbnails
+    const [open, one, two] = done.result.thumbnails
+    expect(open?.key).toMatch(/^[0-9a-f]{64}$/)
     expect(one?.stepId).toBe(first.id)
     expect(one?.key).toMatch(/^[0-9a-f]{64}$/)
     expect(two).toEqual({ stepId: second.id, key: null })
@@ -438,6 +439,48 @@ describe('exports', () => {
     await expect(
       t.app.renders.requestExport(t.ann, other.id, JPEG),
     ).rejects.toThrow(/Needs/)
+  })
+})
+
+describe('Open image steps', () => {
+  const JPEG = {
+    format: ExportFormat.Jpeg,
+    options: { quality: 70 },
+    keepMetadata: false,
+  }
+
+  it('refuses an export when no Open image step is switched on', async () => {
+    const document = await newDocument()
+    const [open] = document.pipeline.steps
+    if (open === undefined) throw new Error('no step')
+    await t.app.documents.change(t.ann, document.id, document.revision, {
+      type: 'set-enabled',
+      stepId: open.id,
+      enabled: false,
+    })
+
+    await expect(
+      t.app.renders.requestExport(t.ann, document.id, JPEG),
+    ).rejects.toThrow(/Open image/)
+  })
+
+  it('previews the first Open image step that is switched on', async () => {
+    const first = await t.uploadImage(t.ann, '#ff0000')
+    const second = await t.uploadImage(t.ann, '#0000ff')
+    const document = await t.app.documents.create(t.ann, first.id)
+    const [open] = document.pipeline.steps
+    if (open === undefined) throw new Error('no step')
+    await t.app.documents.change(t.ann, document.id, document.revision, {
+      type: 'set-source',
+      stepId: open.id,
+      sourceId: second.id,
+    })
+
+    const done = await run(
+      await t.app.renders.requestPreview(t.ann, document.id),
+    )
+
+    expect(done.state).toBe(JobState.Done)
   })
 })
 

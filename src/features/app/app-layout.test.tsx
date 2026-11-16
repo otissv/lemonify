@@ -317,6 +317,47 @@ describe('AppLayout', () => {
     ).toBeVisible()
   })
 
+  describe('a document row', () => {
+    it('toggles its steps when the name is clicked', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND])
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      await user.click(documentLink('one.png'))
+      expect(
+        await screen.findByRole('button', { name: 'Hide steps of one.png' }),
+      ).toHaveAttribute('aria-expanded', 'true')
+
+      await user.click(documentLink('one.png'))
+      expect(
+        await screen.findByRole('button', { name: 'Show steps of one.png' }),
+      ).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('shows the active background behind the whole row, toggle and delete included', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND])
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      const row = documentLink('one.png').parentElement
+      expect(row).toHaveAttribute('data-active', 'true')
+      expect(row).toHaveClass('data-[active=true]:bg-sidebar-accent')
+      expect(
+        within(row as HTMLElement).getByRole('button', {
+          name: 'Show steps of one.png',
+        }),
+      ).toBeInTheDocument()
+      expect(
+        within(row as HTMLElement).getByRole('button', {
+          name: 'Delete one.png',
+        }),
+      ).toBeInTheDocument()
+      expect(documentLink('two.png').parentElement).toHaveAttribute(
+        'data-active',
+        'false',
+      )
+    })
+  })
+
   describe('navigating between documents', () => {
     it('shows a document when its sidebar link is clicked', async () => {
       vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND])

@@ -1,3 +1,4 @@
+import { formatSize } from '@/lib/format-size'
 import { RiAddLine, RiCloseLine } from '@remixicon/react'
 import { useEffect } from 'react'
 
@@ -14,20 +15,6 @@ interface InputSourcesPanelProps {
   sourceIds: ReadonlyArray<string>
   onAdd: (sourceIds: ReadonlyArray<string>) => void
   onRemove: (sourceId: string) => void
-}
-
-const KILOBYTE = 1024
-const UNITS = ['B', 'KB', 'MB', 'GB']
-
-function formatSize(bytes: number): string {
-  let value = bytes
-  let unit = 0
-  while (value >= KILOBYTE && unit < UNITS.length - 1) {
-    value /= KILOBYTE
-    unit += 1
-  }
-  const rounded = unit === 0 ? value : Math.round(value * 10) / 10
-  return `${rounded} ${UNITS[unit]}`
 }
 
 /** The images the workflow runs on: choose from your uploaded images, or upload more. */

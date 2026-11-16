@@ -30,7 +30,7 @@ jobDaoContract('sqlite', async () => {
       await sources.insert(
         source({ id: sourceId, ownerId, contentHash: `h-${id}` }),
       )
-      await documents.insert(documentRecord({ id, ownerId, sourceId }))
+      await documents.insert(documentRecord({ id, ownerId }), [sourceId])
     },
     close: () => database.destroy(),
   }

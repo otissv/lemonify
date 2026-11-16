@@ -111,6 +111,6 @@ describe('DocumentNotices', () => {
     )
     expect(
       useAppStore.getState().documents[DOCUMENT_ID]?.confirmed.pipeline.steps,
-    ).toEqual([])
+    ).toEqual(documentView().pipeline.steps)
   })
 })

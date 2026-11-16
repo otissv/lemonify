@@ -176,19 +176,21 @@ describe('useAppStore', () => {
 
     it('shows a queued change at once, before the server has confirmed it', () => {
       const store = useAppStore.getState()
+      const opened = documentView([], FIRST).pipeline.steps
       store.confirmDocument(documentView([], FIRST), true)
 
       store.queueOperation(FIRST, {
         kind: 'change',
-        change: { type: 'add-step', step: blur, index: 0 },
+        change: { type: 'add-step', step: blur, index: opened.length },
       })
 
       expect(currentPipeline(useAppStore.getState(), FIRST)?.steps).toEqual([
+        ...opened,
         blur,
       ])
       expect(
         useAppStore.getState().documents[FIRST]?.confirmed.pipeline.steps,
-      ).toEqual([])
+      ).toEqual(opened)
     })
 
     it('takes the server’s answer and drops the operation it answered', () => {

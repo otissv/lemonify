@@ -46,6 +46,11 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
   }),
   aiToolSchema({ type: z.literal('set-settings'), stepId: z.string().min(1) }),
   z.strictObject({
+    type: z.literal('set-source'),
+    stepId: z.string().min(1),
+    sourceId: z.string().min(1),
+  }),
+  z.strictObject({
     type: z.literal('set-enabled'),
     stepId: z.string().min(1),
     enabled: z.boolean(),
@@ -109,6 +114,15 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         settings: step.settings,
       }
     }
+    case 'set-source': {
+      const { step } = requireStep(pipeline, change.stepId)
+      if (step.kind !== PipelineStepKind.Source) throw wrongKind()
+      return {
+        type: 'set-source',
+        stepId: change.stepId,
+        sourceId: step.sourceId,
+      }
+    }
     case 'set-enabled': {
       const { step } = requireStep(pipeline, change.stepId)
       return {
@@ -155,6 +169,11 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
           settings: change.settings,
         }),
       )
+    }
+    case 'set-source': {
+      const { step } = requireStep(pipeline, change.stepId)
+      if (step.kind !== PipelineStepKind.Source) throw wrongKind()
+      return replaceStep(pipeline, { ...step, sourceId: change.sourceId })
     }
     case 'set-enabled':
       requireStep(pipeline, change.stepId)
