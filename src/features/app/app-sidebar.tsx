@@ -14,7 +14,7 @@ import {
   useParams,
   useRouter,
 } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { AddWorkflowDialog } from '@/features/workflows/add-workflow-dialog'
 import { Button } from '@/components/ui/button'
@@ -23,11 +23,14 @@ import { filterByQuery } from '@/features/app/sidebar-search'
 import type { DocumentSummary } from '@/features/documents/document'
 import {
   deleteDocument,
+  moveDocument,
   renameDocument,
 } from '@/features/documents/document-functions'
 import { DocumentNameInput } from '@/features/app/document-name-input'
 import { DocumentSteps } from '@/features/documents/document-steps'
 import { errorMessage } from '@/lib/error-message'
+import { placeAt } from '@/lib/place-at'
+import { cn } from '@/lib/utils'
 import {
   Sidebar,
   SidebarContent,
@@ -44,6 +47,7 @@ import { SidebarTab, useAppStore } from '@/store/app-store'
 const rootRoute = getRouteApi('__root__')
 const DELETE_FAILED = 'The image could not be deleted.'
 const RENAME_FAILED = 'The image could not be renamed.'
+const MOVE_FAILED = 'The image could not be moved.'
 
 const TAB_LABELS: Readonly<Record<SidebarTab, string>> = {
   [SidebarTab.Editor]: 'Editor',
@@ -55,15 +59,35 @@ function isSidebarTab(value: string): value is SidebarTab {
 }
 
 /** Hover is darker than the row's active background, which now sits behind these buttons. */
+const DRAG_TYPE = 'application/x-lemonify-document'
+/** How far Alt and each arrow key move a document in the list. */
+const ARROW_STEPS: Readonly<Record<string, number | undefined>> = {
+  ArrowUp: -1,
+  ArrowDown: 1,
+}
+
 const ROW_BUTTON_CLASS = 'group-data-[active=true]/row:hover:bg-black/25'
+
+interface DocumentItemProps {
+  document: DocumentSummary
+  active: boolean
+  /** Where the document is in the list, or undefined when the list cannot be reordered. */
+  position: { index: number; count: number } | undefined
+  dragging: boolean
+  onMove: (documentId: string, index: number) => void
+  onDragStart: (documentId: string) => void
+  onDragEnd: () => void
+}
 
 function DocumentItem({
   document,
   active,
-}: {
-  document: DocumentSummary
-  active: boolean
-}): React.JSX.Element {
+  position,
+  dragging,
+  onMove,
+  onDragStart,
+  onDragEnd,
+}: DocumentItemProps): React.JSX.Element {
   const navigate = useNavigate()
   const router = useRouter()
   const expanded = useAppStore(
@@ -84,10 +108,38 @@ function DocumentItem({
     setRenaming(true)
   }
 
-  function handleRenameKey(event: React.KeyboardEvent<HTMLElement>): void {
-    if (event.key !== 'F2') return
+  function handleKey(event: React.KeyboardEvent<HTMLElement>): void {
+    if (event.key === 'F2') {
+      event.preventDefault()
+      handleStartRename()
+      return
+    }
+    if (!event.altKey || position === undefined) return
+    const step = ARROW_STEPS[event.key]
+    if (step === undefined) return
     event.preventDefault()
-    handleStartRename()
+    const target = position.index + step
+    if (target < 0 || target >= position.count) return
+    onMove(document.id, target)
+  }
+
+  function handleDragStart(event: React.DragEvent<HTMLLIElement>): void {
+    event.dataTransfer.setData(DRAG_TYPE, document.id)
+    event.dataTransfer.effectAllowed = 'move'
+    onDragStart(document.id)
+  }
+
+  function handleDragOver(event: React.DragEvent<HTMLLIElement>): void {
+    if (!event.dataTransfer.types.includes(DRAG_TYPE)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLLIElement>): void {
+    const droppedId = event.dataTransfer.getData(DRAG_TYPE)
+    if (droppedId === '' || position === undefined) return
+    event.preventDefault()
+    onMove(droppedId, position.index)
   }
 
   function handleCancelRename(): void {
@@ -119,7 +171,14 @@ function DocumentItem({
   }
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem
+      draggable={position !== undefined}
+      className={cn(dragging && 'opacity-50')}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      onDragEnd={onDragEnd}
+    >
       <div
         data-active={active}
         className="group/row flex items-center gap-1 rounded-md data-[active=true]:bg-sidebar-accent"
@@ -155,8 +214,12 @@ function DocumentItem({
               params={{ id: document.id }}
               title={document.source?.fileName}
               onClick={handleToggle}
+              draggable={false}
+              aria-keyshortcuts={
+                position === undefined ? undefined : 'Alt+ArrowUp Alt+ArrowDown'
+              }
               onDoubleClick={handleStartRename}
-              onKeyDown={handleRenameKey}
+              onKeyDown={handleKey}
             >
               <RiImageLine aria-hidden="true" />
               <span className="truncate">{document.name}</span>
@@ -185,14 +248,60 @@ function DocumentItem({
   )
 }
 
+/** The documents in `order`; any that it does not name, being new, come first. */
+function inOrder(
+  documents: ReadonlyArray<DocumentSummary>,
+  order: ReadonlyArray<string> | undefined,
+): ReadonlyArray<DocumentSummary> {
+  if (order === undefined) return documents
+  const known = documents.filter(({ id }) => order.includes(id))
+  const fresh = documents.filter(({ id }) => !order.includes(id))
+  const placed = order.flatMap((id) => known.find((d) => d.id === id) ?? [])
+  return [...fresh, ...placed]
+}
+
 function DocumentList({ query }: { query: string }): React.JSX.Element | null {
-  const { documents } = rootRoute.useLoaderData()
+  const { documents: saved } = rootRoute.useLoaderData()
   const { id: activeId } = useParams({ strict: false })
+  const router = useRouter()
+  const [order, setOrder] = useState<ReadonlyArray<string> | undefined>(
+    undefined,
+  )
+  const [draggedId, setDraggedId] = useState<string | undefined>(undefined)
+  const [moveError, setMoveError] = useState<string | null>(null)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a list read again from the server replaces the order shown while it was being saved
+  useEffect(() => {
+    setOrder(undefined)
+  }, [saved])
+
+  const documents = inOrder(saved, order)
   if (documents.length === 0) return null
   const shown = filterByQuery(documents, query, (document) => [
     document.name,
     document.source?.fileName ?? '',
   ])
+  const reorderable = query.trim() === ''
+
+  async function handleMove(documentId: string, index: number): Promise<void> {
+    setDraggedId(undefined)
+    const ids = documents.map(({ id }) => id)
+    const next = placeAt(ids, documentId, index)
+    if (next.every((id, place) => id === ids[place])) return
+    setMoveError(null)
+    setOrder(next)
+    try {
+      await moveDocument({ data: { id: documentId, index } })
+      await router.invalidate()
+    } catch (caught) {
+      setOrder(undefined)
+      setMoveError(errorMessage(caught, MOVE_FAILED))
+    }
+  }
+
+  function handleDragEnd(): void {
+    setDraggedId(undefined)
+  }
 
   if (shown.length === 0) {
     return (
@@ -203,15 +312,27 @@ function DocumentList({ query }: { query: string }): React.JSX.Element | null {
   }
 
   return (
-    <SidebarMenu aria-label="Open images">
-      {shown.map((document) => (
-        <DocumentItem
-          key={document.id}
-          document={document}
-          active={document.id === activeId}
-        />
-      ))}
-    </SidebarMenu>
+    <>
+      <SidebarMenu aria-label="Open images">
+        {shown.map((document, index) => (
+          <DocumentItem
+            key={document.id}
+            document={document}
+            active={document.id === activeId}
+            position={reorderable ? { index, count: shown.length } : undefined}
+            dragging={draggedId === document.id}
+            onMove={(id, to) => void handleMove(id, to)}
+            onDragStart={setDraggedId}
+            onDragEnd={handleDragEnd}
+          />
+        ))}
+      </SidebarMenu>
+      {moveError && (
+        <p role="alert" className="px-2 text-caption text-destructive">
+          {moveError}
+        </p>
+      )}
+    </>
   )
 }
 

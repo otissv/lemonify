@@ -8,6 +8,7 @@ import {
   NotFoundError,
 } from '../../errors.ts'
 import { STALE_DOCUMENT_MESSAGE } from '../document-dao.ts'
+import { placeAt } from '@/lib/place-at'
 import type {
   DocumentDao,
   DocumentRecord,
@@ -104,6 +105,18 @@ async function linkOperands(
   )
 }
 
+/** The place before the owner's first Document, so a new Document is listed first. */
+async function firstPosition(
+  trx: Knex.Transaction,
+  ownerId: string,
+): Promise<number> {
+  const first: { lowest?: number | null } | undefined = await trx('documents')
+    .where({ owner_id: ownerId })
+    .min({ lowest: 'position' })
+    .first()
+  return first?.lowest == null ? 0 : first.lowest - 1
+}
+
 async function reload(
   trx: Knex.Transaction,
   id: string,
@@ -133,6 +146,7 @@ export class SqliteDocumentDao implements DocumentDao {
         history_cursor: document.historyCursor,
         created_at: document.createdAt,
         updated_at: document.updatedAt,
+        position: await firstPosition(trx, document.ownerId),
       })
       await linkOperands(trx, document.id, sourceIds)
     })
@@ -148,9 +162,25 @@ export class SqliteDocumentDao implements DocumentDao {
   async listByOwner(ownerId: string): Promise<DocumentRecord[]> {
     const rows: DocumentRow[] = await this.#database('documents')
       .where({ owner_id: ownerId })
-      .orderBy('updated_at', 'desc')
+      .orderBy('position', 'asc')
       .orderBy('id', 'asc')
     return rows.map(toRecord)
+  }
+
+  async move(ownerId: string, id: string, index: number): Promise<void> {
+    await this.#database.transaction(async (trx) => {
+      const rows: Array<{ id: string }> = await trx('documents')
+        .where({ owner_id: ownerId })
+        .orderBy('position', 'asc')
+        .orderBy('id', 'asc')
+        .select('id')
+      const ids = rows.map((row) => row.id)
+      if (!ids.includes(id)) throw new NotFoundError(MISSING)
+      const moved = placeAt(ids, id, index)
+      for (const [position, documentId] of moved.entries()) {
+        await trx('documents').where({ id: documentId }).update({ position })
+      }
+    })
   }
 
   async rename(id: string, name: string, now: string): Promise<DocumentRecord> {

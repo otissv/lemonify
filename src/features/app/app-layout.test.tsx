@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +6,7 @@ import {
   deleteDocument,
   getDocument,
   listDocuments,
+  moveDocument,
   renameDocument,
 } from '@/features/documents/document-functions'
 import type { DocumentSummary } from '@/features/documents/document'
@@ -24,6 +25,7 @@ vi.mock('@/features/documents/document-functions', () => ({
   getDocument: vi.fn(),
   createDocument: vi.fn(),
   deleteDocument: vi.fn(),
+  moveDocument: vi.fn(),
   renameDocument: vi.fn(),
   changeDocument: vi.fn(),
   undoDocument: vi.fn(),
@@ -382,6 +384,176 @@ describe('AppLayout', () => {
         { name: 'Application' },
       ),
     ).toBeVisible()
+  })
+
+  describe('reordering documents', () => {
+    const THIRD_ID = '8b3e8e6a-2a65-4c0b-9c79-4f4b2b0b4d33'
+    const THIRD = summary(THIRD_ID, 'three.png')
+
+    function names(): string[] {
+      return within(screen.getByRole('list', { name: 'Open images' }))
+        .getAllByRole('link')
+        .map((link) => link.textContent ?? '')
+    }
+
+    /** jsdom has no drag data, so this holds what is set on the drag. */
+    function dragData(): DataTransfer {
+      const data = new Map<string, string>()
+      return {
+        get types() {
+          return [...data.keys()]
+        },
+        setData: (type: string, value: string) => {
+          data.set(type, value)
+        },
+        getData: (type: string) => data.get(type) ?? '',
+        effectAllowed: 'uninitialized',
+        dropEffect: 'none',
+      } as unknown as DataTransfer
+    }
+
+    function rowOf(name: string): HTMLElement {
+      const row = documentLink(name).closest('li')
+      if (!row) throw new Error(`No row for ${name}.`)
+      return row
+    }
+
+    beforeEach(() => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND, THIRD])
+      vi.mocked(moveDocument).mockResolvedValue(undefined)
+    })
+
+    it('moves a document up and down with Alt and the arrow keys, and saves it', async () => {
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      fireEvent.keyDown(documentLink('two.png'), {
+        key: 'ArrowUp',
+        altKey: true,
+      })
+
+      expect(moveDocument).toHaveBeenCalledWith({
+        data: { id: SECOND_ID, index: 0 },
+      })
+      expect(names()).toEqual(['two.png', 'one.png', 'three.png'])
+
+      fireEvent.keyDown(documentLink('two.png'), {
+        key: 'ArrowDown',
+        altKey: true,
+      })
+
+      expect(moveDocument).toHaveBeenLastCalledWith({
+        data: { id: SECOND_ID, index: 1 },
+      })
+      expect(names()).toEqual(['one.png', 'two.png', 'three.png'])
+    })
+
+    it('does not move the first document up or the last one down', async () => {
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      fireEvent.keyDown(documentLink('one.png'), {
+        key: 'ArrowUp',
+        altKey: true,
+      })
+      fireEvent.keyDown(documentLink('three.png'), {
+        key: 'ArrowDown',
+        altKey: true,
+      })
+
+      expect(moveDocument).not.toHaveBeenCalled()
+    })
+
+    it('leaves the arrow keys alone without Alt', async () => {
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      const handled = fireEvent.keyDown(documentLink('two.png'), {
+        key: 'ArrowUp',
+      })
+
+      expect(handled).toBe(true)
+      expect(moveDocument).not.toHaveBeenCalled()
+    })
+
+    it('moves a document to where another is dropped on it', async () => {
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      const dataTransfer = dragData()
+      fireEvent.dragStart(rowOf('three.png'), { dataTransfer })
+      fireEvent.dragOver(rowOf('one.png'), { dataTransfer })
+      fireEvent.drop(rowOf('one.png'), { dataTransfer })
+
+      expect(moveDocument).toHaveBeenCalledWith({
+        data: { id: THIRD_ID, index: 0 },
+      })
+      expect(names()).toEqual(['three.png', 'one.png', 'two.png'])
+    })
+
+    it('shows the document being dragged as faded, until it is dropped or let go', async () => {
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      fireEvent.dragStart(rowOf('two.png'), { dataTransfer: dragData() })
+      expect(rowOf('two.png')).toHaveClass('opacity-50')
+
+      fireEvent.dragEnd(rowOf('two.png'))
+      expect(rowOf('two.png')).not.toHaveClass('opacity-50')
+      expect(moveDocument).not.toHaveBeenCalled()
+    })
+
+    it('ignores something dragged in that is not a document', async () => {
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      const dataTransfer = dragData()
+      const accepted = fireEvent.dragOver(rowOf('one.png'), { dataTransfer })
+      fireEvent.drop(rowOf('one.png'), { dataTransfer })
+
+      expect(accepted).toBe(true)
+      expect(moveDocument).not.toHaveBeenCalled()
+    })
+
+    it('puts the order back and says so when it could not be saved', async () => {
+      vi.mocked(moveDocument).mockRejectedValue(new Error('Offline.'))
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      fireEvent.keyDown(documentLink('two.png'), {
+        key: 'ArrowUp',
+        altKey: true,
+      })
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Offline.')
+      expect(names()).toEqual(['one.png', 'two.png', 'three.png'])
+    })
+
+    it('follows the order the server lists when the list is read again', async () => {
+      vi.mocked(listDocuments)
+        .mockResolvedValueOnce([FIRST, SECOND, THIRD])
+        .mockResolvedValue([SECOND, THIRD, FIRST])
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      fireEvent.keyDown(documentLink('one.png'), {
+        key: 'ArrowDown',
+        altKey: true,
+      })
+
+      await waitFor(() => {
+        expect(names()).toEqual(['two.png', 'three.png', 'one.png'])
+      })
+    })
+
+    it('cannot be done while the list is filtered, since the list shown is not the whole list', async () => {
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+      await user.type(
+        screen.getByRole('searchbox', { name: 'Search images' }),
+        'o',
+      )
+
+      fireEvent.keyDown(documentLink('two.png'), {
+        key: 'ArrowUp',
+        altKey: true,
+      })
+
+      expect(moveDocument).not.toHaveBeenCalled()
+      expect(rowOf('two.png')).not.toHaveAttribute('draggable', 'true')
+    })
   })
 
   describe('a document row', () => {

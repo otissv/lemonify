@@ -79,14 +79,21 @@ describe('ToolsPanel', () => {
       expect(tablist.parentElement?.lastElementChild).toBe(tablist)
     })
 
-    it('has Tools, Options, Export, Results and Document tabs, in that order', () => {
+    it('has Tools, Options, Export, Results, Document and Navigator tabs, in that order', () => {
       renderPanel()
 
       expect(
         within(panel())
           .getAllByRole('tab')
           .map((tab) => tab.getAttribute('aria-label')),
-      ).toEqual(['Tools', 'Options', 'Export', 'Results', 'Document'])
+      ).toEqual([
+        'Tools',
+        'Options',
+        'Export',
+        'Results',
+        'Document',
+        'Navigator',
+      ])
     })
 
     it('shows the Tools tab first as an icon with no visible label', () => {
@@ -180,6 +187,20 @@ describe('ToolsPanel', () => {
       })
       expect(menu.parentElement).toBe(handle.parentElement)
       expect(handle.parentElement).toHaveClass('border-b')
+    })
+  })
+
+  describe('navigator tab', () => {
+    it('shows the Navigator, which has the same view as the canvas', async () => {
+      const user = userEvent.setup()
+      renderPanel()
+
+      await user.click(screen.getByRole('tab', { name: 'Navigator' }))
+
+      expect(useAppStore.getState().activeTool).toBe(Tool.Navigator)
+      expect(
+        within(screen.getByRole('tabpanel')).getByRole('status'),
+      ).toHaveTextContent('There is no picture to navigate.')
     })
   })
 

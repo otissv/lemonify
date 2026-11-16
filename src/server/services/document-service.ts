@@ -164,6 +164,12 @@ export class DocumentService {
     return this.#view(renamed)
   }
 
+  /** Moves one of the User's Documents to a place in their list. */
+  async move(actor: Actor, id: string, index: number): Promise<void> {
+    await this.#owned(actor, id)
+    await this.#deps.documents.move(actor.userId, id, index)
+  }
+
   async delete(actor: Actor, id: string): Promise<void> {
     await this.#owned(actor, id)
     await this.#deps.cleanup.onDocumentDeleted(actor, id)

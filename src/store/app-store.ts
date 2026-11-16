@@ -21,6 +21,7 @@ import type {
 import type { ExportSettings } from '@/features/export/export-settings'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import type { PanelPosition } from '@/features/tools/panel-position'
+import type { ViewFrame, Viewport } from '@/features/viewport/viewport'
 
 export { PreviewStatus }
 
@@ -34,6 +35,8 @@ export enum Tool {
   Results = 'results',
   /** What the document is: its image, steps and dates. */
   Document = 'document',
+  /** A small view of the whole picture, to move around it and zoom. */
+  Navigator = 'navigator',
 }
 
 export const MAX_RECENT_UPSCALE_MODELS = 10
@@ -61,6 +64,10 @@ interface AppStateData {
   documents: Readonly<Record<string, DocumentSession | undefined>>
   /** Documents shown as uploaded instead of as their edits make them. */
   showOriginal: Readonly<Record<string, boolean | undefined>>
+  /** How far in each document's canvas is zoomed, and where. Not kept between visits to the app. */
+  viewports: Readonly<Record<string, Viewport | undefined>>
+  /** The canvas window and picture as last measured, by document, for whatever else shows the view. */
+  viewFrames: Readonly<Record<string, ViewFrame | undefined>>
   previews: Readonly<Record<string, DocumentPreview | undefined>>
   thumbnails: Readonly<Record<string, DocumentThumbnails | undefined>>
   aiRuns: Readonly<Record<string, AiRun | undefined>>
@@ -77,6 +84,8 @@ interface AppStateActions {
   setPanelCollapsed: (collapsed: boolean) => void
   setActiveTool: (tool: Tool) => void
   setShowOriginal: (documentId: string, show: boolean) => void
+  setViewport: (documentId: string, viewport: Viewport) => void
+  setViewFrame: (documentId: string, frame: ViewFrame) => void
   rememberUpscaleModel: (name: string) => void
   setDocumentExpanded: (documentId: string, expanded: boolean) => void
   selectStep: (documentId: string, stepId: string | undefined) => void
@@ -113,6 +122,8 @@ export const INITIAL_APP_STATE: Readonly<AppStateData> = {
   selectedSteps: {},
   documents: {},
   showOriginal: {},
+  viewports: {},
+  viewFrames: {},
   previews: {},
   thumbnails: {},
   aiRuns: {},
@@ -196,6 +207,16 @@ export const useAppStore = create<AppState>()(
           showOriginal: { ...showOriginal, [documentId]: show },
         }))
       },
+      setViewport: (documentId, viewport) => {
+        set(({ viewports }) => ({
+          viewports: { ...viewports, [documentId]: viewport },
+        }))
+      },
+      setViewFrame: (documentId, frame) => {
+        set(({ viewFrames }) => ({
+          viewFrames: { ...viewFrames, [documentId]: frame },
+        }))
+      },
       rememberUpscaleModel: (name) => {
         set(({ recentUpscaleModels }) => ({
           recentUpscaleModels: withRecent(recentUpscaleModels, name),
@@ -257,6 +278,8 @@ export const useAppStore = create<AppState>()(
             expandedDocuments,
             selectedSteps,
             showOriginal,
+            viewports,
+            viewFrames,
           }) => {
             const without = <T>(
               record: Readonly<Record<string, T | undefined>>,
@@ -273,6 +296,8 @@ export const useAppStore = create<AppState>()(
               expandedDocuments: without(expandedDocuments),
               selectedSteps: without(selectedSteps),
               showOriginal: without(showOriginal),
+              viewports: without(viewports),
+              viewFrames: without(viewFrames),
             }
           },
         )

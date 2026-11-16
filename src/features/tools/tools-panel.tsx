@@ -1,4 +1,5 @@
 import {
+  RiCompass3Line,
   RiDownload2Line,
   RiEqualizerLine,
   RiFolderImageLine,
@@ -16,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import type { AiToolSummary } from '@/features/ai/ai-tools'
 import { DocumentInfo } from '@/features/documents/document-info'
+import { NavigatorPanel } from '@/features/viewport/navigator-panel'
 import { ResultsPanel } from '@/features/results/results-panel'
 import { Tool, useAppStore } from '@/store/app-store'
 
@@ -31,6 +33,7 @@ const TOOL_LABELS: Readonly<Record<Tool, string>> = {
   [Tool.Export]: 'Export',
   [Tool.Results]: 'Results',
   [Tool.Document]: 'Document',
+  [Tool.Navigator]: 'Navigator',
 }
 
 const TOOL_ICONS: Readonly<Record<Tool, RemixiconComponentType>> = {
@@ -39,6 +42,7 @@ const TOOL_ICONS: Readonly<Record<Tool, RemixiconComponentType>> = {
   [Tool.Export]: RiDownload2Line,
   [Tool.Results]: RiFolderImageLine,
   [Tool.Document]: RiInformationLine,
+  [Tool.Navigator]: RiCompass3Line,
 }
 
 const TOOLS: ReadonlyArray<Tool> = [
@@ -47,6 +51,7 @@ const TOOLS: ReadonlyArray<Tool> = [
   Tool.Export,
   Tool.Results,
   Tool.Document,
+  Tool.Navigator,
 ]
 
 function isTool(value: string): value is Tool {
@@ -103,6 +108,9 @@ export function ToolsPanel({
         </TabsContent>
         <TabsContent value={Tool.Document} className="min-w-0 overflow-y-auto">
           <DocumentInfo documentId={documentId} />
+        </TabsContent>
+        <TabsContent value={Tool.Navigator} className="min-w-0 overflow-y-auto">
+          <NavigatorPanel documentId={documentId} />
         </TabsContent>
         <TabsList
           variant="line"

@@ -48,6 +48,15 @@ export const renameDocument = createServerFn({ method: 'POST' })
     return app.documents.rename(actor, data.id, data.name)
   })
 
+/** Puts one of the person's documents at `index` in their list. */
+export const moveDocument = createServerFn({ method: 'POST' })
+  .middleware(PROTECTED_CHAIN)
+  .validator(IdSchema.extend({ index: z.number().int().nonnegative() }))
+  .handler(async ({ context, data }): Promise<void> => {
+    const { app, actor } = await appFor(context)
+    await app.documents.move(actor, data.id, data.index)
+  })
+
 export const deleteDocument = createServerFn({ method: 'POST' })
   .middleware(PROTECTED_CHAIN)
   .validator(IdSchema)

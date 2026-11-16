@@ -51,8 +51,14 @@ export interface DocumentDao {
   /** Stores the Document and links the Sources its Pipeline uses, in one transaction. */
   insert(document: DocumentRecord, sourceIds: string[]): Promise<void>
   findById(id: string): Promise<DocumentRecord | null>
-  /** Most recently changed first. */
+  /** In the order the owner keeps them in, which starts with the newest first; changes and renames do not move a Document. */
   listByOwner(ownerId: string): Promise<DocumentRecord[]>
+  /**
+   * Moves the Document to `index` in the owner's list (a place beyond either
+   * end puts it at that end), keeping the others in their order. Fails with a
+   * NotFoundError when the owner has no such Document.
+   */
+  move(ownerId: string, id: string, index: number): Promise<void>
   rename(id: string, name: string, now: string): Promise<DocumentRecord>
   /** Removes the Document, its History and its operand links. */
   delete(id: string): Promise<void>

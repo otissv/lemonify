@@ -182,7 +182,7 @@ export function libraryDaoContract(
       await close()
     })
 
-    it('lists only the owner’s Documents, most recently changed first', async () => {
+    it('lists only the owner’s Documents, newest first', async () => {
       const { documents, seedUser, sources, close } = await setup(create)
       await sources.insert(
         source({ id: 'src-b', ownerId: 'bea', contentHash: 'hb' }),
@@ -199,6 +199,101 @@ export function libraryDaoContract(
         'doc-1',
       ])
       await close()
+    })
+
+    describe('order', () => {
+      async function three(create: Parameters<typeof setup>[0]) {
+        const fixture = await setup(create)
+        for (const id of ['doc-2', 'doc-3']) {
+          await fixture.documents.insert(documentRecord({ id }), ['src-1'])
+        }
+        return fixture
+      }
+
+      async function ids(
+        documents: {
+          listByOwner: (owner: string) => Promise<Array<{ id: string }>>
+        },
+        owner = 'ann',
+      ): Promise<string[]> {
+        return (await documents.listByOwner(owner)).map((d) => d.id)
+      }
+
+      it('puts a new Document first', async () => {
+        const { documents, close } = await three(create)
+        expect(await ids(documents)).toEqual(['doc-3', 'doc-2', 'doc-1'])
+        await close()
+      })
+
+      it('keeps the order when a Document is renamed or changed', async () => {
+        const { documents, close } = await three(create)
+        await documents.rename('doc-1', 'Renamed', T2)
+        await documents.applyChange({
+          id: 'doc-2',
+          expectedRevision: 0,
+          pipeline: pipelineWith('s1'),
+          operandSourceIds: ['src-1'],
+          patch: addPatch('s1'),
+          maxEntries: MAX_ENTRIES,
+          now: T2,
+        })
+        expect(await ids(documents)).toEqual(['doc-3', 'doc-2', 'doc-1'])
+        await close()
+      })
+
+      it('moves a Document to a place in the list', async () => {
+        const { documents, close } = await three(create)
+        await documents.move('ann', 'doc-1', 0)
+        expect(await ids(documents)).toEqual(['doc-1', 'doc-3', 'doc-2'])
+        await documents.move('ann', 'doc-1', 2)
+        expect(await ids(documents)).toEqual(['doc-3', 'doc-2', 'doc-1'])
+        await documents.move('ann', 'doc-3', 1)
+        expect(await ids(documents)).toEqual(['doc-2', 'doc-3', 'doc-1'])
+        await close()
+      })
+
+      it('puts a Document at the ends when the place is beyond them', async () => {
+        const { documents, close } = await three(create)
+        await documents.move('ann', 'doc-2', 99)
+        expect(await ids(documents)).toEqual(['doc-3', 'doc-1', 'doc-2'])
+        await documents.move('ann', 'doc-2', -5)
+        expect(await ids(documents)).toEqual(['doc-2', 'doc-3', 'doc-1'])
+        await close()
+      })
+
+      it('keeps the order after a Document is deleted and a new one added', async () => {
+        const { documents, close } = await three(create)
+        await documents.move('ann', 'doc-1', 0)
+        await documents.delete('doc-3')
+        await documents.insert(documentRecord({ id: 'doc-4' }), ['src-1'])
+        expect(await ids(documents)).toEqual(['doc-4', 'doc-1', 'doc-2'])
+        await close()
+      })
+
+      it('leaves other Users’ order alone, and refuses a Document that is not the User’s', async () => {
+        const { documents, sources, seedUser, close } = await three(create)
+        await seedUser('bea')
+        await sources.insert(
+          source({ id: 'src-b', ownerId: 'bea', contentHash: 'hb' }),
+        )
+        await documents.insert(
+          documentRecord({ id: 'doc-b1', ownerId: 'bea' }),
+          ['src-b'],
+        )
+        await documents.insert(
+          documentRecord({ id: 'doc-b2', ownerId: 'bea' }),
+          ['src-b'],
+        )
+        await documents.move('ann', 'doc-1', 0)
+        expect(await ids(documents, 'bea')).toEqual(['doc-b2', 'doc-b1'])
+        await expect(documents.move('ann', 'doc-b1', 0)).rejects.toThrow(
+          NotFoundError,
+        )
+        await expect(documents.move('ann', 'nope', 0)).rejects.toThrow(
+          NotFoundError,
+        )
+        await close()
+      })
     })
 
     it('renames a Document and refuses a missing one', async () => {

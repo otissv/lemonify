@@ -7,6 +7,7 @@ import type {
   MovedCursor,
   RecordedChange,
 } from '../document-dao.ts'
+import { placeAt } from '@/lib/place-at'
 import type { MemoryStore } from './store.ts'
 
 const MISSING = 'That image does not exist.'
@@ -34,6 +35,7 @@ export class MemoryDocumentDao implements DocumentDao {
 
   async insert(document: DocumentRecord, sourceIds: string[]): Promise<void> {
     this.#store.documents.set(document.id, document)
+    this.#store.documentOrder.unshift(document.id)
     this.#store.entries.set(document.id, [])
     this.#store.operands.set(document.id, new Set(sourceIds))
   }
@@ -43,12 +45,23 @@ export class MemoryDocumentDao implements DocumentDao {
   }
 
   async listByOwner(ownerId: string): Promise<DocumentRecord[]> {
-    return [...this.#store.documents.values()]
-      .filter((document) => document.ownerId === ownerId)
-      .sort(
-        (a, b) =>
-          b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id),
-      )
+    const owned: DocumentRecord[] = []
+    for (const id of this.#store.documentOrder) {
+      const document = this.#store.documents.get(id)
+      if (document?.ownerId === ownerId) owned.push(document)
+    }
+    return owned
+  }
+
+  async move(ownerId: string, id: string, index: number): Promise<void> {
+    const order = this.#store.documentOrder
+    const owned = (await this.listByOwner(ownerId)).map(({ id: own }) => own)
+    if (!owned.includes(id)) throw new NotFoundError(MISSING)
+    const moved = placeAt(owned, id, index)
+    let next = 0
+    this.#store.documentOrder = order.map((other) =>
+      owned.includes(other) ? (moved[next++] ?? other) : other,
+    )
   }
 
   async rename(id: string, name: string, now: string): Promise<DocumentRecord> {
@@ -61,6 +74,9 @@ export class MemoryDocumentDao implements DocumentDao {
 
   async delete(id: string): Promise<void> {
     this.#store.documents.delete(id)
+    this.#store.documentOrder = this.#store.documentOrder.filter(
+      (other) => other !== id,
+    )
     this.#store.entries.delete(id)
     this.#store.operands.delete(id)
   }

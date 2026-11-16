@@ -118,7 +118,7 @@ describe('create, list and get', () => {
     )
   })
 
-  it('lists only the User’s Documents, most recently changed first', async () => {
+  it('lists only the User’s Documents, newest first, whatever changes after', async () => {
     const first = await service.create(ANN, 'src-1', 'First')
     clock.advance(1000)
     const second = await service.create(ANN, 'src-1', 'Second')
@@ -127,13 +127,41 @@ describe('create, list and get', () => {
     await addSource('src-b', 'bea')
     await service.create(BEA, 'src-b')
     expect((await service.list(ANN)).map((d) => d.id)).toEqual([
-      first.id,
       second.id,
+      first.id,
     ])
-    expect((await service.list(ANN))[0]).toMatchObject({
+    expect((await service.list(ANN))[1]).toMatchObject({
       name: 'First again',
       source: { id: 'src-1' },
     })
+  })
+
+  it('moves a Document to a place in the User’s list', async () => {
+    const first = await service.create(ANN, 'src-1', 'First')
+    const second = await service.create(ANN, 'src-1', 'Second')
+    const third = await service.create(ANN, 'src-1', 'Third')
+
+    await service.move(ANN, first.id, 0)
+    expect((await service.list(ANN)).map((d) => d.id)).toEqual([
+      first.id,
+      third.id,
+      second.id,
+    ])
+    await service.move(ANN, first.id, 2)
+    expect((await service.list(ANN)).map((d) => d.id)).toEqual([
+      third.id,
+      second.id,
+      first.id,
+    ])
+  })
+
+  it('does not let a User move another User’s Document', async () => {
+    const mine = await service.create(ANN, 'src-1')
+    await addSource('src-b', 'bea')
+    await service.create(BEA, 'src-b')
+
+    await expect(service.move(BEA, mine.id, 0)).rejects.toThrow(NotFoundError)
+    await expect(service.move(ANN, 'missing', 0)).rejects.toThrow(NotFoundError)
   })
 
   it('shows a Document only to its owner', async () => {

@@ -6,6 +6,7 @@ import { workTables } from './20260101000300-work-tables.ts'
 import { openImageSteps } from './20260101000400-open-image-steps.ts'
 import { layers } from './20260101000500-layers.ts'
 import { layersOnly } from './20260101000600-layers-only.ts'
+import { documentOrder } from './20260101000700-document-order.ts'
 
 export type Migration = {
   name: string
@@ -21,4 +22,5 @@ export const MIGRATIONS: readonly Migration[] = [
   openImageSteps,
   layers,
   layersOnly,
+  documentOrder,
 ]
