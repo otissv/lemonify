@@ -16,9 +16,9 @@ export type SourceSummary = {
 export type DocumentView = {
   id: string
   name: string
-  /** The image the document starts from: the first Open image step's, switched on or not. Null when it has none. */
+  /** The document's own image: the first step's. Null when it is gone. */
   source: SourceSummary | null
-  /** Every image the Open image steps open, in pipeline order. */
+  /** Every image the document's image and its layers use, in pipeline order. */
   sources: ReadonlyArray<SourceSummary>
   pipeline: Pipeline
   /** Changes must name the revision they were made on, so two tabs never overwrite each other. */
@@ -29,7 +29,7 @@ export type DocumentView = {
   updatedAt: string
 }
 
-/** One row of the list of open images. */
+/** One row of the list of documents. */
 export type DocumentSummary = {
   id: string
   name: string

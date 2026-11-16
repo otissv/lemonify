@@ -8,7 +8,7 @@ Storing images under the hash of their bytes does three things. An image used tw
 
 The manifest (`src/server/bundle/manifest.ts`) is versioned. It names the document, carries its pipeline, and lists each Source (its id in the pipeline, hash and file name) and each AI result (the render key, hash, step id and file name). A file from a newer version is refused with a message to update.
 
-Render keys name second images by their content hash instead of their per-user Source id (`planPipeline`). The same pipeline on the same pixels therefore has the same key on every machine, so an imported AI result is found again and nothing runs a second time.
+Render keys name layer images and second images by their content hash instead of their per-user Source id (`planPipeline`). The same pipeline on the same pixels therefore has the same key on every machine, so an imported AI result is found again and nothing runs a second time.
 
 Import makes a new Document for the importing User, re-adds each Source under that User, rewrites the pipeline's Source ids, and stores the results as that User's own. `LEMONIFY_MAX_BUNDLE_BYTES` (default 1 GB) limits what the website accepts.
 

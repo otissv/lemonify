@@ -12,6 +12,8 @@ import {
 } from '@/features/pipeline/pipeline'
 import type { Pipeline, PipelineStep } from '@/features/pipeline/pipeline'
 import { aiToolSchema } from '@/features/ai/ai-tools'
+import { layerSettingsSchema } from '@/features/pipeline/layer'
+import type { LayerSettings } from '@/features/pipeline/layer'
 
 /** The most changes History keeps for undo; older ones are dropped. */
 export const MAX_HISTORY_ENTRIES = 100
@@ -45,6 +47,11 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     options: SharpOptionsSchema,
   }),
   aiToolSchema({ type: z.literal('set-settings'), stepId: z.string().min(1) }),
+  z.strictObject({
+    type: z.literal('set-layer'),
+    stepId: z.string().min(1),
+    settings: layerSettingsSchema,
+  }),
   z.strictObject({
     type: z.literal('set-source'),
     stepId: z.string().min(1),
@@ -114,9 +121,18 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         settings: step.settings,
       }
     }
+    case 'set-layer': {
+      const { step } = requireStep(pipeline, change.stepId)
+      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
+      return {
+        type: 'set-layer',
+        stepId: change.stepId,
+        settings: layerSettingsOf(step),
+      }
+    }
     case 'set-source': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (step.kind !== PipelineStepKind.Source) throw wrongKind()
+      if (!hasImage(step)) throw wrongKind()
       return {
         type: 'set-source',
         stepId: change.stepId,
@@ -138,6 +154,33 @@ function wrongKind(): InvalidChangeError {
   return new InvalidChangeError('That step does not have those settings.')
 }
 
+function hasImage(
+  step: PipelineStep,
+): step is Extract<
+  PipelineStep,
+  { kind: typeof PipelineStepKind.Source | typeof PipelineStepKind.Layer }
+> {
+  return (
+    step.kind === PipelineStepKind.Source ||
+    step.kind === PipelineStepKind.Layer
+  )
+}
+
+function layerSettingsOf(
+  step: Extract<PipelineStep, { kind: typeof PipelineStepKind.Layer }>,
+): LayerSettings {
+  const { opacity, blend, fit, scale, rotation, anchor, x, y } = step
+  return { opacity, blend, fit, scale, rotation, anchor, x, y }
+}
+
+function requireNotImage(pipeline: Pipeline, stepId: string): void {
+  if (requireStep(pipeline, stepId).step.kind === PipelineStepKind.Source) {
+    throw new InvalidChangeError(
+      'The document’s image stays where it is. Replace it to use another.',
+    )
+  }
+}
+
 function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
   switch (change.type) {
     case 'add-step':
@@ -146,10 +189,10 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       }
       return insertStep(pipeline, change.step, change.index)
     case 'remove-step':
-      requireStep(pipeline, change.stepId)
+      requireNotImage(pipeline, change.stepId)
       return removeStep(pipeline, change.stepId)
     case 'move-step':
-      requireStep(pipeline, change.stepId)
+      requireNotImage(pipeline, change.stepId)
       return moveStep(pipeline, change.stepId, change.to)
     case 'set-options': {
       const { step } = requireStep(pipeline, change.stepId)
@@ -170,13 +213,19 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
         }),
       )
     }
+    case 'set-layer': {
+      const { step } = requireStep(pipeline, change.stepId)
+      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
+      return replaceStep(pipeline, { ...step, ...change.settings })
+    }
     case 'set-source': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (step.kind !== PipelineStepKind.Source) throw wrongKind()
+      if (!hasImage(step)) throw wrongKind()
       return replaceStep(pipeline, { ...step, sourceId: change.sourceId })
     }
     case 'set-enabled':
-      requireStep(pipeline, change.stepId)
+      if (!change.enabled) requireNotImage(pipeline, change.stepId)
+      else requireStep(pipeline, change.stepId)
       return setStepEnabled(pipeline, change.stepId, change.enabled)
   }
 }

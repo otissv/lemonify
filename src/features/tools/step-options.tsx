@@ -6,22 +6,24 @@ import type { AiCatalogue } from '@/features/ai/ai-tools'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type {
   AiStep,
+  LayerStep,
   SharpStep,
   SourceStep,
 } from '@/features/pipeline/pipeline'
+import type { LayerSettings } from '@/features/pipeline/layer'
 import {
   setAiSettings,
+  setLayerSettings,
   setSharpOptions,
   setStepSource,
 } from '@/features/pipeline/pipeline-actions'
-import { imagesOpenedBefore } from '@/features/pipeline/opened-images'
+import { LayerSettingsForm } from '@/features/tools/layer-settings-form'
 import { formatSize } from '@/lib/format-size'
 import { pipelineStepLabel } from '@/features/pipeline/step-problems'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { useStepDraft } from '@/features/pipeline/use-step-draft'
 import { UpscaleSettingsForm } from '@/features/upscale/upscale-settings-form'
 import type { UpscaleSettings } from '@/features/upscale/upscale-settings'
-import { ImageChoicesContext } from '@/features/workflows/fields/image-choices'
 import { ImagePicker } from '@/features/workflows/fields/image-picker'
 import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
 import { sourceImageUrl } from '@/features/documents/image-urls'
@@ -36,13 +38,12 @@ interface StepOptionsProps {
 interface SharpStepOptionsProps {
   documentId: string
   step: SharpStep
-  /** The images the steps before this one open: the only second images it can use. */
-  images: ReadonlyArray<SourceSummary>
 }
 
-interface SourceStepOptionsProps {
+interface ImageStepOptionsProps {
   documentId: string
-  step: SourceStep
+  /** The document's image or a layer. */
+  step: SourceStep | LayerStep
   source: SourceSummary | undefined
 }
 
@@ -61,11 +62,18 @@ function imageMeta(source: SourceSummary): string {
   return `${source.width} × ${source.height} px · ${type} · ${formatSize(source.bytes)}`
 }
 
-function SourceStepOptions({
+function sourceOf(
+  sources: ReadonlyArray<SourceSummary>,
+  sourceId: string,
+): SourceSummary | undefined {
+  return sources.find(({ id }) => id === sourceId)
+}
+
+function ImageStepOptions({
   documentId,
   step,
   source,
-}: SourceStepOptionsProps): React.JSX.Element {
+}: ImageStepOptionsProps): React.JSX.Element {
   const stepId = step.id
 
   function handlePick(sourceId: string): void {
@@ -105,7 +113,6 @@ function SourceStepOptions({
 function SharpStepOptions({
   documentId,
   step,
-  images,
 }: SharpStepOptionsProps): React.JSX.Element {
   const stepId = step.id
   const { draft, change, flush } = useStepDraft<SharpOptions>(
@@ -118,10 +125,39 @@ function SharpStepOptions({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them
     <div onBlur={flush}>
-      <ImageChoicesContext.Provider value={images}>
-        <SharpOptionsForm op={step.op} options={draft} onChange={change} />
-      </ImageChoicesContext.Provider>
+      <SharpOptionsForm op={step.op} options={draft} onChange={change} />
     </div>
+  )
+}
+
+function LayerStepOptions({
+  documentId,
+  step,
+  source,
+}: ImageStepOptionsProps & { step: LayerStep }): React.JSX.Element {
+  const stepId = step.id
+  const {
+    sourceId: _sourceId,
+    id: _id,
+    enabled: _enabled,
+    kind: _kind,
+    ...current
+  } = step
+  const { draft, change, flush } = useStepDraft<LayerSettings>(
+    current,
+    (settings) => {
+      setLayerSettings(documentId, stepId, settings)
+    },
+  )
+
+  return (
+    <>
+      <ImageStepOptions documentId={documentId} step={step} source={source} />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them */}
+      <div onBlur={flush}>
+        <LayerSettingsForm settings={draft} onChange={change} />
+      </div>
+    </>
   )
 }
 
@@ -190,26 +226,23 @@ export function StepOptions({
         </p>
       )}
       {step.kind === PipelineStepKind.Source && (
-        <SourceStepOptions
+        <ImageStepOptions
           key={step.id}
           documentId={documentId}
           step={step}
-          source={preview.document.sources.find(
-            ({ id }) => id === step.sourceId,
-          )}
+          source={sourceOf(preview.document.sources, step.sourceId)}
+        />
+      )}
+      {step.kind === PipelineStepKind.Layer && (
+        <LayerStepOptions
+          key={step.id}
+          documentId={documentId}
+          step={step}
+          source={sourceOf(preview.document.sources, step.sourceId)}
         />
       )}
       {step.kind === PipelineStepKind.Sharp && (
-        <SharpStepOptions
-          key={step.id}
-          documentId={documentId}
-          step={step}
-          images={imagesOpenedBefore(
-            preview.pipeline,
-            step.id,
-            preview.document.sources,
-          )}
-        />
+        <SharpStepOptions key={step.id} documentId={documentId} step={step} />
       )}
       {step.kind === PipelineStepKind.Ai &&
         step.tool === AiToolId.Upscale &&

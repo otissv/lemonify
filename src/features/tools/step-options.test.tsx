@@ -8,8 +8,8 @@ import { changeDocument } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
 import {
   createAiStep,
+  createLayerStep,
   createSharpStep,
-  createSourceStep,
 } from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { addStepAfter } from '@/features/pipeline/pipeline-actions'
@@ -169,41 +169,93 @@ describe('StepOptions', () => {
   })
 
   describe('a step that uses a second image', () => {
-    it('offers only the images opened before it', async () => {
+    beforeEach(() => {
+      useSourcesStore.setState(INITIAL_SOURCES_STATE)
+    })
+
+    it('offers every image in the library, not only those the document uses', async () => {
       const mask = {
         ...documentView().source,
         id: 'src-mask',
         fileName: 'mask.png',
       }
-      const unopened = { ...mask, id: 'src-x', fileName: 'unopened.png' }
-      vi.mocked(listSources).mockResolvedValue([mask, unopened])
-      const view = {
-        ...documentView([createSourceStep('src-mask')]),
-        sources: [documentView().source, mask],
-      }
+      vi.mocked(listSources).mockResolvedValue([mask])
+      const view = documentView()
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
       const user = userEvent.setup()
-      const boolean = createSharpStep('boolean')
-      addStepAfter(DOCUMENT_ID, boolean)
+      addStepAfter(DOCUMENT_ID, createSharpStep('boolean'))
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
       )
 
       await user.click(
         await screen.findByRole('button', {
-          name: 'Use an opened image for operand',
+          name: 'Choose an image for operand',
         }),
       )
 
       expect(
         await screen.findByRole('menuitem', { name: 'mask.png' }),
       ).toBeVisible()
-      expect(screen.getByRole('menuitem', { name: 'one.png' })).toBeVisible()
       expect(
-        screen.queryByRole('menuitem', { name: 'unopened.png' }),
-      ).not.toBeInTheDocument()
-      expect(screen.queryByText(/Upload operand/)).not.toBeInTheDocument()
+        screen.getByRole('menuitem', { name: 'Choose from library…' }),
+      ).toBeVisible()
+    })
+  })
+
+  describe('a layer', () => {
+    beforeEach(() => {
+      useSourcesStore.setState(INITIAL_SOURCES_STATE)
+      vi.mocked(listSources).mockResolvedValue([])
+    })
+
+    it('shows its image and its settings under its name', () => {
+      const layer = createLayerStep('src-mask')
+      const view = documentView([layer])
+      loadDocumentIntoEditor({
+        ...view,
+        sources: [
+          view.source,
+          { ...view.source, id: 'src-mask', fileName: 'mask.png' },
+        ],
+      })
+      useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      expect(screen.getByRole('heading', { name: 'Layer' })).toBeVisible()
+      expect(screen.getByText('mask.png')).toBeVisible()
+      expect(screen.getByRole('slider', { name: 'Opacity' })).toBeVisible()
+      expect(screen.getByRole('combobox', { name: 'Blend mode' })).toBeVisible()
+    })
+
+    it('saves a changed setting on the layer as one change', async () => {
+      const layer = createLayerStep('src-mask')
+      const view = documentView([layer])
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
+      const user = userEvent.setup()
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      await user.click(screen.getByRole('combobox', { name: 'Blend mode' }))
+      await user.click(screen.getByRole('option', { name: 'Multiply' }))
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: {
+              type: 'set-layer',
+              stepId: layer.id,
+              settings: expect.objectContaining({ blend: 'multiply' }),
+            },
+          }),
+        })
+      })
     })
   })
 

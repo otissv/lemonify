@@ -12,6 +12,7 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
 import {
   createAiStep,
+  createLayerStep,
   createSharpStep,
   createSourceStep,
 } from '@/features/pipeline/pipeline'
@@ -74,24 +75,25 @@ async function runAiStep(documentId: string, stepId: string): Promise<void> {
   throw new Error('The AI step did not finish in time.')
 }
 
-/** A document with a mask opened as a second image, a composite using it, and an upscale that has run. */
+/** A document with a mask as a layer, a boolean step using it as a second image, and an upscale that has run. */
 async function makeDocument() {
   const base = await t.uploadImage(t.ann, '#336699', 'base.png')
   const mask = await t.uploadImage(t.ann, '#cc0000', 'mask.png')
   const created = await t.app.documents.create(t.ann, base.id, 'Collage')
-  const open = createSourceStep(mask.id)
-  const composite = createSharpStep('composite', {
-    images: [{ input: mask.id, blend: 'over' }],
+  const layer = createLayerStep(mask.id)
+  const boolean = createSharpStep('boolean', {
+    operand: mask.id,
+    operator: 'and',
   })
   const upscale = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
-  await change(created.id, { steps: [open, composite, upscale] })
+  await change(created.id, { steps: [layer, boolean, upscale] })
   await runAiStep(created.id, upscale.id)
-  return { base, mask, created, open, composite, upscale }
+  return { base, mask, created, layer, boolean, upscale }
 }
 
 describe('DocumentBundleService', () => {
   it('exports a document as one file and imports it for another User', async () => {
-    const { base, mask, created, open, composite, upscale } =
+    const { base, mask, created, layer, boolean, upscale } =
       await makeDocument()
     const bundle = file('collage.lemon')
 
@@ -111,16 +113,17 @@ describe('DocumentBundleService', () => {
     expect(view.name).toBe('Collage')
     expect(view.pipeline.steps.map(({ id }) => id)).toEqual([
       expect.any(String),
-      open.id,
-      composite.id,
+      layer.id,
+      boolean.id,
       upscale.id,
     ])
     const theirMask = view.sources.find(
       ({ fileName }) => fileName === 'mask.png',
     )
     expect(theirMask?.id).not.toBe(mask.id)
+    expect(view.pipeline.steps[1]).toMatchObject({ sourceId: theirMask?.id })
     expect(view.pipeline.steps[2]).toMatchObject({
-      options: { images: [{ input: theirMask?.id, blend: 'over' }] },
+      options: { operand: theirMask?.id },
     })
     expect(view.sources.map(({ fileName }) => fileName)).toEqual([
       'base.png',

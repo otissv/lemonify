@@ -270,7 +270,7 @@ export class DocumentService {
     }
   }
 
-  /** The Sources a Pipeline uses as second images must all be the actor's own. */
+  /** Every Source a Pipeline uses (as a layer or as a second image) must be the actor's own. */
   async #ownedOperands(actor: Actor, pipeline: Pipeline): Promise<string[]> {
     const ids = pipelineOperandSourceIds(pipeline)
     for (const id of ids) {
@@ -283,12 +283,16 @@ export class DocumentService {
     return ids
   }
 
-  /** The images the Open image steps open, in order, leaving out any that are gone. */
+  /** The images the document's image and its layers use, in order, leaving out any that are gone. */
   async #openedSources(pipeline: Pipeline): Promise<SourceSummary[]> {
     const summaries: SourceSummary[] = []
     const seen = new Set<string>()
     for (const step of pipeline.steps) {
-      if (step.kind !== PipelineStepKind.Source || seen.has(step.sourceId)) {
+      if (
+        (step.kind !== PipelineStepKind.Source &&
+          step.kind !== PipelineStepKind.Layer) ||
+        seen.has(step.sourceId)
+      ) {
         continue
       }
       seen.add(step.sourceId)

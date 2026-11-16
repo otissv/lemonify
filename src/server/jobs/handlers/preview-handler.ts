@@ -32,7 +32,7 @@ export async function ensureRender(
   try {
     await deps.engine.render({
       input: plan.basePath,
-      steps: plan.sharpSteps,
+      steps: plan.steps,
       target: {
         kind:
           kind === RenderKind.Preview

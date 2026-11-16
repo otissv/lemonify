@@ -369,9 +369,11 @@ describe('running a workflow', () => {
     })
     await t.app.scheduler.start()
     await runFinished(run.id)
-    expect(t.imageEngine.requests[0]?.steps.map(({ op }) => op)).toEqual([
-      'flip',
-    ])
+    expect(
+      t.imageEngine.requests[0]?.steps.map((step) =>
+        step.kind === 'layer' ? 'layer' : step.op,
+      ),
+    ).toEqual(['flip'])
   })
 
   it('cancels a run: waiting items are dropped and a running one queues no next segment', async () => {

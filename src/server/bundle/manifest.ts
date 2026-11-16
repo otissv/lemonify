@@ -24,7 +24,7 @@ function isUnique(values: ReadonlyArray<string>): boolean {
 const hashSchema = z.string().regex(/^[0-9a-f]{64}$/)
 const fileNameSchema = z.string().min(1).max(255)
 
-/** An image the document's Open image steps and second images use, by the id its pipeline gives it. */
+/** An image the document's image, its layers and second images use, by the id its pipeline gives it. */
 const sourceEntrySchema = z.strictObject({
   id: z.string().min(1),
   hash: hashSchema,

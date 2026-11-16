@@ -16,7 +16,7 @@ export interface ImageOpener {
   openImage: () => void
   /** Shows the library, to open one of its images as a new document. */
   openLibraryImage: () => void
-  /** Shows the library, to add an image to a document as a new Open image step. */
+  /** Shows the library, to add an image to a document as a new layer. */
   insertImage: (documentId: string) => void
   /** Shows the library, to replace the selected image of a document. */
   replaceImage: (documentId: string) => void

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { DocumentView } from '@/features/documents/document'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import { MAX_HISTORY_ENTRIES } from '@/features/pipeline/document-change'
-import { createSharpStep, createSourceStep } from '@/features/pipeline/pipeline'
+import { createLayerStep, createSharpStep } from '@/features/pipeline/pipeline'
 import { MemoryDocumentDao } from '../dao/memory/document-dao'
 import { MemorySourceDao } from '../dao/memory/source-dao'
 import { MemoryStore } from '../dao/memory/store'
@@ -217,7 +217,7 @@ describe('change', () => {
     const changed = await service.change(ANN, created.id, 0, {
       type: 'add-step',
       step: withOperand,
-      index: 0,
+      index: 1,
     })
     expect(await sourceDao.isReferenced('src-2')).toBe(true)
     expect(changed.revision).toBe(1)
@@ -230,7 +230,7 @@ describe('change', () => {
       service.change(ANN, created.id, 1, {
         type: 'add-step',
         step: stolen,
-        index: 1,
+        index: 2,
       }),
     ).rejects.toThrow('An image used by this step does not exist.')
   })
@@ -345,40 +345,53 @@ describe('delete', () => {
   })
 })
 
-describe('Open image steps', () => {
-  it('lists every image the Pipeline opens, the first being the document image', async () => {
+describe('layers', () => {
+  it('lists the images the document and its layers use, the first being the document image', async () => {
     await addSource('src-2', 'ann', 'mask.png')
     const created = await service.create(ANN, 'src-1')
-    const opened = await service.change(ANN, created.id, 0, {
+    const layered = await service.change(ANN, created.id, 0, {
       type: 'add-step',
-      step: createSourceStep('src-2'),
+      step: createLayerStep('src-2'),
       index: 1,
     })
 
-    expect(opened.sources.map(({ id }) => id)).toEqual(['src-1', 'src-2'])
-    expect(opened.source?.id).toBe('src-1')
+    expect(layered.sources.map(({ id }) => id)).toEqual(['src-1', 'src-2'])
+    expect(layered.source?.id).toBe('src-1')
     expect(await sourceDao.isReferenced('src-2')).toBe(true)
   })
 
-  it('links the image of an Open image step, and unlinks it when the step goes', async () => {
+  it('links the image of a layer, and unlinks it when the layer goes', async () => {
     await addSource('src-2')
     const created = await service.create(ANN, 'src-1')
-    const step = createSourceStep('src-2')
+    const layer = createLayerStep('src-2')
     await service.change(ANN, created.id, 0, {
       type: 'add-step',
-      step,
+      step: layer,
       index: 1,
     })
     await service.change(ANN, created.id, 1, {
       type: 'remove-step',
-      stepId: step.id,
+      stepId: layer.id,
     })
 
     expect(await sourceDao.isReferenced('src-2')).toBe(false)
     expect(await sourceDao.isReferenced('src-1')).toBe(true)
   })
 
-  it('opens another image in place, and refuses another User’s image', async () => {
+  it('refuses a layer whose image is another User’s', async () => {
+    await addSource('src-b', 'bea')
+    const created = await service.create(ANN, 'src-1')
+
+    await expect(
+      service.change(ANN, created.id, 0, {
+        type: 'add-step',
+        step: createLayerStep('src-b'),
+        index: 1,
+      }),
+    ).rejects.toThrow(NotFoundError)
+  })
+
+  it('replaces the document image in place, and refuses another User’s image', async () => {
     await addSource('src-2')
     await addSource('src-b', 'bea')
     const created = await service.create(ANN, 'src-1')
@@ -400,17 +413,16 @@ describe('Open image steps', () => {
     ).rejects.toThrow(NotFoundError)
   })
 
-  it('has no document image when no Open image step is left', async () => {
+  it('keeps the document image: it cannot be removed', async () => {
     const created = await service.create(ANN, 'src-1')
     const [open] = created.pipeline.steps
     if (open === undefined) throw new Error('no step')
-    const emptied = await service.change(ANN, created.id, 0, {
-      type: 'remove-step',
-      stepId: open.id,
-    })
 
-    expect(emptied.source).toBeNull()
-    expect(emptied.sources).toEqual([])
-    expect((await service.list(ANN))[0]?.source).toBeNull()
+    await expect(
+      service.change(ANN, created.id, 0, {
+        type: 'remove-step',
+        stepId: open.id,
+      }),
+    ).rejects.toThrow(ValidationError)
   })
 })

@@ -21,7 +21,7 @@ export interface SourceDao {
   findById(id: string): Promise<SourceRecord | null>
   /** Newest first. */
   listByOwner(ownerId: string): Promise<SourceRecord[]>
-  /** Whether a Document uses the Source as its image or as a second image. */
+  /** Whether a Document uses the Source as its image, a layer or a second image. */
   isReferenced(sourceId: string): Promise<boolean>
   /** Refused by the database while a Document uses the Source. */
   delete(id: string): Promise<void>

@@ -9,10 +9,21 @@ import { ExportFormat } from '@/features/export/export-settings'
 import type { ExportSettings } from '@/features/export/export-settings'
 import type { SharpStep } from '@/features/pipeline/pipeline'
 import { applySharpOpsBlended } from '@/lib/images/sharp/blend-tint'
-import { sharpOpSchema } from '@/lib/images/sharp/ops'
+import { applySharpOps, sharpOpSchema } from '@/lib/images/sharp/ops'
+import type { SharpOp } from '@/lib/images/sharp/ops'
 import { OUTPUT_OPTION_SCHEMAS } from '@/lib/images/sharp/output-options'
 
+import { compositeLayer } from './layer-compositor.ts'
+import type { EngineLayer, RawImage } from './layer-compositor.ts'
 import { RenderError, plainReason } from './render-error.ts'
+
+export type { EngineLayer } from './layer-compositor.ts'
+
+/** One thing the engine does to the picture: a Sharp step, or a layer placed over it. */
+export type EngineStep = SharpStep | EngineLayer
+
+const WHITE = '#ffffff'
+const CHANNELS = 4
 
 /** The longest side of a preview; images are shown no larger, whatever their real size. */
 export const PREVIEW_MAX_SIZE = 2560
@@ -42,8 +53,8 @@ export type EngineTarget =
 export interface EngineRequest {
   /** The image the steps start from. */
   input: string
-  /** Sharp steps with their second images already resolved to paths. */
-  steps: ReadonlyArray<SharpStep>
+  /** Sharp steps and layers, in order, with every image they use already resolved to a path. */
+  steps: ReadonlyArray<EngineStep>
   target: EngineTarget
   /** Exactly where to write the image. */
   output: string
@@ -99,15 +110,28 @@ function fitInside(image: Sharp, size: number): Sharp {
 function encodeExport(
   image: Sharp,
   target: Extract<EngineTarget, { kind: EngineTargetKind.Export }>,
+  savesAsJpeg: boolean,
 ): Sharp {
   const { settings, width } = target
   let next = settings.keepMetadata ? image.keepMetadata() : image
   if (width !== undefined) next = next.resize({ width })
-  if (settings.format === ExportFormat.Original) return next
-  return next.toFormat(settings.format, exportFormatOptions(settings))
+  if (settings.format === ExportFormat.Original) {
+    return savesAsJpeg ? next.flatten({ background: WHITE }) : next
+  }
+  const converted = next.toFormat(
+    settings.format,
+    exportFormatOptions(settings),
+  )
+  return settings.format === ExportFormat.Jpeg
+    ? converted.flatten({ background: WHITE })
+    : converted
 }
 
-function encode(image: Sharp, target: EngineTarget): Sharp {
+function encode(
+  image: Sharp,
+  target: EngineTarget,
+  savesAsJpeg: boolean,
+): Sharp {
   switch (target.kind) {
     case EngineTargetKind.Preview:
       return fitInside(image, PREVIEW_MAX_SIZE).webp({
@@ -120,16 +144,67 @@ function encode(image: Sharp, target: EngineTarget): Sharp {
     case EngineTargetKind.Intermediate:
       return image.png()
     case EngineTargetKind.Export:
-      return encodeExport(image, target)
+      return encodeExport(image, target, savesAsJpeg)
   }
+}
+
+/** The picture so far as RGBA pixels, so a layer can be put over it. */
+async function pixelsOf(image: Sharp): Promise<RawImage> {
+  const { data, info } = await image
+    .toColourspace('srgb')
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return { data, width: info.width, height: info.height }
+}
+
+function fromPixels(image: RawImage): Sharp {
+  return sharp(image.data, {
+    raw: { width: image.width, height: image.height, channels: CHANNELS },
+  })
+}
+
+/**
+ * Applies the steps in order. Sharp does not run the operations of one
+ * pipeline in the order they are listed (it resizes before it composites, for
+ * instance), so the picture is rendered to pixels at every layer and the next
+ * stage starts from those pixels: a step before a layer acts on the picture
+ * only, and a step after it acts on the layer too.
+ */
+async function applySteps(
+  image: Sharp,
+  steps: ReadonlyArray<EngineStep>,
+): Promise<Sharp> {
+  let pipeline = image
+  let stage: SharpOp[] = []
+  const all: SharpOp[] = []
+  for (const step of steps) {
+    if (step.kind === 'layer') {
+      pipeline = await applySharpOpsBlended(pipeline, stage, 'pixels')
+      stage = []
+      pipeline = fromPixels(
+        await compositeLayer(await pixelsOf(pipeline), step),
+      )
+      continue
+    }
+    const op = sharpOpSchema.parse({ ...step.options, op: step.op })
+    stage.push(op)
+    all.push(op)
+  }
+  pipeline = await applySharpOpsBlended(pipeline, stage, 'pixels')
+  return applySharpOps(pipeline, all, 'output')
 }
 
 async function build(request: EngineRequest): Promise<Sharp> {
   const image = sharp(request.input).autoOrient()
-  const ops = request.steps.map((step) =>
-    sharpOpSchema.parse({ ...step.options, op: step.op }),
+  const savesAsJpeg =
+    request.target.kind === EngineTargetKind.Export &&
+    (await sharp(request.input).metadata()).format === 'jpeg'
+  return encode(
+    await applySteps(image, request.steps),
+    request.target,
+    savesAsJpeg,
   )
-  return encode(await applySharpOpsBlended(image, ops), request.target)
 }
 
 /**

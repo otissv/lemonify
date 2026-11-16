@@ -74,19 +74,16 @@ describe('remapPipelineSources', () => {
     expect(remapped.steps[0]).toMatchObject({ id: open.id, sourceId: 'A' })
   })
 
-  it('renames a boolean operand, joined channels and composite layers', () => {
+  it('renames a boolean operand and joined channels', () => {
     const boolean = createSharpStep('boolean', {
       operand: 'a',
       operator: 'and',
     })
     const join = createSharpStep('joinChannel', { images: ['a', 'b'] })
     const single = createSharpStep('joinChannel', { images: 'b' })
-    const composite = createSharpStep('composite', {
-      images: [{ input: 'a', blend: 'over' }, { input: 'b' }],
-    })
 
     const { steps } = remapPipelineSources(
-      { steps: [boolean, join, single, composite] },
+      { steps: [boolean, join, single] },
       MAP,
     )
 
@@ -94,11 +91,7 @@ describe('remapPipelineSources', () => {
       ['A'],
       ['A', 'B'],
       ['B'],
-      ['A', 'B'],
     ])
-    expect(steps[3]).toMatchObject({
-      options: { images: [{ input: 'A', blend: 'over' }, { input: 'B' }] },
-    })
   })
 
   it('leaves other steps and other options alone', () => {

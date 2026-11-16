@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
-import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
-import type { AiStep } from '@/features/pipeline/pipeline'
+import {
+  createAiStep,
+  createLayerStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
+import type { AiStep, PipelineStep } from '@/features/pipeline/pipeline'
 
 import { ResultKind } from '../dao/result-dao.ts'
 import {
@@ -38,11 +42,7 @@ async function newDocument(actor = t.ann, colour?: string) {
   return t.app.documents.create(actor, source.id)
 }
 
-async function addStep(
-  documentId: string,
-  step: ReturnType<typeof createSharpStep> | AiStep,
-  actor = t.ann,
-) {
+async function addStep(documentId: string, step: PipelineStep, actor = t.ann) {
   const view = await t.app.documents.get(actor, documentId)
   return t.app.documents.change(actor, documentId, view.revision, {
     type: 'add-step',
@@ -85,7 +85,9 @@ describe('previews', () => {
     expect(done.result.pendingStepIds).toEqual([])
     const request = t.imageEngine.requests[0]
     expect(request?.target.kind).toBe(EngineTargetKind.Preview)
-    expect(request?.steps.map(({ op }) => op)).toEqual(['blur'])
+    expect(
+      request?.steps.map((step) => (step.kind === 'layer' ? 'layer' : step.op)),
+    ).toEqual(['blur'])
 
     const opened = await t.app.renders.fetch(
       t.ann,
@@ -149,9 +151,11 @@ describe('previews', () => {
     )
     if (done.result?.kind !== JobKind.Preview) throw new Error('wrong result')
     expect(done.result.pendingStepIds).toEqual([ai.id])
-    expect(t.imageEngine.requests[0]?.steps.map(({ op }) => op)).toEqual([
-      'flip',
-    ])
+    expect(
+      t.imageEngine.requests[0]?.steps.map((step) =>
+        step.kind === 'layer' ? 'layer' : step.op,
+      ),
+    ).toEqual(['flip'])
   })
 
   it('reports a step that is not set up and still renders the rest', async () => {
@@ -166,9 +170,11 @@ describe('previews', () => {
     expect(done.result.problems.map(({ stepId }) => stepId)).toEqual([
       incomplete.id,
     ])
-    expect(t.imageEngine.requests[0]?.steps.map(({ op }) => op)).toEqual([
-      'flip',
-    ])
+    expect(
+      t.imageEngine.requests[0]?.steps.map((step) =>
+        step.kind === 'layer' ? 'layer' : step.op,
+      ),
+    ).toEqual(['flip'])
   })
 
   it('fails a preview in plain words when the engine breaks, and logs the detail', async () => {
@@ -247,7 +253,9 @@ describe('AI steps', () => {
     expect(preview.result.pendingStepIds).toEqual([])
     const request = t.imageEngine.requests.at(-1)
     expect(request?.input).toContain('results')
-    expect(request?.steps.map(({ op }) => op)).toEqual(['flop'])
+    expect(
+      request?.steps.map((step) => (step.kind === 'layer' ? 'layer' : step.op)),
+    ).toEqual(['flop'])
   })
 
   it('refuses a step that is not an enabled AI step', async () => {
@@ -442,29 +450,8 @@ describe('exports', () => {
   })
 })
 
-describe('Open image steps', () => {
-  const JPEG = {
-    format: ExportFormat.Jpeg,
-    options: { quality: 70 },
-    keepMetadata: false,
-  }
-
-  it('refuses an export when no Open image step is switched on', async () => {
-    const document = await newDocument()
-    const [open] = document.pipeline.steps
-    if (open === undefined) throw new Error('no step')
-    await t.app.documents.change(t.ann, document.id, document.revision, {
-      type: 'set-enabled',
-      stepId: open.id,
-      enabled: false,
-    })
-
-    await expect(
-      t.app.renders.requestExport(t.ann, document.id, JPEG),
-    ).rejects.toThrow(/Open image/)
-  })
-
-  it('previews the first Open image step that is switched on', async () => {
+describe('the document’s image and layers', () => {
+  it('previews the image the document’s image was replaced with', async () => {
     const first = await t.uploadImage(t.ann, '#ff0000')
     const second = await t.uploadImage(t.ann, '#0000ff')
     const document = await t.app.documents.create(t.ann, first.id)
@@ -481,6 +468,53 @@ describe('Open image steps', () => {
     )
 
     expect(done.state).toBe(JobState.Done)
+  })
+
+  it('sends a layer to the engine in its place among the steps, with its image as a file', async () => {
+    const document = await newDocument()
+    const top = await t.uploadImage(t.ann, '#00ff00', 'top.png')
+    const layer = {
+      ...createLayerStep(top.id),
+      opacity: 40,
+      blend: 'multiply' as const,
+    }
+    await addStep(document.id, createSharpStep('blur', { sigma: 2 }))
+    await addStep(document.id, layer)
+
+    const done = await run(
+      await t.app.renders.requestPreview(t.ann, document.id),
+    )
+
+    expect(done.state).toBe(JobState.Done)
+    const steps = t.imageEngine.requests[0]?.steps
+    expect(
+      steps?.map((step) => (step.kind === 'layer' ? 'layer' : step.op)),
+    ).toEqual(['blur', 'layer'])
+    expect(steps?.[1]).toMatchObject({
+      kind: 'layer',
+      opacity: 40,
+      blend: 'multiply',
+      path: await t.app.sources.pathOf(t.ann, top.id),
+    })
+  })
+
+  it('thumbnails a layer as its own image', async () => {
+    const document = await newDocument()
+    const top = await t.uploadImage(t.ann, '#00ff00', 'top.png')
+    const layer = createLayerStep(top.id)
+    await addStep(document.id, layer)
+
+    const job = await t.app.renders.requestThumbnails(t.ann, document.id)
+    const done = await run(job)
+
+    if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
+    const thumbnail = done.result.thumbnails.find(
+      ({ stepId }) => stepId === layer.id,
+    )
+    expect(thumbnail?.key).not.toBeNull()
+    const request = t.imageEngine.requests.at(-1)
+    expect(request?.steps).toEqual([])
+    expect(request?.input).toBe(await t.app.sources.pathOf(t.ann, top.id))
   })
 })
 

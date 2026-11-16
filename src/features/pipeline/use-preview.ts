@@ -8,7 +8,7 @@ import {
   previewImageUrl,
   sourceImageUrl,
 } from '@/features/documents/image-urls'
-import { PipelineStepKind, hasEdits } from '@/features/pipeline/pipeline'
+import { firstSourceStep, hasEdits } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { PreviewStatus, useAppStore } from '@/store/app-store'
 
@@ -18,7 +18,7 @@ export const PREVIEW_DELAY_MS = 120
 export interface PipelinePreview {
   document: DocumentView
   pipeline: Pipeline
-  /** The image the pipeline edits: the first Open image step that is switched on. Undefined when none is. */
+  /** The document's own image. Undefined when it is gone. */
   source: SourceSummary | undefined
   /** The picture to show: the rendered result, or the image itself while there are no edits. Undefined without an image. */
   imageUrl: string | undefined
@@ -32,17 +32,13 @@ export interface PipelinePreview {
   problems: ReadonlyArray<StepProblem>
 }
 
-/** The first Open image step that is switched on, as far as the document's images are known. */
+/** The document's own image, as far as the document's images are known. */
 export function activeSource(
   pipeline: Pipeline,
   sources: ReadonlyArray<SourceSummary>,
 ): SourceSummary | undefined {
-  for (const step of pipeline.steps) {
-    if (step.kind !== PipelineStepKind.Source || !step.enabled) continue
-    const known = sources.find(({ id }) => id === step.sourceId)
-    if (known !== undefined) return known
-  }
-  return undefined
+  const first = firstSourceStep(pipeline)
+  return sources.find(({ id }) => id === first?.sourceId)
 }
 
 /**

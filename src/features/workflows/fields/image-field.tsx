@@ -2,7 +2,7 @@ import { RiCloseLine } from '@remixicon/react'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
-import { useImageNames } from '@/features/workflows/fields/image-choices'
+import { useImageNames } from '@/features/workflows/fields/image-names'
 import type { ControlProps } from '@/features/workflows/fields/control-props'
 import { ImagePicker } from '@/features/workflows/fields/image-picker'
 

@@ -113,7 +113,7 @@ describe('ImageLibrary', () => {
   it('says why an image could not be deleted, and keeps it', async () => {
     vi.mocked(listSources).mockResolvedValue([source('a')])
     vi.mocked(deleteSource).mockRejectedValue(
-      new Error('This image is used by an open image or one of its steps.'),
+      new Error('This image is used by a document or one of its steps.'),
     )
     const user = userEvent.setup()
     render(<ImageLibrary onChoose={() => {}} />)
@@ -123,7 +123,7 @@ describe('ImageLibrary', () => {
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This image is used by an open image',
+      'This image is used by a document',
     )
     expect(screen.getByText('a.png')).toBeVisible()
   })

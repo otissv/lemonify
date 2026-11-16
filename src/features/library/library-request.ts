@@ -1,7 +1,7 @@
 export enum LibraryRequestKind {
   /** Open a new document on an image. */
   Open = 'open',
-  /** Add an image to a document as an Open image step. */
+  /** Add an image to a document as a layer. */
   Insert = 'insert',
   /** Swap the image a document opens for another. */
   Replace = 'replace',
@@ -36,14 +36,14 @@ export function describeLibraryRequest(
       return {
         title: 'Insert image',
         description:
-          'Add an image from your library, or upload one, before the selected step, so that step and the ones after it can use it.',
+          'Add an image from your library, or upload one, as a layer on top of the selected step.',
         uploadLabel: UPLOAD_LABEL,
       }
     case LibraryRequestKind.Replace:
       return {
         title: 'Replace image',
         description:
-          'Replace the selected image, or the document’s own image, with one from your library, or upload one.',
+          'Replace the selected layer, or the document’s own image, with one from your library, or upload one.',
         uploadLabel: UPLOAD_LABEL,
       }
   }

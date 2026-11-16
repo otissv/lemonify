@@ -46,7 +46,7 @@ export const AI_CATALOGUES: AiCatalogues = [
   },
 ]
 
-/** The Open image step every document starts with, with an id that stays the same between calls. */
+/** The image step every document starts with, with an id that stays the same between calls. */
 export function openImageStep(sourceId: string): SourceStep {
   return {
     ...createSourceStep(sourceId),

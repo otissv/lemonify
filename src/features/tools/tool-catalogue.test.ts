@@ -28,10 +28,14 @@ describe('tool catalogue', () => {
     ])
   })
 
-  it('has every editing tool, 9 geometry, 18 filter and 10 colour, plus Upscale', () => {
+  it('has every editing tool, 9 geometry, 18 filter and 9 colour, plus Upscale', () => {
     const counts = TOOL_GROUPS.map(({ tools }) => tools.length)
 
-    expect(counts).toEqual([1, 9, 18, 10])
+    expect(counts).toEqual([1, 9, 18, 9])
+  })
+
+  it('leaves out Composite, which layers do in a document', () => {
+    expect(names(TOOL_GROUPS)).not.toContain('Composite')
   })
 
   it('leaves out the Output group, which Export covers', () => {
@@ -45,7 +49,6 @@ describe('tool catalogue', () => {
     const all = names(TOOL_GROUPS)
 
     for (const label of [
-      'Composite',
       'Join channel',
       'Boolean',
       'Affine',

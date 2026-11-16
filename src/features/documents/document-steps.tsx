@@ -20,7 +20,12 @@ function sourceNameOf(
   step: PipelineStep,
   sources: ReadonlyArray<SourceSummary> | undefined,
 ): string | undefined {
-  if (step.kind !== PipelineStepKind.Source) return undefined
+  if (
+    step.kind !== PipelineStepKind.Source &&
+    step.kind !== PipelineStepKind.Layer
+  ) {
+    return undefined
+  }
   return sources?.find(({ id }) => id === step.sourceId)?.fileName
 }
 
@@ -29,7 +34,7 @@ interface DocumentStepsProps {
   name: string
 }
 
-/** The steps of one document, in order: select, switch off, delete, and reorder by dragging or with the buttons. */
+/** The steps of one document, the last on top as in a layer panel, so the document's image is the bottom row: select, switch off, delete, and reorder by dragging or with the buttons. */
 export function DocumentSteps({
   documentId,
   name,
@@ -46,6 +51,7 @@ export function DocumentSteps({
   useStepThumbnails(documentId, true)
 
   const steps = preview?.pipeline.steps ?? []
+  const topFirst = [...steps].reverse()
   if (steps.length === 0) {
     return (
       <p className="px-2 py-1 text-caption text-muted-foreground">
@@ -102,19 +108,25 @@ export function DocumentSteps({
 
   return (
     <ul aria-label={`Steps of ${name}`} className="flex flex-col gap-1">
-      {steps.map((step, position) => {
+      {topFirst.map((step) => {
+        const position = steps.indexOf(step)
+        const isImage = step.kind === PipelineStepKind.Source
         const key = thumbnails?.find(({ stepId }) => stepId === step.id)?.key
         return (
           <li
             key={step.id}
-            draggable
+            draggable={!isImage}
             onDragStart={(event) => {
               handleDragStart(event, step.id)
             }}
-            onDragOver={handleDragOver}
-            onDrop={(event) => {
-              handleDrop(event, position)
-            }}
+            onDragOver={isImage ? undefined : handleDragOver}
+            onDrop={
+              isImage
+                ? undefined
+                : (event) => {
+                    handleDrop(event, position)
+                  }
+            }
             onDragEnd={handleDragEnd}
           >
             <StepRow

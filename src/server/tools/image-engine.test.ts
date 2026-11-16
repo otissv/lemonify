@@ -6,6 +6,7 @@ import sharp from 'sharp'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ExportFormat } from '@/features/export/export-settings'
+import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 
 import {
@@ -184,5 +185,183 @@ describe('SharpImageEngine', () => {
       output: input,
     })
     expect((await sharp(input).metadata()).format).toBe('png')
+  })
+
+  describe('layers', () => {
+    async function colourFile(
+      name: string,
+      colour: string,
+      size = 4,
+      channels: 3 | 4 = 3,
+    ): Promise<string> {
+      const file = path.join(directory, name)
+      await sharp({
+        create: { width: size, height: size, channels, background: colour },
+      })
+        .png()
+        .toFile(file)
+      return file
+    }
+
+    async function render(
+      steps: Parameters<typeof engine.render>[0]['steps'],
+      base: string,
+    ): Promise<Buffer> {
+      const output = path.join(directory, 'out.png')
+      await engine.render({
+        input: base,
+        steps,
+        target: { kind: EngineTargetKind.Intermediate },
+        output,
+      })
+      return sharp(output).raw().ensureAlpha().toBuffer()
+    }
+
+    function layerOf(file: string, settings = {}) {
+      return {
+        kind: 'layer' as const,
+        path: file,
+        ...DEFAULT_LAYER_SETTINGS,
+        ...settings,
+      }
+    }
+
+    const at = (raw: Buffer, x: number, y: number, size = 8) => [
+      ...raw.subarray((y * size + x) * 4, (y * size + x) * 4 + 4),
+    ]
+
+    it('draws a layer over the picture', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+      const layer = await colourFile('layer.png', '#0000ff', 2)
+
+      const raw = await render([layerOf(layer)], base)
+
+      expect(at(raw, 4, 4)).toEqual([0, 0, 255, 255])
+      expect(at(raw, 0, 0)).toEqual([255, 0, 0, 255])
+    })
+
+    it('applies a step placed before a layer to the picture only', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+      const layer = await colourFile('layer.png', '#0000ff', 2)
+
+      const raw = await render(
+        [createSharpStep('negate', { alpha: false }), layerOf(layer)],
+        base,
+      )
+
+      expect(at(raw, 0, 0)).toEqual([0, 255, 255, 255])
+      expect(at(raw, 4, 4)).toEqual([0, 0, 255, 255])
+    })
+
+    it('applies a step placed after a layer to the layer as well', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+      const layer = await colourFile('layer.png', '#0000ff', 2)
+
+      const raw = await render(
+        [layerOf(layer), createSharpStep('negate', { alpha: false })],
+        base,
+      )
+
+      expect(at(raw, 0, 0)).toEqual([0, 255, 255, 255])
+      expect(at(raw, 4, 4)).toEqual([255, 255, 0, 255])
+    })
+
+    it('stacks layers in order, the later one on top', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+      const blue = await colourFile('blue.png', '#0000ff', 4)
+      const green = await colourFile('green.png', '#00ff00', 2)
+
+      const raw = await render([layerOf(blue), layerOf(green)], base)
+
+      expect(at(raw, 4, 4)).toEqual([0, 255, 0, 255])
+      expect(at(raw, 2, 2)).toEqual([0, 0, 255, 255])
+    })
+
+    it('measures a layer against the picture as the steps before it left it', async () => {
+      const base = await colourFile('base.png', '#ff0000', 8)
+      const layer = await colourFile('layer.png', '#0000ff', 8)
+      const output = path.join(directory, 'out.png')
+
+      await engine.render({
+        input: base,
+        steps: [
+          createSharpStep('resize', { width: 4, height: 4 }),
+          layerOf(layer),
+        ],
+        target: { kind: EngineTargetKind.Intermediate },
+        output,
+      })
+
+      const meta = await sharp(output).metadata()
+      expect([meta.width, meta.height]).toEqual([4, 4])
+      const raw = await sharp(output).raw().ensureAlpha().toBuffer()
+      expect(at(raw, 0, 0, 4)).toEqual([0, 0, 255, 255])
+    })
+
+    it('flattens transparency onto white when the picture is saved as a JPEG', async () => {
+      const base = await colourFile(
+        'clear.png',
+        { r: 0, g: 0, b: 0, alpha: 0 } as never,
+        4,
+        4,
+      )
+      const layer = await colourFile('layer.png', '#0000ff', 2)
+      const output = path.join(directory, 'out.jpg')
+
+      await engine.render({
+        input: base,
+        steps: [layerOf(layer)],
+        target: {
+          kind: EngineTargetKind.Export,
+          settings: {
+            format: ExportFormat.Jpeg,
+            options: {},
+            keepMetadata: false,
+          },
+        },
+        output,
+      })
+
+      const raw = await sharp(output).raw().toBuffer()
+      expect(raw[0]).toBeGreaterThan(245)
+      expect(raw[1]).toBeGreaterThan(245)
+      expect(raw[2]).toBeGreaterThan(245)
+    })
+
+    it('keeps transparency in a PNG export', async () => {
+      const base = await colourFile(
+        'clear.png',
+        { r: 0, g: 0, b: 0, alpha: 0 } as never,
+        4,
+        4,
+      )
+      const layer = await colourFile('layer.png', '#0000ff', 2)
+      const output = path.join(directory, 'out.png')
+
+      await engine.render({
+        input: base,
+        steps: [layerOf(layer)],
+        target: {
+          kind: EngineTargetKind.Export,
+          settings: {
+            format: ExportFormat.Png,
+            options: {},
+            keepMetadata: false,
+          },
+        },
+        output,
+      })
+
+      const raw = await sharp(output).raw().ensureAlpha().toBuffer()
+      expect(raw[3]).toBe(0)
+    })
+
+    it('says plainly when a layer’s image cannot be read', async () => {
+      const base = await colourFile('base.png', '#ff0000', 4)
+
+      await expect(
+        render([layerOf(path.join(directory, 'gone.png'))], base),
+      ).rejects.toBeInstanceOf(RenderError)
+    })
   })
 })

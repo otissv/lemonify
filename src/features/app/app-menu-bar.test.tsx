@@ -288,7 +288,7 @@ describe('AppMenuBar', () => {
       }
     })
 
-    it('inserts an image from the library as a new Open image step before the selected step', async () => {
+    it('inserts an image from the library as a layer on top of the selected step', async () => {
       const view = documentView([BLUR])
       vi.mocked(getDocument).mockResolvedValue(view)
       echoChanges(vi.mocked(changeDocument), view)
@@ -313,10 +313,10 @@ describe('AppMenuBar', () => {
             change: {
               type: 'add-step',
               step: expect.objectContaining({
-                kind: 'source',
+                kind: 'layer',
                 sourceId: 'src-other',
               }),
-              index: 1,
+              index: 2,
             },
           }),
         })

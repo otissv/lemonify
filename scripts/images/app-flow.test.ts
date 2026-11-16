@@ -139,6 +139,60 @@ describe('document files through the CLI', () => {
   })
 })
 
+describe('layers through the CLI', () => {
+  async function pixel(file: string, x: number, y: number): Promise<number[]> {
+    const { data, info } = await sharp(file)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const start = (y * info.width + x) * info.channels
+    return [...data.subarray(start, start + info.channels)]
+  }
+
+  it('blends a half-transparent layer into the document’s image where it lies, and leaves the rest alone', async () => {
+    const base = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('base.png'),
+    )
+    const stamp = path.join(workDir, 'stamp.png')
+    await sharp({
+      create: {
+        width: 16,
+        height: 16,
+        channels: 4,
+        background: { r: 0, g: 0, b: 255, alpha: 0.5 },
+      },
+    })
+      .png()
+      .toFile(stamp)
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      stamp,
+    )
+    const { document } = await cli<Doc>('document', 'create', base.source.id)
+    await cli<Doc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--layer',
+      source.id,
+      '--settings',
+      '{"fit":"original","anchor":"northwest"}',
+    )
+
+    const out = path.join(workDir, 'layered.png')
+    await cli('export', document.id, '--out', out, '--format', 'png')
+
+    const [r, g, b, a] = await pixel(out, 4, 4)
+    expect(a).toBe(255)
+    expect([r, g, b]).toEqual([110, 25, 153])
+    expect(await pixel(out, 40, 40)).toEqual([221, 51, 51, 255])
+  })
+})
+
 describe('workflows through the CLI', () => {
   it('runs a workflow with --follow and writes the images with a manifest', async () => {
     const { source } = await cli<{ source: { id: string } }>(
@@ -210,24 +264,68 @@ describe('workflows through the CLI', () => {
       'step',
       'add',
       document.id,
-      '--source',
+      '--layer',
       mask.source.id,
+      '--settings',
+      '{"opacity":40,"blend":"multiply"}',
     )
-    const opened = added.document.pipeline.steps.at(-1)
+    const layer = added.document.pipeline.steps.at(-1)
     expect(added.document.pipeline.steps).toHaveLength(2)
+    expect(layer).toMatchObject({
+      kind: 'layer',
+      sourceId: mask.source.id,
+      opacity: 40,
+      blend: 'multiply',
+      fit: 'inside',
+      anchor: 'centre',
+    })
+
+    const restyled = await cli<Doc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      layer?.id ?? '',
+      '--settings',
+      '{"rotation":90,"anchor":"north"}',
+    )
+    expect(restyled.document.pipeline.steps.at(-1)).toMatchObject({
+      kind: 'layer',
+      opacity: 100,
+      rotation: 90,
+      anchor: 'north',
+    })
 
     const swapped = await cli<Doc>(
       'document',
       'step',
       'set',
       document.id,
-      opened?.id ?? '',
+      layer?.id ?? '',
       '--source',
       base.source.id,
     )
     expect(swapped.document.pipeline.steps.at(-1)).toMatchObject({
-      kind: 'source',
+      kind: 'layer',
       sourceId: base.source.id,
     })
+
+    const first = swapped.document.pipeline.steps.at(0)
+    const replaced = await cli<Doc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      first?.id ?? '',
+      '--source',
+      mask.source.id,
+    )
+    expect(replaced.document.pipeline.steps.at(0)).toMatchObject({
+      kind: 'source',
+      sourceId: mask.source.id,
+    })
+    await expect(
+      cli('document', 'step', 'remove', document.id, first?.id ?? ''),
+    ).rejects.toThrow(/stays where it is/)
   })
 })

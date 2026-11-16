@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import type { AiStep, SharpStep } from '@/features/pipeline/pipeline'
+import type { AiStep, LayerStep, SharpStep } from '@/features/pipeline/pipeline'
 
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)
@@ -13,11 +13,20 @@ function sortKeys(value: unknown): unknown {
   return sorted
 }
 
-function stepIdentity(step: SharpStep | AiStep): unknown {
-  if (step.kind === PipelineStepKind.Sharp) {
-    return { kind: step.kind, op: step.op, options: step.options }
+/** A step as the key sees it. A layer's `sourceId` must already be the image's content hash, so the key means the same wherever the image is stored. */
+export type KeyedStep = SharpStep | LayerStep | AiStep
+
+function stepIdentity(step: KeyedStep): unknown {
+  switch (step.kind) {
+    case PipelineStepKind.Sharp:
+      return { kind: step.kind, op: step.op, options: step.options }
+    case PipelineStepKind.Layer: {
+      const { id: _id, enabled: _enabled, ...identity } = step
+      return identity
+    }
+    case PipelineStepKind.Ai:
+      return { kind: step.kind, tool: step.tool, settings: step.settings }
   }
-  return { kind: step.kind, tool: step.tool, settings: step.settings }
 }
 
 /**
@@ -28,7 +37,7 @@ function stepIdentity(step: SharpStep | AiStep): unknown {
  */
 export function renderKey(
   sourceHash: string,
-  steps: ReadonlyArray<SharpStep | AiStep>,
+  steps: ReadonlyArray<KeyedStep>,
 ): string {
   const identity = sortKeys({
     source: sourceHash,

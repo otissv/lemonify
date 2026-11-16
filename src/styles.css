@@ -256,3 +256,15 @@
   background: var(--color-surface-dark);
   color: var(--color-on-dark);
 }
+
+/* Behind a picture, so that transparent and partly transparent pixels can be seen. The greys stay the same in light and dark themes, since they stand for "nothing here" rather than for a colour of the page. */
+@utility bg-checkerboard {
+  background-color: #ffffff;
+  background-image: conic-gradient(
+    #d4d4d4 25%,
+    transparent 0 50%,
+    #d4d4d4 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}

@@ -18,7 +18,7 @@ import type {
   JsonValue,
 } from '@/features/workflows/fields/control-props'
 import { ImagePicker } from '@/features/workflows/fields/image-picker'
-import { useImageNames } from '@/features/workflows/fields/image-choices'
+import { useImageNames } from '@/features/workflows/fields/image-names'
 import { BLEND_MODES } from '@/lib/images/sharp/input-options'
 
 const DEFAULT_CHOICE = '__default__'

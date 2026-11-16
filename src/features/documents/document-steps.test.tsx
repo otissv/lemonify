@@ -11,7 +11,11 @@ import {
 } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
 import { cancelJob } from '@/features/jobs/job-functions'
-import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
+import {
+  createAiStep,
+  createLayerStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import {
   requestPreview,
@@ -104,26 +108,60 @@ describe('DocumentSteps', () => {
     expect(await screen.findByText('No edits yet.')).toBeVisible()
   })
 
-  it('lists the Open image step first, with the name of the image it opens', async () => {
+  it('lists the document’s image last, as the bottom layer, with the name of its file', async () => {
     const list = await showSteps([BLUR], userEvent.setup())
 
-    const [open] = within(list).getAllByRole('listitem')
-    expect(
-      within(open as HTMLElement).getByText('Open image'),
-    ).toBeInTheDocument()
-    expect(within(open as HTMLElement).getByText('one.png')).toBeInTheDocument()
+    const items = within(list).getAllByRole('listitem')
+    const image = items.at(-1) as HTMLElement
+    expect(within(image).getByText('Image')).toBeInTheDocument()
+    expect(within(image).getByText('one.png')).toBeInTheDocument()
   })
 
-  it('lists the steps in order with what is set on each', async () => {
+  it('cannot hide, move or delete the document’s image', async () => {
+    const list = await showSteps([BLUR], userEvent.setup())
+
+    const image = within(list).getAllByRole('listitem').at(-1) as HTMLElement
+    expect(
+      within(image).queryByRole('button', { name: /Hide|Delete|Move/ }),
+    ).toBeNull()
+    expect(image).not.toHaveAttribute('draggable', 'true')
+  })
+
+  it('lists the steps with the last on top, with what is set on each', async () => {
     const list = await showSteps([BLUR, FLIP], userEvent.setup())
 
     const names = within(list)
       .getAllByRole('button', { pressed: undefined })
       .map((button) => button.getAttribute('aria-label'))
       .filter((name) => name === 'Blur' || name === 'Flip')
-    expect(names).toEqual(['Blur', 'Flip'])
+    expect(names).toEqual(['Flip', 'Blur'])
     expect(within(list).getByText('1 option set')).toBeVisible()
     expect(within(list).getByText('Default options')).toBeVisible()
+  })
+
+  it('shows a layer with its image, opacity and blend', async () => {
+    const layer = {
+      ...createLayerStep('second'),
+      opacity: 50,
+      blend: 'multiply' as const,
+    }
+    const user = userEvent.setup()
+    const view = documentView([layer])
+    const second = { ...view.source, id: 'second', fileName: 'logo.png' }
+    vi.mocked(getDocument).mockResolvedValue({
+      ...view,
+      sources: [view.source, second],
+    })
+    await renderApp(`/documents/${DOCUMENT_ID}`)
+    await user.click(
+      await screen.findByRole('button', { name: 'Show steps of one.png' }),
+    )
+
+    const list = await screen.findByRole('list', { name: 'Steps of one.png' })
+
+    expect(
+      await within(list).findByText('logo.png · 50% · multiply'),
+    ).toBeVisible()
   })
 
   it('switches a step off, sending one change to the server', async () => {
@@ -167,11 +205,11 @@ describe('DocumentSteps', () => {
     })
   })
 
-  it('moves a step down with its button', async () => {
+  it('moves a step up, which is later in the pipeline, with its button', async () => {
     const user = userEvent.setup()
     const list = await showSteps([BLUR, FLIP], user)
 
-    await user.click(screen.getByRole('button', { name: 'Move Blur down' }))
+    await user.click(screen.getByRole('button', { name: 'Move Blur up' }))
 
     await waitFor(() => {
       expect(changeDocument).toHaveBeenCalledWith({
@@ -186,7 +224,17 @@ describe('DocumentSteps', () => {
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'))
       .filter((name) => name === 'Blur' || name === 'Flip')
-    expect(order).toEqual(['Flip', 'Blur'])
+    expect(order).toEqual(['Blur', 'Flip'])
+  })
+
+  it('offers no move that would leave the pipeline', async () => {
+    const user = userEvent.setup()
+    await showSteps([BLUR, FLIP], user)
+
+    expect(screen.getByRole('button', { name: 'Move Flip up' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Move Blur down' }),
+    ).toBeDisabled()
   })
 
   it('selects a step and shows its options', async () => {

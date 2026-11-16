@@ -24,7 +24,7 @@ export type DocumentPlannerDependencies = {
 
 /**
  * Gets a Document ready for rendering: loads it as the Job saw it and plans
- * its Pipeline over the images its Open image steps open. Used by every handler and
+ * its Pipeline over the document's image and its layers. Used by every handler and
  * by the services that decide what to queue, so a plan means one thing.
  */
 export class DocumentPlanner {

@@ -9,7 +9,8 @@ import {
 
 const GENERAL = '_'
 
-export const OPEN_IMAGE_LABEL = 'Open image'
+export const IMAGE_LABEL = 'Image'
+export const LAYER_LABEL = 'Layer'
 
 /**
  * Why a step cannot be applied yet, in plain words, or undefined when it is
@@ -29,8 +30,14 @@ export function stepProblem(step: PipelineStep): string | undefined {
 
 /** "Blur" or "Auto orient": the name a step is shown by. */
 export function pipelineStepLabel(step: PipelineStep): string {
-  if (step.kind === PipelineStepKind.Source) return OPEN_IMAGE_LABEL
-  return step.kind === PipelineStepKind.Sharp
-    ? opLabel(step.op)
-    : AI_TOOLS[step.tool].label
+  switch (step.kind) {
+    case PipelineStepKind.Source:
+      return IMAGE_LABEL
+    case PipelineStepKind.Layer:
+      return LAYER_LABEL
+    case PipelineStepKind.Sharp:
+      return opLabel(step.op)
+    case PipelineStepKind.Ai:
+      return AI_TOOLS[step.tool].label
+  }
 }

@@ -1,0 +1,113 @@
+import sharp from 'sharp'
+
+import type { LayerSettings } from '@/features/pipeline/layer'
+
+import {
+  layerPlacement,
+  layerSize,
+  visibleRegion,
+} from '../render/layer-geometry.ts'
+
+const CHANNELS = 4
+const ALPHA = 3
+const PERCENT = 100
+const FULL_TURN = 360
+const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 }
+
+/** 8-bit RGBA pixels, rows from the top, alpha not premultiplied. */
+export interface RawImage {
+  data: Buffer
+  width: number
+  height: number
+}
+
+/** A layer with its image resolved to a file. */
+export interface EngineLayer extends LayerSettings {
+  kind: 'layer'
+  path: string
+}
+
+async function decode(file: string): Promise<RawImage> {
+  const { data, info } = await sharp(file)
+    .autoOrient()
+    .toColourspace('srgb')
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return { data, width: info.width, height: info.height }
+}
+
+async function place(
+  image: RawImage,
+  width: number,
+  height: number,
+  rotation: number,
+): Promise<RawImage> {
+  let pipeline = sharp(image.data, {
+    raw: { width: image.width, height: image.height, channels: CHANNELS },
+  }).resize(width, height, { fit: 'fill' })
+  if (rotation % FULL_TURN !== 0) {
+    pipeline = pipeline.rotate(rotation, { background: TRANSPARENT })
+  }
+  const { data, info } = await pipeline
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return { data, width: info.width, height: info.height }
+}
+
+async function crop(
+  image: RawImage,
+  region: { left: number; top: number; width: number; height: number },
+): Promise<RawImage> {
+  const { data, info } = await sharp(image.data, {
+    raw: { width: image.width, height: image.height, channels: CHANNELS },
+  })
+    .extract(region)
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return { data, width: info.width, height: info.height }
+}
+
+/** Multiplies every pixel's alpha by `opacity` (a percentage); the colours are untouched. */
+function fade(image: RawImage, opacity: number): void {
+  if (opacity >= PERCENT) return
+  const factor = opacity / PERCENT
+  for (let at = ALPHA; at < image.data.length; at += CHANNELS) {
+    image.data[at] = Math.round((image.data[at] ?? 0) * factor)
+  }
+}
+
+/**
+ * Puts a layer over the canvas and answers with the new picture, which is the
+ * size of the canvas: what hangs over its edge is cut off. The layer's image
+ * is oriented, sized by its fit and scale, turned, faded and then blended by
+ * its alpha and blend mode, so transparent parts show what is under them.
+ */
+export async function compositeLayer(
+  canvas: RawImage,
+  layer: EngineLayer,
+): Promise<RawImage> {
+  const image = await decode(layer.path)
+  const size = layerSize(canvas, image, layer.fit, layer.scale)
+  const placed = await place(image, size.width, size.height, layer.rotation)
+  const at = layerPlacement(canvas, placed, layer.anchor, layer.x, layer.y)
+  const visible = visibleRegion(canvas, placed, at.left, at.top)
+  if (visible === undefined) return canvas
+  const part = await crop(placed, visible.crop)
+  fade(part, layer.opacity)
+  const { data, info } = await sharp(canvas.data, {
+    raw: { width: canvas.width, height: canvas.height, channels: CHANNELS },
+  })
+    .composite([
+      {
+        input: part.data,
+        raw: { width: part.width, height: part.height, channels: CHANNELS },
+        left: visible.at.left,
+        top: visible.at.top,
+        blend: layer.blend === 'normal' ? 'over' : layer.blend,
+      },
+    ])
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return { data, width: info.width, height: info.height }
+}

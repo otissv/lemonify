@@ -68,6 +68,6 @@ export interface DocumentDao {
     documentId: string,
     position: number,
   ): Promise<HistoryEntryRecord | null>
-  /** Documents whose Pipeline uses the Source, as an opened image or a second image. */
+  /** Documents whose Pipeline uses the Source, as its image, a layer or a second image. */
   listBySource(sourceId: string): Promise<DocumentRecord[]>
 }

@@ -141,7 +141,7 @@ export class SourceService {
     await this.get(actor, id)
     if (await this.#deps.sources.isReferenced(id)) {
       throw new ConflictError(
-        'This image is used by an open image or one of its steps. Delete those first.',
+        'This image is used by a document or one of its steps. Delete those first.',
       )
     }
     await this.#deps.sources.delete(id)

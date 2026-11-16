@@ -117,11 +117,11 @@ export class AiStepHandler implements JobHandler {
       throw new ValidationError(EARLIER_FIRST)
     }
     let input = plan.basePath
-    if (plan.sharpSteps.length > 0) {
+    if (plan.steps.length > 0) {
       input = path.join(directory, `in-${job.id}.png`)
       await engine.render({
         input: plan.basePath,
-        steps: plan.sharpSteps,
+        steps: plan.steps,
         target: { kind: EngineTargetKind.Intermediate },
         output: input,
       })

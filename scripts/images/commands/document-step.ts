@@ -2,10 +2,11 @@ import { z } from 'zod'
 
 import { AiToolId, aiToolSchema } from '../../../src/features/ai/ai-tools.ts'
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
+import { layerSettingsSchema } from '../../../src/features/pipeline/layer.ts'
 import {
   createAiStep,
+  createLayerStep,
   createSharpStep,
-  createSourceStep,
 } from '../../../src/features/pipeline/pipeline.ts'
 import { PipelineStepKind } from '../../../src/features/pipeline/pipeline.ts'
 import type { PipelineStep } from '../../../src/features/pipeline/pipeline.ts'
@@ -49,9 +50,14 @@ function newStep(input: {
   options?: Record<string, z.infer<ReturnType<typeof z.json>>>
   ai?: AiToolId
   settings?: Record<string, z.infer<ReturnType<typeof z.json>>>
-  source?: string
+  layer?: string
 }): PipelineStep {
-  if (input.source !== undefined) return createSourceStep(input.source)
+  if (input.layer !== undefined) {
+    return {
+      ...createLayerStep(input.layer),
+      ...layerSettingsSchema.parse(input.settings ?? {}),
+    }
+  }
   if (input.op !== undefined) {
     return createSharpStep(input.op, input.options ?? {})
   }
@@ -62,22 +68,27 @@ function newStep(input: {
 
 export const documentStepAddCommand = defineAppCommand({
   name: 'document step add',
-  summary: 'Add a Sharp, AI or Open image step to a document',
+  summary: 'Add a Sharp, AI or layer step to a document',
   synopsis:
-    '<documentId> (--op <name> [--options <json>] | --ai <tool> --settings <json> | --source <sourceId>) [--index <n>]',
-  help: `Adds a step to the end of the pipeline, or at --index. A Sharp step is an
-operation by name (\`${'pnpm images sharp --help'}\` and \`pnpm images schema sharp\`
-list them) with its options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings;
-an Open image step opens a source. The first Open image step that is switched
-on is the image the document edits; later ones make their image available to
-steps after them, such as composite, boolean and joinChannel.
+    '<documentId> (--op <name> [--options <json>] | --ai <tool> --settings <json> | --layer <sourceId> [--settings <json>]) [--index <n>]',
+  help: `Adds a step to the end of the pipeline, or at --index (never before the
+document's image, which is step 0). A Sharp step is an operation by name
+(\`${'pnpm images sharp --help'}\` and \`pnpm images schema sharp\` list them) with its
+options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings; a layer
+draws another image on top of everything before it, and the steps after it act
+on the picture with the layer in it. Layer settings, all optional: opacity
+(0-100), blend (normal, multiply, screen, overlay, darken, lighten,
+colour-dodge, colour-burn, hard-light, soft-light, difference, exclusion), fit
+(inside, original, contain, cover, stretch), scale (1-1000), rotation
+(-180 to 180), anchor (centre or a compass point such as northwest), x and y
+(whole pixels). Boolean and joinChannel steps name their own second image.
 
 Options:
   --op <name>          A Sharp operation, e.g. blur or resize
   --options <json>     The operation's options (${JSON_VALUE})
   --ai <tool>          An AI tool
-  --settings <json>    The tool's settings (${JSON_VALUE})
-  --source <sourceId>  Open this source as an image in the pipeline
+  --layer <sourceId>   Add this source as a layer
+  --settings <json>    The tool's settings, or the layer's (${JSON_VALUE})
   --index <n>          Where to put the step (default: the end)`,
   shape: {
     documentId: id,
@@ -85,7 +96,7 @@ Options:
     options: json.optional(),
     ai: z.enum(AiToolId).optional(),
     settings: json.optional(),
-    source: id.optional(),
+    layer: id.optional(),
     index: z.coerce.number().int().nonnegative().optional(),
   },
   positionals: ['documentId'],
@@ -94,16 +105,16 @@ Options:
     options: { type: 'string', json: true },
     ai: { type: 'string' },
     settings: { type: 'string', json: true },
-    source: { type: 'string' },
+    layer: { type: 'string' },
     index: { type: 'string' },
   },
   async run(context) {
-    const { op, options, ai, settings, source, index } = context.options
-    const given = [op, ai, source].filter((value) => value !== undefined)
+    const { op, options, ai, settings, layer, index } = context.options
+    const given = [op, ai, layer].filter((value) => value !== undefined)
     if (given.length !== 1) {
-      throw new ValidationError('Give one of --op, --ai or --source.')
+      throw new ValidationError('Give one of --op, --ai or --layer.')
     }
-    const step = newStep({ op, options, ai, settings, source })
+    const step = newStep({ op, options, ai, settings, layer })
     return change(context, (current) => ({
       type: 'add-step',
       step,
@@ -147,16 +158,17 @@ export const documentStepMoveCommand = defineAppCommand({
 
 export const documentStepSetCommand = defineAppCommand({
   name: 'document step set',
-  summary: "Replace a step's options or settings",
+  summary: "Replace a step's options, settings or image",
   synopsis:
     '<documentId> <stepId> (--options <json> | --settings <json> | --source <sourceId>)',
-  help: `Replaces the options of a Sharp step, the settings of an AI step, or the image
-an Open image step opens.
+  help: `Replaces the options of a Sharp step, the settings of an AI step or of a layer
+(every layer setting not given goes back to its default), or the image of a
+layer or of the document itself (step 0).
 
 Options:
   --options <json>     New options for a Sharp step (${JSON_VALUE})
-  --settings <json>    New settings for an AI step (${JSON_VALUE})
-  --source <sourceId>  The source an Open image step opens`,
+  --settings <json>    New settings for an AI step or a layer (${JSON_VALUE})
+  --source <sourceId>  The source a layer or the document's image shows`,
   shape: {
     documentId: id,
     stepId: id,
@@ -173,23 +185,64 @@ Options:
   run: (context) =>
     change(context, (current) => {
       const { stepId, options, settings, source } = context.options
-      const step = requireStep(current, stepId)
-      if (step.kind === PipelineStepKind.Source) {
-        if (source === undefined)
-          throw new ValidationError('Give --source for an Open image step.')
-        return { type: 'set-source', stepId, sourceId: source }
-      }
-      if (step.kind === PipelineStepKind.Sharp) {
-        if (options === undefined)
-          throw new ValidationError('Give --options for a Sharp step.')
-        return { type: 'set-options', stepId, options }
-      }
-      if (settings === undefined)
-        throw new ValidationError('Give --settings for an AI step.')
-      const content = aiToolSchema({}).parse({ tool: step.tool, settings })
-      return { type: 'set-settings', stepId, ...content }
+      return setChange(requireStep(current, stepId), {
+        options,
+        settings,
+        source,
+      })
     }),
 })
+
+type Given = {
+  options: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
+  settings: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
+  source: string | undefined
+}
+
+function requireGiven<T>(value: T | undefined, flag: string, what: string): T {
+  if (value === undefined) {
+    throw new ValidationError(`Give ${flag} for ${what}.`)
+  }
+  return value
+}
+
+function setChange(step: PipelineStep, given: Given): DocumentChange {
+  const stepId = step.id
+  switch (step.kind) {
+    case PipelineStepKind.Source:
+      return {
+        type: 'set-source',
+        stepId,
+        sourceId: requireGiven(
+          given.source,
+          '--source',
+          'the document’s image',
+        ),
+      }
+    case PipelineStepKind.Layer:
+      if (given.source !== undefined) {
+        return { type: 'set-source', stepId, sourceId: given.source }
+      }
+      return {
+        type: 'set-layer',
+        stepId,
+        settings: layerSettingsSchema.parse(
+          requireGiven(given.settings, '--settings or --source', 'a layer'),
+        ),
+      }
+    case PipelineStepKind.Sharp:
+      return {
+        type: 'set-options',
+        stepId,
+        options: requireGiven(given.options, '--options', 'a Sharp step'),
+      }
+    case PipelineStepKind.Ai: {
+      const settings = requireGiven(given.settings, '--settings', 'an AI step')
+      const content = aiToolSchema({}).parse({ tool: step.tool, settings })
+      return { type: 'set-settings', stepId, ...content }
+    }
+  }
+}
 
 function enabling(name: string, enabled: boolean) {
   const verb = enabled ? 'Switch on' : 'Switch off'

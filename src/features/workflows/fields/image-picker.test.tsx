@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SourceSummary } from '@/features/documents/document'
 import { listSources } from '@/features/sources/source-functions'
-import { ImageChoicesContext } from '@/features/workflows/fields/image-choices'
 import { ImagePicker } from '@/features/workflows/fields/image-picker'
 import {
   INITIAL_SOURCES_STATE,
@@ -45,7 +44,7 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>) {
   return screen.findByRole('menu')
 }
 
-describe('ImagePicker with the whole library to choose from', () => {
+describe('ImagePicker', () => {
   it('lists the five most recently uploaded images, then the library', async () => {
     const user = userEvent.setup()
     render(<ImagePicker label="image" onPick={() => {}} />)
@@ -124,28 +123,5 @@ describe('ImagePicker with the whole library to choose from', () => {
         .getAllByRole('menuitem')
         .map((item) => item.textContent),
     ).toEqual(['Choose from library…'])
-  })
-})
-
-describe('ImagePicker where the editor limits the choice', () => {
-  it('offers only the images opened so far, and no library', async () => {
-    const user = userEvent.setup()
-    render(
-      <ImageChoicesContext.Provider value={[source(2), source(3)]}>
-        <ImagePicker label="operand" onPick={() => {}} />
-      </ImageChoicesContext.Provider>,
-    )
-
-    await user.click(
-      await screen.findByRole('button', {
-        name: 'Use an opened image for operand',
-      }),
-    )
-
-    expect(
-      within(await screen.findByRole('menu'))
-        .getAllByRole('menuitem')
-        .map((item) => item.textContent),
-    ).toEqual(['image-2.png', 'image-3.png'])
   })
 })

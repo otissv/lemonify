@@ -24,12 +24,18 @@ function layerIds(options: Record<string, unknown>): string[] {
 }
 
 /**
- * The Source ids a step reads: the image an Open image step opens, or the
- * second images of a boolean operand, joined channels or composite layers.
+ * The Source ids a step reads: the image of the document or of a layer, or the
+ * second images of a boolean operand, joined channels or composite layers
+ * (composite only in workflows: a document uses layers instead).
  * Images are always Sources of the same User, never paths.
  */
 export function stepOperandSourceIds(step: PipelineStep): string[] {
-  if (step.kind === PipelineStepKind.Source) return [step.sourceId]
+  if (
+    step.kind === PipelineStepKind.Source ||
+    step.kind === PipelineStepKind.Layer
+  ) {
+    return [step.sourceId]
+  }
   if (step.kind !== PipelineStepKind.Sharp) return []
   if (step.op === 'boolean') {
     const operand = OperandSchema.safeParse(step.options)
@@ -64,19 +70,6 @@ function mapped(id: string, ids: SourceIds): string {
   return next
 }
 
-function remapLayers(
-  options: Record<string, unknown>,
-  ids: SourceIds,
-): Record<string, unknown> {
-  const layers = LayersSchema.safeParse(options)
-  if (!layers.success) return options
-  const images = layers.data.images.map((layer) => {
-    const input = IdSchema.safeParse(layer.input)
-    return input.success ? { ...layer, input: mapped(input.data, ids) } : layer
-  })
-  return { ...options, images }
-}
-
 function remapOptions(
   step: Extract<PipelineStep, { kind: typeof PipelineStepKind.Sharp }>,
   ids: SourceIds,
@@ -100,7 +93,6 @@ function remapOptions(
           : images.map((id) => mapped(id, ids)),
     }
   }
-  if (step.op === 'composite') return remapLayers(options, ids)
   return options
 }
 
@@ -114,7 +106,10 @@ export function remapPipelineSources(
   ids: SourceIds,
 ): Pipeline {
   const steps = pipeline.steps.map((step): PipelineStep => {
-    if (step.kind === PipelineStepKind.Source) {
+    if (
+      step.kind === PipelineStepKind.Source ||
+      step.kind === PipelineStepKind.Layer
+    ) {
       return { ...step, sourceId: mapped(step.sourceId, ids) }
     }
     if (step.kind !== PipelineStepKind.Sharp) return step
