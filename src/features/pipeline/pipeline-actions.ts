@@ -1,4 +1,4 @@
-import { applyEdit } from '@/features/documents/document-sync'
+import { applyEdit, loadDocument } from '@/features/documents/document-sync'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import { supportsBlend } from '@/features/pipeline/step-blend'
@@ -15,6 +15,9 @@ import type {
 } from '@/features/pipeline/pipeline'
 import { Tool, currentPipeline, useAppStore } from '@/store/app-store'
 import type { AiContent } from '@/features/ai/ai-tools'
+import { errorMessage } from '@/lib/error-message'
+
+const OPEN_FAILED = 'That image could not be opened.'
 
 type SharpOptions = SharpStep['options']
 
@@ -71,6 +74,37 @@ function stepOf(documentId: string, stepId: string): PipelineStep | undefined {
   return currentPipeline(useAppStore.getState(), documentId)?.steps.find(
     ({ id }) => id === stepId,
   )
+}
+
+/**
+ * Puts a copy of a step on top of another document's steps, as one undoable
+ * change to that document; the step stays where it was. The copy has an id of
+ * its own. Returns why it could not be done, or nothing when it was.
+ */
+export async function copyStepToDocument(
+  fromId: string,
+  stepId: string,
+  toId: string,
+): Promise<string | undefined> {
+  if (fromId === toId) return undefined
+  const step = stepOf(fromId, stepId)
+  if (!step) return undefined
+  try {
+    await loadDocument(toId)
+  } catch (caught) {
+    return errorMessage(caught, OPEN_FAILED)
+  }
+  const store = useAppStore.getState()
+  const steps = currentPipeline(store, toId)?.steps
+  if (!steps) return undefined
+  store.clearDocumentError(toId)
+  store.setDocumentExpanded(toId, true)
+  await applyEdit(toId, {
+    type: 'add-step',
+    step: { ...step, id: crypto.randomUUID() },
+    index: steps.length,
+  })
+  return useAppStore.getState().documents[toId]?.error
 }
 
 /** Adds a layer for `sourceId` just after the selected step, on top of it (on top of everything when none is selected), as one undoable change. */

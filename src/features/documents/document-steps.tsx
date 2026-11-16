@@ -7,6 +7,7 @@ import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { thumbnailImageUrl } from '@/features/documents/image-urls'
 import { useDocument } from '@/features/documents/use-document'
 import { StepRow } from '@/features/documents/step-row'
+import { setStepDrag } from '@/features/documents/step-drag'
 import {
   deleteStep,
   reorderStep,
@@ -29,7 +30,7 @@ interface DocumentStepsProps {
   name: string
 }
 
-/** The steps of one document, the last on top as in a layer panel, so the layer that sets the canvas is lowest: select, switch off, delete, and reorder by dragging or with the buttons. */
+/** The steps of one document, the last on top as in a layer panel, so the layer that sets the canvas is lowest: select, switch off, delete, and reorder by dragging or with the buttons. Dragging one onto another document in the sidebar copies it there. */
 export function DocumentSteps({
   documentId,
   name,
@@ -79,7 +80,8 @@ export function DocumentSteps({
     stepId: string,
   ): void {
     event.dataTransfer.setData('text/plain', stepId)
-    event.dataTransfer.effectAllowed = 'move'
+    setStepDrag(event.dataTransfer, { documentId, stepId })
+    event.dataTransfer.effectAllowed = 'copyMove'
     setDraggedId(stepId)
   }
 
@@ -93,8 +95,9 @@ export function DocumentSteps({
     event: React.DragEvent<HTMLLIElement>,
     index: number,
   ): void {
+    if (draggedId === undefined) return
     event.preventDefault()
-    if (draggedId !== undefined) reorderStep(documentId, draggedId, index)
+    reorderStep(documentId, draggedId, index)
     setDraggedId(undefined)
   }
 

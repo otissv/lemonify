@@ -28,6 +28,12 @@ import {
 } from '@/features/documents/document-functions'
 import { DocumentNameInput } from '@/features/app/document-name-input'
 import { DocumentSteps } from '@/features/documents/document-steps'
+import {
+  droppedStep,
+  isStepDragFromElsewhere,
+} from '@/features/documents/step-drag'
+import type { DraggedStep } from '@/features/documents/step-drag'
+import { copyStepToDocument } from '@/features/pipeline/pipeline-actions'
 import { errorMessage } from '@/lib/error-message'
 import { placeAt } from '@/lib/place-at'
 import { cn } from '@/lib/utils'
@@ -98,6 +104,7 @@ function DocumentItem({
   const confirmDocument = useAppStore((state) => state.confirmDocument)
   const [error, setError] = useState<string | null>(null)
   const [renaming, setRenaming] = useState(false)
+  const [stepOver, setStepOver] = useState(false)
 
   function handleToggle(): void {
     setExpanded(document.id, !expanded)
@@ -123,19 +130,49 @@ function DocumentItem({
     onMove(document.id, target)
   }
 
-  function handleDragStart(event: React.DragEvent<HTMLLIElement>): void {
+  function handleDragStart(event: React.DragEvent<HTMLDivElement>): void {
     event.dataTransfer.setData(DRAG_TYPE, document.id)
     event.dataTransfer.effectAllowed = 'move'
     onDragStart(document.id)
   }
 
   function handleDragOver(event: React.DragEvent<HTMLLIElement>): void {
+    if (isStepDragFromElsewhere(event.dataTransfer, document.id)) {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'copy'
+      setStepOver(true)
+      return
+    }
     if (!event.dataTransfer.types.includes(DRAG_TYPE)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
   }
 
+  function handleDragLeave(event: React.DragEvent<HTMLLIElement>): void {
+    const next = event.relatedTarget
+    if (next instanceof Node && event.currentTarget.contains(next)) return
+    setStepOver(false)
+  }
+
+  async function handleCopyStep(step: DraggedStep): Promise<void> {
+    setError(null)
+    const failure = await copyStepToDocument(
+      step.documentId,
+      step.stepId,
+      document.id,
+    )
+    if (failure !== undefined) setError(failure)
+  }
+
   function handleDrop(event: React.DragEvent<HTMLLIElement>): void {
+    setStepOver(false)
+    const step = droppedStep(event.dataTransfer)
+    if (step !== undefined) {
+      if (step.documentId === document.id) return
+      event.preventDefault()
+      void handleCopyStep(step)
+      return
+    }
     const droppedId = event.dataTransfer.getData(DRAG_TYPE)
     if (droppedId === '' || position === undefined) return
     event.preventDefault()
@@ -172,16 +209,22 @@ function DocumentItem({
 
   return (
     <SidebarMenuItem
-      draggable={position !== undefined}
-      className={cn(dragging && 'opacity-50')}
-      onDragStart={handleDragStart}
+      data-drop-target={stepOver}
+      className={cn(stepOver && 'rounded-md ring-2 ring-primary')}
       onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      onDragEnd={onDragEnd}
     >
+      {/* Only the row is dragged, not the whole item: the steps listed under it are draggable themselves, and the browser would drag the item instead of the step. */}
       <div
         data-active={active}
-        className="group/row flex items-center gap-1 rounded-md data-[active=true]:bg-sidebar-accent"
+        draggable={position !== undefined}
+        className={cn(
+          'group/row flex items-center gap-1 rounded-md data-[active=true]:bg-sidebar-accent',
+          dragging && 'opacity-50',
+        )}
+        onDragStart={handleDragStart}
+        onDragEnd={onDragEnd}
       >
         <Button
           variant="ghost"

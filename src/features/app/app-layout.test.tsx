@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   deleteDocument,
   getDocument,
+  changeDocument,
   listDocuments,
   moveDocument,
   renameDocument,
 } from '@/features/documents/document-functions'
 import type { DocumentSummary } from '@/features/documents/document'
+import { createSharpStep } from '@/features/pipeline/pipeline'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import {
   INITIAL_APP_STATE,
@@ -58,6 +60,29 @@ function sidebar(): HTMLElement {
   )
   if (!element) throw new Error('Sidebar is not rendered')
   return element
+}
+
+/** jsdom has no drag data, so this holds what is set on the drag. */
+function dragData(): DataTransfer {
+  const data = new Map<string, string>()
+  return {
+    get types() {
+      return [...data.keys()]
+    },
+    setData: (type: string, value: string) => {
+      data.set(type, value)
+    },
+    getData: (type: string) => data.get(type) ?? '',
+    effectAllowed: 'uninitialized',
+    dropEffect: 'none',
+  } as unknown as DataTransfer
+}
+
+/** The part of a document's item that is dragged to reorder it. */
+function handleOf(name: string): HTMLElement {
+  const handle = documentLink(name).parentElement
+  if (!handle) throw new Error(`No row for ${name}.`)
+  return handle
 }
 
 function documentLink(name: string): HTMLElement {
@@ -396,22 +421,6 @@ describe('AppLayout', () => {
         .map((link) => link.textContent ?? '')
     }
 
-    /** jsdom has no drag data, so this holds what is set on the drag. */
-    function dragData(): DataTransfer {
-      const data = new Map<string, string>()
-      return {
-        get types() {
-          return [...data.keys()]
-        },
-        setData: (type: string, value: string) => {
-          data.set(type, value)
-        },
-        getData: (type: string) => data.get(type) ?? '',
-        effectAllowed: 'uninitialized',
-        dropEffect: 'none',
-      } as unknown as DataTransfer
-    }
-
     function rowOf(name: string): HTMLElement {
       const row = documentLink(name).closest('li')
       if (!row) throw new Error(`No row for ${name}.`)
@@ -477,7 +486,7 @@ describe('AppLayout', () => {
       await renderApp(`/documents/${FIRST_ID}`)
 
       const dataTransfer = dragData()
-      fireEvent.dragStart(rowOf('three.png'), { dataTransfer })
+      fireEvent.dragStart(handleOf('three.png'), { dataTransfer })
       fireEvent.dragOver(rowOf('one.png'), { dataTransfer })
       fireEvent.drop(rowOf('one.png'), { dataTransfer })
 
@@ -490,11 +499,11 @@ describe('AppLayout', () => {
     it('shows the document being dragged as faded, until it is dropped or let go', async () => {
       await renderApp(`/documents/${FIRST_ID}`)
 
-      fireEvent.dragStart(rowOf('two.png'), { dataTransfer: dragData() })
-      expect(rowOf('two.png')).toHaveClass('opacity-50')
+      fireEvent.dragStart(handleOf('two.png'), { dataTransfer: dragData() })
+      expect(handleOf('two.png')).toHaveClass('opacity-50')
 
-      fireEvent.dragEnd(rowOf('two.png'))
-      expect(rowOf('two.png')).not.toHaveClass('opacity-50')
+      fireEvent.dragEnd(handleOf('two.png'))
+      expect(handleOf('two.png')).not.toHaveClass('opacity-50')
       expect(moveDocument).not.toHaveBeenCalled()
     })
 
@@ -552,7 +561,121 @@ describe('AppLayout', () => {
       })
 
       expect(moveDocument).not.toHaveBeenCalled()
-      expect(rowOf('two.png')).not.toHaveAttribute('draggable', 'true')
+      expect(handleOf('two.png')).not.toHaveAttribute('draggable', 'true')
+    })
+  })
+
+  describe('dragging a step onto another document', () => {
+    const BLUR = createSharpStep('blur', { sigma: 4 })
+
+    function stepRow(name: string): HTMLElement {
+      const row = within(screen.getByRole('list', { name: `Steps of ${name}` }))
+        .getByRole('button', { name: 'Blur' })
+        .closest('li')
+      if (!row) throw new Error('No step row.')
+      return row
+    }
+
+    function rowOf(name: string): HTMLElement {
+      const row = documentLink(name).closest('li')
+      if (!row) throw new Error(`No row for ${name}.`)
+      return row
+    }
+
+    async function show(): Promise<void> {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND])
+      vi.mocked(getDocument).mockImplementation(({ data }) =>
+        Promise.resolve(
+          data.id === FIRST_ID
+            ? documentView([BLUR], FIRST_ID, 'one.png')
+            : documentView([], SECOND_ID, 'two.png'),
+        ),
+      )
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+      await user.click(
+        await screen.findByRole('button', { name: 'Show steps of one.png' }),
+      )
+      await screen.findByRole('list', { name: 'Steps of one.png' })
+    }
+
+    it('adds a copy of the step to the other document', async () => {
+      await show()
+      vi.mocked(changeDocument).mockResolvedValue(
+        documentView([], SECOND_ID, 'two.png'),
+      )
+      const dataTransfer = dragData()
+
+      fireEvent.dragStart(stepRow('one.png'), { dataTransfer })
+      fireEvent.dragOver(rowOf('two.png'), { dataTransfer })
+      fireEvent.drop(rowOf('two.png'), { dataTransfer })
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: {
+            id: SECOND_ID,
+            revision: 0,
+            change: {
+              type: 'add-step',
+              step: { ...BLUR, id: expect.not.stringMatching(BLUR.id) },
+              index: 1,
+            },
+          },
+        })
+      })
+      expect(
+        screen.getByRole('list', { name: 'Steps of one.png' }),
+      ).toBeInTheDocument()
+    })
+
+    it('shows the document it would be copied to while the step is over it', async () => {
+      await show()
+      const dataTransfer = dragData()
+      fireEvent.dragStart(stepRow('one.png'), { dataTransfer })
+
+      fireEvent.dragOver(rowOf('two.png'), { dataTransfer })
+      expect(rowOf('two.png')).toHaveAttribute('data-drop-target', 'true')
+
+      fireEvent.dragLeave(rowOf('two.png'))
+      expect(rowOf('two.png')).toHaveAttribute('data-drop-target', 'false')
+    })
+
+    it('does not take a step dragged over the document it is from', async () => {
+      await show()
+      const dataTransfer = dragData()
+      fireEvent.dragStart(stepRow('one.png'), { dataTransfer })
+
+      const accepted = fireEvent.dragOver(rowOf('one.png'), { dataTransfer })
+      fireEvent.drop(rowOf('one.png'), { dataTransfer })
+
+      expect(accepted).toBe(true)
+      expect(rowOf('one.png')).toHaveAttribute('data-drop-target', 'false')
+      expect(changeDocument).not.toHaveBeenCalled()
+    })
+
+    it('does not mistake a dragged step for a dragged document', async () => {
+      await show()
+      const dataTransfer = dragData()
+
+      fireEvent.dragStart(stepRow('one.png'), { dataTransfer })
+
+      expect(handleOf('one.png')).not.toHaveClass('opacity-50')
+      expect(dataTransfer.getData('application/x-lemonify-document')).toBe('')
+      fireEvent.drop(rowOf('two.png'), { dataTransfer })
+      expect(moveDocument).not.toHaveBeenCalled()
+    })
+
+    it('says why when the other document would not take it', async () => {
+      await show()
+      vi.mocked(changeDocument).mockRejectedValue(new Error('Not allowed.'))
+      const dataTransfer = dragData()
+
+      fireEvent.dragStart(stepRow('one.png'), { dataTransfer })
+      fireEvent.drop(rowOf('two.png'), { dataTransfer })
+
+      expect(
+        await within(rowOf('two.png')).findByRole('alert'),
+      ).toHaveTextContent('Not allowed.')
     })
   })
 

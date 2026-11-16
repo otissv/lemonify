@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { applyEdit } from '@/features/documents/document-sync'
+import { applyEdit, loadDocument } from '@/features/documents/document-sync'
 import { createLayerStep, createSharpStep } from '@/features/pipeline/pipeline'
 import {
+  copyStepToDocument,
   insertImage,
   replaceImage,
   renameStep,
@@ -19,12 +20,14 @@ import {
 
 vi.mock('@/features/documents/document-sync', () => ({
   applyEdit: vi.fn().mockResolvedValue(undefined),
+  loadDocument: vi.fn().mockResolvedValue(undefined),
 }))
 
 const IMAGE = baseLayer(`source-${DOCUMENT_ID}`)
 
 beforeEach(() => {
   vi.mocked(applyEdit).mockClear()
+  vi.mocked(loadDocument).mockReset().mockResolvedValue(undefined)
   useAppStore.setState(INITIAL_APP_STATE)
 })
 
@@ -236,6 +239,116 @@ describe('setLayerSettings', () => {
 
     setLayerSettings(DOCUMENT_ID, blur.id, SETTINGS)
 
+    expect(applyEdit).not.toHaveBeenCalled()
+  })
+})
+
+describe('copyStepToDocument', () => {
+  const OTHER_ID = '7a2d7d5f-1f54-4b9a-8b68-3e3a1a9a3c22'
+
+  function load(): { layer: ReturnType<typeof createLayerStep> } {
+    const layer = createLayerStep('second')
+    loadDocumentIntoEditor(documentView([createSharpStep('blur'), layer]))
+    loadDocumentIntoEditor(documentView([createSharpStep('flip')], OTHER_ID))
+    return { layer }
+  }
+
+  it('adds a copy of the step on top of the other document, with an id of its own', async () => {
+    const { layer } = load()
+
+    const failure = await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
+
+    expect(failure).toBeUndefined()
+    expect(applyEdit).toHaveBeenCalledWith(OTHER_ID, {
+      type: 'add-step',
+      step: { ...layer, id: expect.not.stringMatching(layer.id) },
+      index: 2,
+    })
+  })
+
+  it('copies steps of every kind, settings and blend included', async () => {
+    const blur = {
+      ...createSharpStep('blur', { sigma: 4 }),
+      name: 'Soften',
+      blend: { mode: 'multiply', opacity: 40 },
+    } as const
+    loadDocumentIntoEditor(documentView([blur]))
+    loadDocumentIntoEditor(documentView([], OTHER_ID))
+
+    await copyStepToDocument(DOCUMENT_ID, blur.id, OTHER_ID)
+
+    expect(applyEdit).toHaveBeenCalledWith(OTHER_ID, {
+      type: 'add-step',
+      step: { ...blur, id: expect.not.stringMatching(blur.id) },
+      index: 1,
+    })
+  })
+
+  it('leaves the step where it is, so it is a copy and not a move', async () => {
+    const { layer } = load()
+
+    await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
+
+    expect(applyEdit).toHaveBeenCalledTimes(1)
+    expect(applyEdit).not.toHaveBeenCalledWith(DOCUMENT_ID, expect.anything())
+  })
+
+  it('shows the steps of the document it was copied to', async () => {
+    const { layer } = load()
+
+    await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
+
+    expect(useAppStore.getState().expandedDocuments[OTHER_ID]).toBe(true)
+  })
+
+  it('reads the other document first when the editor does not have it yet', async () => {
+    const { layer } = load()
+    useAppStore.getState().forgetDocument(OTHER_ID)
+    vi.mocked(loadDocument).mockImplementation(async () => {
+      loadDocumentIntoEditor(documentView([], OTHER_ID))
+    })
+
+    await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
+
+    expect(loadDocument).toHaveBeenCalledWith(OTHER_ID)
+    expect(applyEdit).toHaveBeenCalledWith(OTHER_ID, {
+      type: 'add-step',
+      step: expect.objectContaining({ sourceId: 'second' }),
+      index: 1,
+    })
+  })
+
+  it('says why when the other document could not be read', async () => {
+    const { layer } = load()
+    useAppStore.getState().forgetDocument(OTHER_ID)
+    vi.mocked(loadDocument).mockRejectedValue(new Error('Gone.'))
+
+    const failure = await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
+
+    expect(failure).toBe('Gone.')
+    expect(applyEdit).not.toHaveBeenCalled()
+  })
+
+  it('says why when the other document would not take it', async () => {
+    const { layer } = load()
+    vi.mocked(applyEdit).mockImplementation(async () => {
+      useAppStore.getState().setDocumentError(OTHER_ID, 'Not allowed.')
+    })
+
+    const failure = await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
+
+    expect(failure).toBe('Not allowed.')
+  })
+
+  it('does nothing for the same document or a step that is gone', async () => {
+    const { layer } = load()
+
+    expect(
+      await copyStepToDocument(DOCUMENT_ID, layer.id, DOCUMENT_ID),
+    ).toBeUndefined()
+    expect(
+      await copyStepToDocument(DOCUMENT_ID, 'missing', OTHER_ID),
+    ).toBeUndefined()
     expect(applyEdit).not.toHaveBeenCalled()
   })
 })
