@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import sharp from 'sharp'
+import type { z } from 'zod'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ExportFormat } from '@/features/export/export-settings'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { createSharpStep } from '@/features/pipeline/pipeline'
+import { blendableOps } from '@/features/pipeline/step-blend'
 import type { StepBlend } from '@/features/pipeline/step-blend'
 
 import {
@@ -44,6 +46,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
+
+const HALF_BLEND: StepBlend = { mode: 'normal', opacity: 50 }
 
 describe('SharpImageEngine', () => {
   it('writes a preview no larger than the preview size', async () => {
@@ -85,6 +89,173 @@ describe('SharpImageEngine', () => {
       output: path.join(directory, 'rotated.png'),
     })
     expect(info).toMatchObject({ format: 'png', width: 2000, height: 3000 })
+  })
+
+  describe('transparency', () => {
+    it.each([
+      ['plain', undefined],
+      ['blended', { mode: 'multiply', opacity: 60 } as StepBlend],
+    ] as const)('stays through Greyscale, %s', async (_, blend) => {
+      const cutout = path.join(directory, 'cutout.png')
+      await sharp({
+        create: {
+          width: 8,
+          height: 8,
+          channels: 4,
+          background: { r: 200, g: 50, b: 50, alpha: 0 },
+        },
+      })
+        .png()
+        .toFile(cutout)
+      const output = path.join(directory, 'grey.png')
+      await engine.render({
+        input: cutout,
+        steps: [
+          { ...createSharpStep('greyscale'), ...(blend ? { blend } : {}) },
+        ],
+        target: { kind: EngineTargetKind.Intermediate },
+        output,
+      })
+      const { data } = await sharp(output)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      expect(data[3]).toBe(0)
+    })
+  })
+
+  describe('tools that take a second image', () => {
+    async function maskFile(): Promise<string> {
+      const file = path.join(directory, 'mask.png')
+      await sharp({
+        create: {
+          width: 3000,
+          height: 2000,
+          channels: 3,
+          background: '#404040',
+        },
+      })
+        .png()
+        .toFile(file)
+      return file
+    }
+
+    it.each([
+      ['boolean', { operand: 'MASK', operator: 'and' }],
+      ['joinChannel', { images: 'MASK' }],
+    ] as const)(
+      'shows %s in the preview, and blended with the picture before it',
+      async (op, options) => {
+        const mask = await maskFile()
+        const resolved = JSON.parse(
+          JSON.stringify(options).replaceAll('MASK', mask),
+        )
+        for (const blend of [undefined, HALF_BLEND]) {
+          const step = {
+            ...createSharpStep(op, resolved),
+            ...(blend ? { blend } : {}),
+          }
+          const info = await engine.render({
+            input,
+            steps: [step],
+            target: { kind: EngineTargetKind.Preview },
+            output: path.join(directory, 'second.webp'),
+          })
+          expect([info.width, info.height]).toEqual([2560, 1707])
+        }
+      },
+    )
+  })
+
+  describe('steps that change the size, in the sizes the editor shows', () => {
+    const exportSettings = {
+      format: ExportFormat.Png,
+      options: {},
+      keepMetadata: false,
+    } as const
+
+    async function sizeOf(
+      steps: Parameters<typeof engine.render>[0]['steps'],
+      target: Parameters<typeof engine.render>[0]['target'],
+      image: string = input,
+    ): Promise<[number, number]> {
+      const info = await engine.render({
+        input: image,
+        steps,
+        target,
+        output: path.join(directory, 'sized.out'),
+      })
+      return [info.width, info.height]
+    }
+
+    it('keeps a resize in the preview', async () => {
+      expect(
+        await sizeOf([createSharpStep('resize', { width: 800 })], {
+          kind: EngineTargetKind.Preview,
+        }),
+      ).toEqual([800, 533])
+    })
+
+    it('keeps a scale in the preview', async () => {
+      expect(
+        await sizeOf([createSharpStep('scale', { percent: 50 })], {
+          kind: EngineTargetKind.Preview,
+        }),
+      ).toEqual([1500, 1000])
+    })
+
+    it('keeps an enlargement in the preview instead of filling it', async () => {
+      const small = await makeImage(40, 30, 'small.png')
+      expect(
+        await sizeOf(
+          [createSharpStep('scale', { percent: 200 })],
+          { kind: EngineTargetKind.Preview },
+          small,
+        ),
+      ).toEqual([80, 60])
+      expect(
+        await sizeOf(
+          [createSharpStep('resize', { width: 100, withoutReduction: true })],
+          { kind: EngineTargetKind.Preview },
+          small,
+        ),
+      ).toEqual([100, 75])
+    })
+
+    it('keeps a resize in the thumbnail', async () => {
+      expect(
+        await sizeOf([createSharpStep('resize', { width: 40 })], {
+          kind: EngineTargetKind.Thumbnail,
+        }),
+      ).toEqual([40, 27])
+    })
+
+    it('applies the width of an export after the steps', async () => {
+      expect(
+        await sizeOf([createSharpStep('resize', { width: 800 })], {
+          kind: EngineTargetKind.Export,
+          settings: exportSettings,
+          width: 100,
+        }),
+      ).toEqual([100, 67])
+    })
+
+    it.each([
+      ['resize then rotate', ['resize', 'rotate'], [533, 800]],
+      ['rotate then resize', ['rotate', 'resize'], [800, 1200]],
+    ] as const)(
+      'runs %s in the order they are listed',
+      async (_, order, size) => {
+        const steps = order.map((op) =>
+          op === 'resize'
+            ? createSharpStep('resize', { width: 800 })
+            : createSharpStep('rotate', { angle: 90 }),
+        )
+        expect(
+          await sizeOf(steps, { kind: EngineTargetKind.Intermediate }),
+        ).toEqual(size)
+      },
+    )
   })
 
   it('blends a tint with an alpha into the image by that alpha', async () => {
@@ -227,6 +398,47 @@ describe('SharpImageEngine', () => {
       ...createSharpStep('negate', { alpha: false }),
       ...(blend ? { blend } : {}),
     })
+
+    const NEEDS_OPTIONS: Record<
+      string,
+      Record<string, z.infer<ReturnType<typeof z.json>>>
+    > = {
+      clahe: { width: 2, height: 2 },
+      convolve: { width: 3, height: 3, kernel: [0, 0, 0, 0, 1, 0, 0, 0, 0] },
+      recomb: {
+        matrix: [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ],
+      },
+      tint: { colour: '#3366cc' },
+      pipelineColourspace: { colourspace: 'b-w' },
+      pipelineColorspace: { colourspace: 'b-w' },
+      toColourspace: { colourspace: 'b-w' },
+      toColorspace: { colourspace: 'b-w' },
+      extractChannel: { channel: 'green' },
+      bandbool: { operator: 'and' },
+    }
+    const NEEDS_A_SECOND_IMAGE = new Set(['boolean', 'joinChannel'])
+
+    it.each(blendableOps().filter((op) => !NEEDS_A_SECOND_IMAGE.has(op)))(
+      'blends %s without breaking the picture',
+      async (op) => {
+        const base = await colourFile('every.png', '#ff8800', 8)
+        const result = await render(
+          [
+            {
+              ...createSharpStep(op, NEEDS_OPTIONS[op] ?? {}),
+              blend: { mode: 'normal', opacity: 50 },
+            },
+          ],
+          base,
+        )
+        expect(result.width).toBe(8)
+        expect(result.raw.length).toBe(8 * 8 * 4)
+      },
+    )
 
     it('puts the result over the picture before the step, at the blend’s opacity', async () => {
       const base = await colourFile('base.png', '#ff0000', 8)

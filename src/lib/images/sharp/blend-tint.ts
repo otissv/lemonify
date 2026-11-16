@@ -4,7 +4,14 @@ import type { Sharp } from 'sharp'
 import { SharpOperationError } from './errors.ts'
 import { applySharpOp, applySharpOps, isOutputOp } from './ops.ts'
 import type { SharpOp, SharpOpStage } from './ops.ts'
-import { applyPixelOp, fromRaw, isPixelOp, toRaw } from './pixel-ops.ts'
+import {
+  applyPixelOp,
+  booleanImage,
+  fromRaw,
+  isFileBoolean,
+  isPixelOp,
+  toRaw,
+} from './pixel-ops.ts'
 
 const MAX_CHANNEL = 255
 const COLOUR_CHANNELS = 3
@@ -72,6 +79,7 @@ async function runStep(
       if (strength < 1) return await blendTint(pipeline, step.colour, strength)
     }
     if (isPixelOp(step)) return await applyPixelOp(pipeline, step)
+    if (isFileBoolean(step)) return await booleanImage(pipeline, step)
     return applySharpOp(pipeline, step)
   } catch (error) {
     throw new SharpOperationError(`ops[${index}] (${step.op})`, error)

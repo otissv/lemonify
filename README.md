@@ -88,15 +88,16 @@ Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_D
 
 ## Scripts
 
-| Script                  | Does                                                 |
-| ----------------------- | ---------------------------------------------------- |
-| `pnpm images <command>` | Runs the image CLI, for example `pnpm images --help` |
-| `pnpm dev`              | Starts the web editor's dev server on port 3100      |
-| `pnpm build`            | Builds for production                                |
-| `pnpm test`             | Runs the tests once (Vitest)                         |
-| `pnpm typecheck`        | Runs `tsc --noEmit`                                  |
-| `pnpm check`            | Lints and checks formatting with Biome               |
-| `pnpm format`           | Fixes lint and formatting with Biome                 |
+| Script                  | Does                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `pnpm images <command>` | Runs the image CLI, for example `pnpm images --help`                                     |
+| `pnpm dev`              | Starts the web editor's dev server on port 3100                                          |
+| `pnpm build`            | Builds for production                                                                    |
+| `pnpm test`             | Runs the tests once (Vitest)                                                             |
+| `pnpm e2e`              | Runs the browser tests against the snapshots in `e2e/` (Playwright; see `e2e/README.md`) |
+| `pnpm typecheck`        | Runs `tsc --noEmit`                                                                      |
+| `pnpm check`            | Lints and checks formatting with Biome                                                   |
+| `pnpm format`           | Fixes lint and formatting with Biome                                                     |
 
 Linting and formatting use [Biome](https://biomejs.dev/), configured in `biome.json`. Biome has no type-aware rules, so `pnpm typecheck` is the type check.
 

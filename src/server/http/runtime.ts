@@ -20,7 +20,10 @@ async function build(): Promise<WebRuntime> {
     app,
     auth: app.auth,
     logger: consoleLogger,
-    rateLimiter: new FixedWindowRateLimiter(),
+    rateLimiter: new FixedWindowRateLimiter(
+      Date.now,
+      app.config.rateLimitMultiplier,
+    ),
   }
 }
 

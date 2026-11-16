@@ -10,6 +10,7 @@ import type { ExportSettings } from '@/features/export/export-settings'
 import type { SharpStep } from '@/features/pipeline/pipeline'
 import type { StepBlend } from '@/features/pipeline/step-blend'
 import { applySharpOpsBlended } from '@/lib/images/sharp/blend-tint'
+import { toRgba } from '@/lib/images/sharp/pixel-ops'
 import { applySharpOps, sharpOpSchema } from '@/lib/images/sharp/ops'
 import type { SharpOp } from '@/lib/images/sharp/ops'
 import { OUTPUT_OPTION_SCHEMAS } from '@/lib/images/sharp/output-options'
@@ -149,14 +150,9 @@ function encode(
   }
 }
 
-/** The picture so far as RGBA pixels, so a layer can be put over it. */
 async function pixelsOf(image: Sharp): Promise<RawImage> {
-  const { data, info } = await image
-    .toColourspace('srgb')
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true })
-  return { data, width: info.width, height: info.height }
+  const { data, width, height } = await toRgba(image)
+  return { data, width, height }
 }
 
 function fromPixels(image: RawImage): Sharp {
@@ -215,16 +211,31 @@ async function applySteps(
   return applySharpOps(pipeline, all, 'output')
 }
 
+/** Whether the target sizes the picture itself, after the steps have made it. */
+function sizesThePicture(target: EngineTarget): boolean {
+  switch (target.kind) {
+    case EngineTargetKind.Preview:
+    case EngineTargetKind.Thumbnail:
+      return true
+    case EngineTargetKind.Export:
+      return target.width !== undefined
+    case EngineTargetKind.Intermediate:
+      return false
+  }
+}
+
 async function build(request: EngineRequest): Promise<Sharp> {
   const image = sharp(request.input).autoOrient()
   const savesAsJpeg =
     request.target.kind === EngineTargetKind.Export &&
     (await sharp(request.input).metadata()).format === 'jpeg'
-  return encode(
-    await applySteps(image, request.steps),
-    request.target,
-    savesAsJpeg,
-  )
+  let picture = await applySteps(image, request.steps)
+  if (request.steps.length > 0 && sizesThePicture(request.target)) {
+    // Sharp keeps one resize per pipeline, and a second one replaces the
+    // first, so the steps' picture is made before it is sized.
+    picture = fromPixels(await pixelsOf(picture))
+  }
+  return encode(picture, request.target, savesAsJpeg)
 }
 
 /**

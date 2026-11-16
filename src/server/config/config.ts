@@ -33,6 +33,7 @@ const EnvironmentSchema = z.object({
   LEMONIFY_RENDER_CACHE_BYTES: positiveInteger(Number.MAX_SAFE_INTEGER).default(
     2 * GIGABYTE,
   ),
+  LEMONIFY_RATE_LIMIT_MULTIPLIER: positiveInteger(1000).default(1),
   LEMONIFY_AUTH_SECRET: z.string().min(32).optional(),
   LEMONIFY_BASE_URL: z.url().default('http://localhost:3100'),
   LEMONIFY_TRUSTED_ORIGINS: z.string().default(''),
@@ -51,6 +52,8 @@ export type Config = {
   jobRetentionDays: number
   maxResultBytesPerUser: number
   renderCacheBytes: number
+  /** How many times looser than its usual limit each kind of request is allowed to be. */
+  rateLimitMultiplier: number
   authSecret: string | undefined
   baseUrl: string
   trustedOrigins: string[]
@@ -103,6 +106,7 @@ export function loadConfig(
     jobRetentionDays: env.LEMONIFY_JOB_RETENTION_DAYS,
     maxResultBytesPerUser: env.LEMONIFY_MAX_RESULT_BYTES_PER_USER,
     renderCacheBytes: env.LEMONIFY_RENDER_CACHE_BYTES,
+    rateLimitMultiplier: env.LEMONIFY_RATE_LIMIT_MULTIPLIER,
     authSecret: env.LEMONIFY_AUTH_SECRET,
     baseUrl: env.LEMONIFY_BASE_URL,
     trustedOrigins: parseOrigins(

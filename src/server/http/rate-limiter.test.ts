@@ -16,6 +16,15 @@ describe('FixedWindowRateLimiter', () => {
     })
   })
 
+  it('allows the limit times the multiplier it is given', () => {
+    const limiter = new FixedWindowRateLimiter(() => 0, 3)
+    const rule = { limit: 2, windowMs: 10_000 }
+    for (let taken = 0; taken < 6; taken += 1) {
+      expect(limiter.take('a', rule)).toEqual({ allowed: true })
+    }
+    expect(limiter.take('a', rule).allowed).toBe(false)
+  })
+
   it('starts a new window after the old one ends', () => {
     let now = 0
     const limiter = new FixedWindowRateLimiter(() => now)

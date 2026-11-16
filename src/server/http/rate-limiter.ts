@@ -30,12 +30,17 @@ const MS_PER_SECOND = 1000
 export class FixedWindowRateLimiter {
   readonly #windows = new Map<string, Window>()
   readonly #now: () => number
+  readonly #multiplier: number
 
-  constructor(now: () => number = Date.now) {
+  /** `multiplier` loosens every limit by that factor; the default of 1 keeps them as they are. */
+  constructor(now: () => number = Date.now, multiplier = 1) {
     this.#now = now
+    this.#multiplier = multiplier
   }
 
-  take(key: string, { limit, windowMs }: RateLimit): RateDecision {
+  take(key: string, rule: RateLimit): RateDecision {
+    const { windowMs } = rule
+    const limit = rule.limit * this.#multiplier
     const now = this.#now()
     const current = this.#windows.get(key)
     if (current === undefined || now - current.startedAt >= windowMs) {

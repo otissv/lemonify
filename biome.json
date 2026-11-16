@@ -27,7 +27,14 @@
   },
   "linter": {
     "enabled": true,
-    "rules": { "preset": "recommended" }
+    "rules": { "preset": "recommended" },
+    "domains": { "playwright": "none" }
   },
+  "overrides": [
+    {
+      "includes": ["e2e/**", "playwright.config.ts"],
+      "linter": { "domains": { "playwright": "recommended" } }
+    }
+  ],
   "assist": { "actions": { "source": { "organizeImports": "off" } } }
 }

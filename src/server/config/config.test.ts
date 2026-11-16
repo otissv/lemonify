@@ -28,10 +28,21 @@ describe('loadConfig', () => {
       jobRetentionDays: 30,
       maxResultBytesPerUser: 20 * 1024 * 1024 * 1024,
       renderCacheBytes: 2 * 1024 * 1024 * 1024,
+      rateLimitMultiplier: 1,
       baseUrl: 'http://localhost:3100',
       trustedOrigins: ['http://localhost:3100'],
     })
     expect(config.authSecret).toBeUndefined()
+  })
+
+  it('reads how much to loosen the request limits', () => {
+    expect(
+      loadConfig({ LEMONIFY_RATE_LIMIT_MULTIPLIER: '20' }, 8, '/work')
+        .rateLimitMultiplier,
+    ).toBe(20)
+    expect(() =>
+      loadConfig({ LEMONIFY_RATE_LIMIT_MULTIPLIER: '0' }, 8, '/work'),
+    ).toThrow(ValidationError)
   })
 
   it('sizes the CPU pool from the CPU count, between 1 and 4', () => {
