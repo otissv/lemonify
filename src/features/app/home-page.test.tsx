@@ -123,16 +123,16 @@ describe('HomePage', () => {
       expect(click).toHaveBeenCalledTimes(1)
     })
 
-    it('opens the list of uploaded images', async () => {
+    it('opens the library to open an image from it', async () => {
       const user = userEvent.setup()
       await renderApp()
 
       await user.click(
-        within(page()).getByRole('button', { name: 'Uploaded images…' }),
+        within(page()).getByRole('button', { name: 'Open library image…' }),
       )
 
       expect(
-        await screen.findByRole('dialog', { name: 'Uploaded images' }),
+        await screen.findByRole('dialog', { name: 'Open library image' }),
       ).toBeInTheDocument()
     })
 

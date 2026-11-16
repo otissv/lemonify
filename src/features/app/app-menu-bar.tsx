@@ -12,7 +12,6 @@ import {
   MenubarShortcut,
   MenubarTrigger,
 } from '@/components/ui/menubar'
-import { downloadDocument } from '@/features/documents/download-document'
 import { previousDocumentId } from '@/features/documents/document-history'
 import { useImageOpener } from '@/features/app/image-opener'
 import { signOut } from '@/features/auth/auth-client'
@@ -95,9 +94,17 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
     void navigate({ to: '/documents/$id', params: { id: previous } })
   }, [documentId, documents, closeDocumentVisit, navigate])
 
+  const handleInsertImage = useCallback((): void => {
+    if (documentId !== undefined) opener.insertImage(documentId)
+  }, [documentId, opener])
+
+  const handleReplaceImage = useCallback((): void => {
+    if (documentId !== undefined) opener.replaceImage(documentId)
+  }, [documentId, opener])
+
   const handleExportDocument = useCallback((): void => {
-    if (documentId !== undefined) void downloadDocument(documentId)
-  }, [documentId])
+    if (documentId !== undefined) void opener.exportDocument(documentId)
+  }, [documentId, opener])
 
   const handleUndo = useCallback((): void => {
     if (documentId !== undefined) void undoEdit(documentId)
@@ -139,8 +146,8 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
             <MenubarItem disabled={opener.opening} onSelect={opener.openImage}>
               Open image
             </MenubarItem>
-            <MenubarItem onSelect={opener.showUploadedImages}>
-              Uploaded images
+            <MenubarItem onSelect={opener.openLibraryImage}>
+              Open library image
             </MenubarItem>
             <MenubarItem
               disabled={opener.importing}
@@ -184,6 +191,19 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
             >
               Redo
               <MenubarShortcut>Ctrl+Shift+Z</MenubarShortcut>
+            </MenubarItem>
+            <MenubarSeparator />
+            <MenubarItem
+              disabled={documentId === undefined}
+              onSelect={handleInsertImage}
+            >
+              Insert image
+            </MenubarItem>
+            <MenubarItem
+              disabled={documentId === undefined}
+              onSelect={handleReplaceImage}
+            >
+              Replace image
             </MenubarItem>
             <MenubarSeparator />
             <MenubarCheckboxItem

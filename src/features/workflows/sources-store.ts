@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { z } from 'zod'
 
 import type { SourceSummary } from '@/features/documents/document'
-import { listSources } from '@/features/sources/source-functions'
+import { deleteSource, listSources } from '@/features/sources/source-functions'
 import { errorMessage } from '@/lib/error-message'
 
 export enum SourcesStatus {
@@ -36,6 +36,8 @@ interface SourcesState {
   error: string | null
   load: () => Promise<void>
   upload: (file: File) => Promise<SourceSummary>
+  /** Deletes an image nothing uses, and takes it out of the list. */
+  remove: (id: string) => Promise<void>
 }
 
 export const INITIAL_SOURCES_STATE = {
@@ -85,6 +87,12 @@ export const useSourcesStore = create<SourcesState>()((set, get) => ({
         : [source, ...sources],
     }))
     return source
+  },
+  remove: async (id) => {
+    await deleteSource({ data: { id } })
+    set(({ sources }) => ({
+      sources: sources.filter((source) => source.id !== id),
+    }))
   },
 }))
 

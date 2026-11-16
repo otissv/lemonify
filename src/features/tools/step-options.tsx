@@ -93,7 +93,11 @@ function SourceStepOptions({
           )}
         </div>
       </div>
-      <ImagePicker label="image" onPick={handlePick} />
+      <ImagePicker
+        label="image"
+        uploadLabel="Replace image…"
+        onPick={handlePick}
+      />
     </div>
   )
 }

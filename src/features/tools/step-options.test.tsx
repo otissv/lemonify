@@ -120,17 +120,49 @@ describe('StepOptions', () => {
       ).not.toBeInTheDocument()
     })
 
+    it('replaces the image with one from the menu, and does not add a step', async () => {
+      const other = {
+        ...documentView().source,
+        id: 'src-other',
+        fileName: 'other.png',
+      }
+      vi.mocked(listSources).mockResolvedValue([other])
+      const user = userEvent.setup()
+      showOpenImage()
+
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Choose an image for image',
+        }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: 'other.png' }),
+      )
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: {
+              type: 'set-source',
+              stepId: openImageStep(documentView().source.id).id,
+              sourceId: 'src-other',
+            },
+          }),
+        })
+      })
+    })
+
     it('puts the list of your images on the side of the upload button, in one group', async () => {
       vi.mocked(listSources).mockResolvedValue([documentView().source])
       showOpenImage()
 
       const group = screen.getByRole('group', { name: 'image' })
       expect(
-        within(group).getByRole('button', { name: 'Upload image…' }),
+        within(group).getByRole('button', { name: 'Replace image…' }),
       ).toBeInTheDocument()
       expect(
         await within(group).findByRole('button', {
-          name: 'Use an uploaded image for image',
+          name: 'Choose an image for image',
         }),
       ).toHaveAttribute('data-variant', 'secondary')
     })

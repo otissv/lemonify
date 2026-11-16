@@ -1,6 +1,9 @@
 import { applyEdit } from '@/features/documents/document-sync'
 import type { DocumentChange } from '@/features/pipeline/document-change'
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  createSourceStep,
+} from '@/features/pipeline/pipeline'
 import type {
   AiStep,
   PipelineStep,
@@ -11,6 +14,18 @@ import type { AiContent } from '@/features/ai/ai-tools'
 
 type SharpOptions = SharpStep['options']
 
+function addStepAt(
+  documentId: string,
+  step: PipelineStep,
+  index: number,
+): void {
+  void applyEdit(documentId, { type: 'add-step', step, index })
+  const store = useAppStore.getState()
+  store.selectStep(documentId, step.id)
+  store.setDocumentExpanded(documentId, true)
+  store.setActiveTool(Tool.Options)
+}
+
 /** Adds a step after `afterId` (at the end by default), selects it and shows its options, as one undoable change. */
 export function addStepAfter(
   documentId: string,
@@ -20,12 +35,7 @@ export function addStepAfter(
   const steps = currentPipeline(useAppStore.getState(), documentId)?.steps
   if (!steps) return
   const after = steps.findIndex(({ id }) => id === afterId)
-  const index = after === -1 ? steps.length : after + 1
-  void applyEdit(documentId, { type: 'add-step', step, index })
-  const store = useAppStore.getState()
-  store.selectStep(documentId, step.id)
-  store.setDocumentExpanded(documentId, true)
-  store.setActiveTool(Tool.Options)
+  addStepAt(documentId, step, after === -1 ? steps.length : after + 1)
 }
 
 export function deleteStep(documentId: string, stepId: string): void {
@@ -57,6 +67,60 @@ function stepOf(documentId: string, stepId: string): PipelineStep | undefined {
   return currentPipeline(useAppStore.getState(), documentId)?.steps.find(
     ({ id }) => id === stepId,
   )
+}
+
+/** The document's own image: its first Open image step that is switched on, or the first of all. */
+function ownImageIndex(steps: ReadonlyArray<PipelineStep>): number {
+  const enabled = steps.findIndex(
+    (step) => step.kind === PipelineStepKind.Source && step.enabled,
+  )
+  return enabled === -1
+    ? steps.findIndex((step) => step.kind === PipelineStepKind.Source)
+    : enabled
+}
+
+/** Where an inserted image goes: just before the selected step, so that step can use it, or at the end when none is selected. Never ahead of the document's own image, which the new image would then replace. */
+function imageInsertIndex(
+  steps: ReadonlyArray<PipelineStep>,
+  selectedId: string | undefined,
+): number {
+  const selected = steps.findIndex(({ id }) => id === selectedId)
+  if (selected === -1) return steps.length
+  return Math.max(selected, ownImageIndex(steps) + 1)
+}
+
+/** Adds an Open image step for `sourceId` before the selected step (at the end when none is selected), as one undoable change, so that step and those after it can use the image. */
+export function insertImage(documentId: string, sourceId: string): void {
+  const steps = currentPipeline(useAppStore.getState(), documentId)?.steps
+  if (!steps) return
+  const selectedId = useAppStore.getState().selectedSteps[documentId]
+  addStepAt(
+    documentId,
+    createSourceStep(sourceId),
+    imageInsertIndex(steps, selectedId),
+  )
+}
+
+/** The Open image step that replacing an image changes: the selected one, or else the document's own image (its first Open image step that is switched on, or the first of all). */
+function replaceTarget(
+  steps: ReadonlyArray<PipelineStep>,
+  selectedId: string | undefined,
+): string | undefined {
+  const selected = steps.find(({ id }) => id === selectedId)
+  if (selected?.kind === PipelineStepKind.Source) return selected.id
+  const opened = steps.filter((step) => step.kind === PipelineStepKind.Source)
+  return (opened.find(({ enabled }) => enabled) ?? opened[0])?.id
+}
+
+/** Makes the selected Open image step open `sourceId` instead, or the document's own image when another kind of step is selected, as one undoable change. */
+export function replaceImage(documentId: string, sourceId: string): void {
+  const steps = currentPipeline(useAppStore.getState(), documentId)?.steps
+  if (!steps) return
+  const stepId = replaceTarget(
+    steps,
+    useAppStore.getState().selectedSteps[documentId],
+  )
+  if (stepId !== undefined) setStepSource(documentId, stepId, sourceId)
 }
 
 /** Sets the options of a Sharp step, as one undoable change; nothing if the step is gone. */

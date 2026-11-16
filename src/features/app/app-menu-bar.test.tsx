@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { signOut } from '@/features/auth/auth-client'
 import {
+  changeDocument,
   createDocument,
   deleteDocument,
   getDocument,
@@ -21,9 +22,18 @@ import {
   requestThumbnails,
 } from '@/features/render/render-functions'
 import { listSources } from '@/features/sources/source-functions'
+import {
+  INITIAL_SOURCES_STATE,
+  useSourcesStore,
+} from '@/features/workflows/sources-store'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import { INITIAL_APP_STATE, Tool, useAppStore } from '@/store/app-store'
-import { DOCUMENT_ID, documentView } from '@/test/document-fixtures'
+import {
+  DOCUMENT_ID,
+  documentView,
+  echoChanges,
+  openImageStep,
+} from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
 
 vi.mock('@/features/auth/auth-client', () => ({ signOut: vi.fn() }))
@@ -73,6 +83,7 @@ async function openMenu(
 describe('AppMenuBar', () => {
   beforeEach(() => {
     useAppStore.setState(INITIAL_APP_STATE)
+    useSourcesStore.setState(INITIAL_SOURCES_STATE)
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
@@ -162,7 +173,7 @@ describe('AppMenuBar', () => {
       expect(createDocument).not.toHaveBeenCalled()
     })
 
-    it('opens a document on an image uploaded before', async () => {
+    it('opens a document on an image from the library', async () => {
       const opened = documentView([], DOCUMENT_ID, 'one.png')
       vi.mocked(listSources).mockResolvedValue([opened.source])
       vi.mocked(createDocument).mockResolvedValue(opened)
@@ -172,10 +183,10 @@ describe('AppMenuBar', () => {
 
       await openMenu(user, 'File')
       await user.click(
-        screen.getByRole('menuitem', { name: 'Uploaded images' }),
+        screen.getByRole('menuitem', { name: 'Open library image' }),
       )
       await user.click(
-        await screen.findByRole('button', { name: 'Open one.png' }),
+        await screen.findByRole('button', { name: 'Choose one.png' }),
       )
 
       await waitFor(() => {
@@ -250,6 +261,134 @@ describe('AppMenuBar', () => {
   })
 
   describe('with a document open', () => {
+    const OTHER = {
+      ...documentView().source,
+      id: 'src-other',
+      fileName: 'other.png',
+    }
+
+    it('keeps Insert image and Replace image in Edit, greyed out without a document', async () => {
+      const user = userEvent.setup()
+      await renderApp()
+
+      const edit = await openMenu(user, 'Edit')
+
+      for (const name of ['Insert image', 'Replace image']) {
+        expect(within(edit).getByRole('menuitem', { name })).toHaveAttribute(
+          'aria-disabled',
+          'true',
+        )
+      }
+      await user.keyboard('{Escape}')
+      const file = await openMenu(user, 'File')
+      for (const name of ['Insert image', 'Replace image']) {
+        expect(
+          within(file).queryByRole('menuitem', { name }),
+        ).not.toBeInTheDocument()
+      }
+    })
+
+    it('inserts an image from the library as a new Open image step before the selected step', async () => {
+      const view = documentView([BLUR])
+      vi.mocked(getDocument).mockResolvedValue(view)
+      echoChanges(vi.mocked(changeDocument), view)
+      vi.mocked(listSources).mockResolvedValue([OTHER])
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+      useAppStore.getState().selectStep(DOCUMENT_ID, BLUR.id)
+
+      const edit = await openMenu(user, 'Edit')
+      await user.click(
+        within(edit).getByRole('menuitem', { name: 'Insert image' }),
+      )
+      const dialog = await screen.findByRole('dialog', { name: 'Insert image' })
+      await user.click(
+        await within(dialog).findByRole('button', { name: 'Choose other.png' }),
+      )
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: {
+              type: 'add-step',
+              step: expect.objectContaining({
+                kind: 'source',
+                sourceId: 'src-other',
+              }),
+              index: 1,
+            },
+          }),
+        })
+      })
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('dialog', { name: 'Insert image' }),
+        ).not.toBeInTheDocument()
+      })
+    })
+
+    it('replaces the document’s image with one from the library, adding no step', async () => {
+      const view = documentView([BLUR])
+      vi.mocked(getDocument).mockResolvedValue(view)
+      echoChanges(vi.mocked(changeDocument), view)
+      vi.mocked(listSources).mockResolvedValue([OTHER])
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+
+      const edit = await openMenu(user, 'Edit')
+      await user.click(
+        within(edit).getByRole('menuitem', { name: 'Replace image' }),
+      )
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Replace image',
+      })
+      await user.click(
+        await within(dialog).findByRole('button', { name: 'Choose other.png' }),
+      )
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: {
+              type: 'set-source',
+              stepId: openImageStep(view.source.id).id,
+              sourceId: 'src-other',
+            },
+          }),
+        })
+      })
+    })
+
+    it('uploads an image from the Insert image dialog', async () => {
+      const view = documentView()
+      vi.mocked(getDocument).mockResolvedValue(view)
+      echoChanges(vi.mocked(changeDocument), view)
+      vi.mocked(listSources).mockResolvedValue([])
+      useSourcesStore.setState({ upload: vi.fn().mockResolvedValue(OTHER) })
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+
+      const edit = await openMenu(user, 'Edit')
+      await user.click(
+        within(edit).getByRole('menuitem', { name: 'Insert image' }),
+      )
+      await user.upload(
+        await screen.findByLabelText('Upload from computer… file'),
+        new File(['x'], 'other.png', { type: 'image/png' }),
+      )
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: expect.objectContaining({ type: 'add-step' }),
+          }),
+        })
+      })
+    })
+
     it('lives inside the Tools panel', async () => {
       vi.mocked(getDocument).mockResolvedValue(documentView())
       await renderApp(`/documents/${DOCUMENT_ID}`)
@@ -432,21 +571,87 @@ describe('AppMenuBar', () => {
       expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
     })
 
-    it('downloads the document as a file from File', async () => {
+    it('saves the document as a file from File, and says so', async () => {
       vi.mocked(getDocument).mockResolvedValue(documentView())
+      vi.mocked(downloadDocument).mockImplementation(
+        async (_id, onProgress) => {
+          onProgress({ loaded: 1024, total: 2048 })
+          return 'kant.lemon'
+        },
+      )
       const user = userEvent.setup()
       await renderApp(`/documents/${DOCUMENT_ID}`)
       await screen.findByRole('dialog', { name: 'Tools' })
 
       const file = await openMenu(user, 'File')
-
       await user.click(
         within(file).getByRole('menuitem', { name: 'Export document…' }),
       )
 
-      await waitFor(() => {
-        expect(downloadDocument).toHaveBeenCalledWith(DOCUMENT_ID)
-      })
+      expect(downloadDocument).toHaveBeenCalledWith(
+        DOCUMENT_ID,
+        expect.any(Function),
+      )
+      expect(await screen.findByText('Saved “kant.lemon”.')).toBeInTheDocument()
+    })
+
+    it('shows how far a save has got', async () => {
+      vi.mocked(getDocument).mockResolvedValue(documentView())
+      vi.mocked(downloadDocument).mockImplementation(
+        (_id, onProgress) =>
+          new Promise<string>(() => {
+            onProgress({ loaded: 1024, total: 2048 })
+          }),
+      )
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+
+      const file = await openMenu(user, 'File')
+      await user.click(
+        within(file).getByRole('menuitem', { name: 'Export document…' }),
+      )
+
+      expect(
+        await screen.findByText('Saving the document… 1 KB of 2 KB'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('progressbar', { name: 'Saving the document' }),
+      ).toHaveValue(0.5)
+    })
+
+    it('says why a save failed in the alert that floats over the page', async () => {
+      vi.mocked(getDocument).mockResolvedValue(documentView())
+      vi.mocked(downloadDocument).mockRejectedValue(
+        new Error('That image does not exist.'),
+      )
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+
+      const file = await openMenu(user, 'File')
+      await user.click(
+        within(file).getByRole('menuitem', { name: 'Export document…' }),
+      )
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'That image does not exist.',
+      )
+    })
+
+    it('says a document is being opened while its file is sent', async () => {
+      vi.mocked(uploadDocumentFile).mockReturnValue(new Promise(() => {}))
+      const user = userEvent.setup()
+      await renderApp()
+
+      await user.upload(
+        await screen.findByLabelText('Choose a document file'),
+        new File(['x'], 'a.lemon', { type: 'application/zip' }),
+      )
+
+      expect(
+        await screen.findByText('Opening the document…'),
+      ).toBeInTheDocument()
     })
 
     it('opens a document file as a new document from File', async () => {
@@ -464,6 +669,9 @@ describe('AppMenuBar', () => {
       await waitFor(() => {
         expect(router.state.location.pathname).toBe('/documents/imported-1')
       })
+      expect(
+        screen.queryByText('Opening the document…'),
+      ).not.toBeInTheDocument()
     })
 
     it('shows the Export panel from File and each panel from View', async () => {

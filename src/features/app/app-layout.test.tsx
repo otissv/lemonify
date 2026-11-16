@@ -146,7 +146,7 @@ describe('AppLayout', () => {
         within(editor).queryByRole('button', { name: 'Open image' }),
       ).not.toBeInTheDocument()
       expect(
-        within(editor).queryByRole('button', { name: 'Uploaded images' }),
+        within(editor).queryByRole('button', { name: 'Open library image' }),
       ).not.toBeInTheDocument()
       expect(
         within(editor).getByRole('link', { name: 'one.png' }),

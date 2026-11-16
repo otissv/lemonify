@@ -393,7 +393,7 @@ describe('option controls', () => {
 
       await user.click(
         await screen.findByRole('button', {
-          name: 'Use an uploaded image for operand',
+          name: 'Choose an image for operand',
         }),
       )
       await user.click(await screen.findByRole('menuitem', { name: 'one.png' }))

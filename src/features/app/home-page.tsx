@@ -102,8 +102,8 @@ export function HomePage(): React.JSX.Element {
             />
             <StartAction
               icon={RiGalleryLine}
-              label="Uploaded images…"
-              onSelect={opener.showUploadedImages}
+              label="Open library image…"
+              onSelect={opener.openLibraryImage}
             />
             <li>
               <AddWorkflowDialog

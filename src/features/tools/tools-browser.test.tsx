@@ -46,7 +46,7 @@ function stepNames(): Array<string> {
   })
 }
 
-const GROUPS = ['Image', 'AI', 'Geometry', 'Filters', 'Colour']
+const GROUPS = ['AI', 'Geometry', 'Filters', 'Colour']
 
 async function expandAll(
   user: ReturnType<typeof userEvent.setup>,
@@ -82,33 +82,9 @@ describe('ToolsBrowser', () => {
       screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
     ).toEqual(GROUPS)
     await expandAll(user)
-    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(39)
+    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(38)
     expect(
       screen.queryByRole('button', { name: 'Add Jpeg' }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('adds an Open image step for one of your images, after the selected step', async () => {
-    const user = userEvent.setup()
-    await expandAll(user)
-    await user.click(screen.getByRole('button', { name: 'Add Blur' }))
-
-    await user.click(screen.getByRole('button', { name: 'Add Add image' }))
-    await user.click(
-      await screen.findByRole('button', {
-        name: 'Use an uploaded image for image',
-      }),
-    )
-    await user.click(await screen.findByRole('menuitem', { name: 'two.png' }))
-
-    const all = currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps
-    expect(all?.map(({ kind }) => kind)).toEqual(['source', 'sharp', 'source'])
-    expect(all?.at(2)).toMatchObject({ sourceId: 'src-2' })
-    expect(useAppStore.getState().activeTool).toBe(Tool.Options)
-    expect(
-      screen.queryByRole('button', {
-        name: 'Use an uploaded image for image',
-      }),
     ).not.toBeInTheDocument()
   })
 

@@ -6,10 +6,9 @@ import { Input } from '@/components/ui/input'
 import { catalogueFor, createAiStepFor } from '@/features/ai/ai-defaults'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import type { AiToolSummary } from '@/features/ai/ai-tools'
-import { createSharpStep, createSourceStep } from '@/features/pipeline/pipeline'
+import { createSharpStep } from '@/features/pipeline/pipeline'
 import { addStepAfter } from '@/features/pipeline/pipeline-actions'
 import { searchTools, toolGroups } from '@/features/tools/tool-catalogue'
-import { ImagePicker } from '@/features/workflows/fields/image-picker'
 import type { ToolEntry } from '@/features/tools/tool-catalogue'
 import { errorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
@@ -92,7 +91,6 @@ export function ToolsBrowser({
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
-  const [choosingImage, setChoosingImage] = useState(false)
   const searchId = useId()
   const groups = searchTools(toolGroups(tools), query)
   const searching = query.trim() !== ''
@@ -109,19 +107,9 @@ export function ToolsBrowser({
     setQuery(event.target.value)
   }
 
-  function handleOpenImage(sourceId: string): void {
-    const afterId = useAppStore.getState().selectedSteps[documentId]
-    addStepAfter(documentId, createSourceStep(sourceId), afterId)
-    setChoosingImage(false)
-  }
-
   function handleAdd(tool: ToolEntry): void {
     setError(null)
     const afterId = useAppStore.getState().selectedSteps[documentId]
-    if (tool.kind === 'source') {
-      setChoosingImage((current) => !current)
-      return
-    }
     if (tool.kind === 'sharp') {
       addStepAfter(documentId, createSharpStep(tool.value), afterId)
       return
@@ -160,9 +148,6 @@ export function ToolsBrowser({
           <p role="alert" className="text-body-md text-destructive">
             {error}
           </p>
-        )}
-        {choosingImage && (
-          <ImagePicker label="image" onPick={handleOpenImage} />
         )}
         {groups.length === 0 && (
           <p role="status" className="text-body-md text-muted-foreground">
