@@ -104,10 +104,10 @@ describe('StepOptions', () => {
       vi.mocked(listSources).mockResolvedValue([])
     })
 
-    it('shows the image it opens, with no heading', () => {
+    it('shows the image it opens under the heading Image', () => {
       showOpenImage()
 
-      expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Image' })).toBeVisible()
       expect(screen.getByText('one.png')).toBeVisible()
     })
 
@@ -201,6 +201,35 @@ describe('StepOptions', () => {
       expect(
         screen.getByRole('menuitem', { name: 'Choose from library…' }),
       ).toBeVisible()
+    })
+  })
+
+  describe('naming a step', () => {
+    it('says what kind of step it is and lets it be renamed, as one change', async () => {
+      const blur = createSharpStep('blur')
+      const view = documentView([blur])
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+      const user = userEvent.setup()
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      expect(screen.getByRole('heading', { name: 'Blur' })).toBeVisible()
+      await user.type(
+        screen.getByRole('textbox', { name: 'Name' }),
+        'Soften{Enter}',
+      )
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: { type: 'rename-step', stepId: blur.id, name: 'Soften' },
+          }),
+        })
+      })
+      expect(screen.getByRole('heading', { name: 'Blur' })).toBeVisible()
     })
   })
 

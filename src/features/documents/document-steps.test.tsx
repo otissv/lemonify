@@ -139,6 +139,19 @@ describe('DocumentSteps', () => {
     expect(within(list).getByText('Default options')).toBeVisible()
   })
 
+  it('titles a step by its name, and keeps the tool’s name for its options', async () => {
+    const list = await showSteps(
+      [{ ...BLUR, name: 'Soften' }],
+      userEvent.setup(),
+    )
+
+    expect(within(list).getByRole('button', { name: 'Soften' })).toBeVisible()
+    expect(
+      within(list).queryByRole('button', { name: 'Blur' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide Soften' })).toBeVisible()
+  })
+
   it('shows a layer with its image, opacity and blend', async () => {
     const layer = {
       ...createLayerStep('second'),

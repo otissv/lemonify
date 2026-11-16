@@ -119,6 +119,16 @@ export function setStepSource(
   void applyEdit(documentId, { type: 'set-source', stepId, sourceId })
 }
 
+/** Gives a step a name, or with an empty one takes it away, as one undoable change; nothing if the step is gone. */
+export function renameStep(
+  documentId: string,
+  stepId: string,
+  name: string,
+): void {
+  if (stepOf(documentId, stepId) === undefined) return
+  void applyEdit(documentId, { type: 'rename-step', stepId, name })
+}
+
 /** Sets how a layer is drawn, as one undoable change; nothing if the step is gone or is not a layer. */
 export function setLayerSettings(
   documentId: string,

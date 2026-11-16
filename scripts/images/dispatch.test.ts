@@ -104,6 +104,7 @@ describe('COMMANDS', () => {
       'document step set',
       'document step enable',
       'document step disable',
+      'document step rename',
       'export',
       'workflow create',
       'workflow show',

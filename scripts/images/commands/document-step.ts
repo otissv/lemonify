@@ -244,6 +244,21 @@ function setChange(step: PipelineStep, given: Given): DocumentChange {
   }
 }
 
+export const documentStepRenameCommand = defineAppCommand({
+  name: 'document step rename',
+  summary: 'Give a step a name, or take its name away',
+  synopsis: '<documentId> <stepId> [<name>]',
+  help: "Names the step in the sidebar. Leave <name> out (or give an empty one) to go back to the tool's own name.",
+  shape: { documentId: id, stepId: id, name: z.string().optional() },
+  positionals: ['documentId', 'stepId', 'name'],
+  run: (context) =>
+    change(context, () => ({
+      type: 'rename-step',
+      stepId: context.options.stepId,
+      name: context.options.name ?? '',
+    })),
+})
+
 function enabling(name: string, enabled: boolean) {
   const verb = enabled ? 'Switch on' : 'Switch off'
   return defineAppCommand({

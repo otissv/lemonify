@@ -13,10 +13,12 @@ import type {
 import type { LayerSettings } from '@/features/pipeline/layer'
 import {
   setAiSettings,
+  renameStep,
   setLayerSettings,
   setSharpOptions,
   setStepSource,
 } from '@/features/pipeline/pipeline-actions'
+import { StepNameField } from '@/features/tools/step-name-field'
 import { LayerSettingsForm } from '@/features/tools/layer-settings-form'
 import { formatSize } from '@/lib/format-size'
 import { pipelineStepLabel } from '@/features/pipeline/step-problems'
@@ -212,9 +214,17 @@ export function StepOptions({
 
   return (
     <div className="flex flex-col">
-      {step.kind !== PipelineStepKind.Source && (
-        <h2 className="px-4 pt-4 text-title-sm">{pipelineStepLabel(step)}</h2>
-      )}
+      <h2 className="px-4 pt-4 text-title-sm">{pipelineStepLabel(step)}</h2>
+      <div className="px-4 pt-3">
+        <StepNameField
+          key={step.id}
+          name={step.name}
+          fallback={pipelineStepLabel(step)}
+          onRename={(name) => {
+            renameStep(documentId, step.id, name)
+          }}
+        />
+      </div>
       {skipped !== undefined && (
         <p role="status" className="px-4 pt-2 text-caption text-destructive">
           {skipped}

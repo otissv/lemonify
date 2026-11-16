@@ -41,3 +41,8 @@ export function pipelineStepLabel(step: PipelineStep): string {
       return AI_TOOLS[step.tool].label
   }
 }
+
+/** What a step is called: the name it was given, or else its tool's name. */
+export function pipelineStepTitle(step: PipelineStep): string {
+  return step.name ?? pipelineStepLabel(step)
+}

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import {
+  MAX_STEP_NAME_LENGTH,
   PipelineSchema,
   PipelineStepKind,
   PipelineStepSchema,
@@ -61,6 +62,12 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     type: z.literal('set-enabled'),
     stepId: z.string().min(1),
     enabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal('rename-step'),
+    stepId: z.string().min(1),
+    /** An empty name goes back to the tool's own name. */
+    name: z.string().max(MAX_STEP_NAME_LENGTH * 2),
   }),
 ])
 
@@ -147,6 +154,14 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         enabled: step.enabled,
       }
     }
+    case 'rename-step': {
+      const { step } = requireStep(pipeline, change.stepId)
+      return {
+        type: 'rename-step',
+        stepId: change.stepId,
+        name: step.name ?? '',
+      }
+    }
   }
 }
 
@@ -227,6 +242,18 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       if (!change.enabled) requireNotImage(pipeline, change.stepId)
       else requireStep(pipeline, change.stepId)
       return setStepEnabled(pipeline, change.stepId, change.enabled)
+    case 'rename-step': {
+      const { step } = requireStep(pipeline, change.stepId)
+      const name = change.name.trim()
+      if (name.length > MAX_STEP_NAME_LENGTH) {
+        throw new InvalidChangeError(
+          `Use ${MAX_STEP_NAME_LENGTH} characters or fewer for a name.`,
+        )
+      }
+      if (name !== '') return replaceStep(pipeline, { ...step, name })
+      const { name: _previous, ...unnamed } = step
+      return replaceStep(pipeline, unnamed)
+    }
   }
 }
 
@@ -259,6 +286,6 @@ export function planChange(
 ): { pipeline: Pipeline; patch: HistoryPatch } | null {
   const inverse = inverseOf(pipeline, change)
   const next = applyChange(pipeline, change)
-  if (sameJson(next, pipeline)) return null
+  if (sameJson(next, PipelineSchema.parse(pipeline))) return null
   return { pipeline: next, patch: { forward: change, inverse } }
 }

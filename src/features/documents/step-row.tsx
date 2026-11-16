@@ -18,7 +18,7 @@ import {
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type { LayerStep, PipelineStep } from '@/features/pipeline/pipeline'
 import {
-  pipelineStepLabel,
+  pipelineStepTitle,
   stepProblem,
 } from '@/features/pipeline/step-problems'
 import { cn } from '@/lib/utils'
@@ -131,7 +131,7 @@ export function StepRow({
   onDelete,
   onMove,
 }: StepRowProps): React.JSX.Element {
-  const label = pipelineStepLabel(step)
+  const label = pipelineStepTitle(step)
   const isImage = step.kind === PipelineStepKind.Source
   const status = statusOf(step, sourceName, outOfDate, skipped, run)
 

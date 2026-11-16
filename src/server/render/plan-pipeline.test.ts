@@ -184,6 +184,16 @@ describe('planPipeline', () => {
       expect(planKey(withOff)).toBe(planKey(plain))
     })
 
+    it('do not change the key when they are renamed', async () => {
+      const layer = createLayerStep('second')
+      const named = { ...layer, name: 'Watermark' }
+
+      const plain = await planPipeline([IMAGE, layer], lookups())
+      const renamed = await planPipeline([IMAGE, named], lookups())
+
+      expect(planKey(renamed)).toBe(planKey(plain))
+    })
+
     it('make the key change with their settings and their place among the steps', async () => {
       const flip = createSharpStep('flip')
       const layer = createLayerStep('second')

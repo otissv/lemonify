@@ -5,6 +5,7 @@ import { createLayerStep, createSharpStep } from '@/features/pipeline/pipeline'
 import {
   insertImage,
   replaceImage,
+  renameStep,
   setLayerSettings,
 } from '@/features/pipeline/pipeline-actions'
 import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
@@ -124,6 +125,29 @@ describe('replaceImage', () => {
 
   it('does nothing when the document is not open', () => {
     replaceImage(DOCUMENT_ID, 'other')
+
+    expect(applyEdit).not.toHaveBeenCalled()
+  })
+})
+
+describe('renameStep', () => {
+  it('renames a step as one change', () => {
+    const blur = createSharpStep('blur')
+    loadDocumentIntoEditor(documentView([blur]))
+
+    renameStep(DOCUMENT_ID, blur.id, 'Soften')
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'rename-step',
+      stepId: blur.id,
+      name: 'Soften',
+    })
+  })
+
+  it('does nothing for a step that is gone', () => {
+    loadDocumentIntoEditor(documentView([]))
+
+    renameStep(DOCUMENT_ID, 'gone', 'Soften')
 
     expect(applyEdit).not.toHaveBeenCalled()
   })

@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { pipelineStepLabel } from '@/features/pipeline/step-problems'
+import { pipelineStepTitle } from '@/features/pipeline/step-problems'
 
 import type { Logger } from '../../http/logger.ts'
 import { actorForOwner } from '../../domain/system-actor.ts'
@@ -40,7 +40,7 @@ export function requireCompletePlan(
   const problem = plan.skipped.at(0)
   if (problem === undefined) return
   const step = steps.find(({ id }) => id === problem.stepId)
-  const label = step ? pipelineStepLabel(step) : 'A step'
+  const label = step ? pipelineStepTitle(step) : 'A step'
   throw new ValidationError(`${label}: ${problem.message}`)
 }
 

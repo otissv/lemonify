@@ -19,6 +19,7 @@ import {
 import {
   documentStepAddCommand,
   documentStepDisableCommand,
+  documentStepRenameCommand,
   documentStepEnableCommand,
   documentStepMoveCommand,
   documentStepRemoveCommand,
@@ -78,6 +79,7 @@ export const COMMANDS: readonly ImageCommand[] = [
   documentStepSetCommand,
   documentStepEnableCommand,
   documentStepDisableCommand,
+  documentStepRenameCommand,
   exportCommand,
   workflowCreateCommand,
   workflowShowCommand,

@@ -34,6 +34,12 @@ export const EDITING_OP_NAMES: ReadonlyArray<string> = [
 
 const enabled = z.boolean().default(true)
 
+/** The longest name a step can be given. */
+export const MAX_STEP_NAME_LENGTH = 60
+
+/** What a person calls the step; the tool's own name is used when there is none. */
+const name = z.string().trim().min(1).max(MAX_STEP_NAME_LENGTH).optional()
+
 /**
  * A step of a file's pipeline: a workflow step without a place on a canvas,
  * plus whether it is switched on. Built from the workflow's own step
@@ -45,19 +51,22 @@ export const PipelineStepSchema = z.discriminatedUnion('kind', [
       .string()
       .refine((op) => EDITING_OP_NAMES.includes(op), 'Not an editing tool'),
     enabled,
+    name,
   }),
-  aiStepSchema({ id: z.uuid(), enabled }),
+  aiStepSchema({ id: z.uuid(), enabled, name }),
   z.strictObject({
     id: z.uuid(),
     kind: z.literal(PipelineStepKind.Source),
     sourceId: z.string().min(1),
     enabled,
+    name,
   }),
   z.strictObject({
     id: z.uuid(),
     kind: z.literal(PipelineStepKind.Layer),
     sourceId: z.string().min(1),
     enabled,
+    name,
     ...layerSettingsSchema.shape,
   }),
 ])

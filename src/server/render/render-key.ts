@@ -21,7 +21,7 @@ function stepIdentity(step: KeyedStep): unknown {
     case PipelineStepKind.Sharp:
       return { kind: step.kind, op: step.op, options: step.options }
     case PipelineStepKind.Layer: {
-      const { id: _id, enabled: _enabled, ...identity } = step
+      const { id: _id, enabled: _enabled, name: _name, ...identity } = step
       return identity
     }
     case PipelineStepKind.Ai:

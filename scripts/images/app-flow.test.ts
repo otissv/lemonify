@@ -310,6 +310,18 @@ describe('workflows through the CLI', () => {
       sourceId: base.source.id,
     })
 
+    const renamed = await cli<Doc>(
+      'document',
+      'step',
+      'rename',
+      document.id,
+      layer?.id ?? '',
+      'Watermark',
+    )
+    expect(renamed.document.pipeline.steps.at(-1)).toMatchObject({
+      name: 'Watermark',
+    })
+
     const first = swapped.document.pipeline.steps.at(0)
     const replaced = await cli<Doc>(
       'document',
