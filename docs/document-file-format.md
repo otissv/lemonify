@@ -6,7 +6,7 @@ The container is a zip written with Node's built-in `zlib`, so no archive librar
 
 Storing images under the hash of their bytes does three things. An image used twice is stored once. Import checks every image against its hash, so a damaged file is refused. A future sync can ask which hashes the other side already has and send only the rest, which is why the format is content addressed.
 
-The manifest (`src/server/bundle/manifest.ts`) is versioned. It names the document, carries its pipeline, and lists each Source (its id in the pipeline, hash and file name) and each AI result (the render key, hash, step id and file name). A file from a newer version is refused with a message to update.
+The manifest (`src/server/bundle/manifest.ts`) is versioned. It names the document, carries its pipeline, and lists each Source (its id in the pipeline, hash and file name) and each AI result (the render key, hash, step id and file name). A file from a newer version is refused with a message to update, and one from an older version (before images were layers, version 1) is refused too, since there is no conversion for files.
 
 Render keys name layer images and second images by their content hash instead of their per-user Source id (`planPipeline`). The same pipeline on the same pixels therefore has the same key on every machine, so an imported AI result is found again and nothing runs a second time.
 

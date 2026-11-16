@@ -21,7 +21,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { filterByQuery } from '@/features/app/sidebar-search'
 import type { DocumentSummary } from '@/features/documents/document'
-import { deleteDocument } from '@/features/documents/document-functions'
+import {
+  deleteDocument,
+  renameDocument,
+} from '@/features/documents/document-functions'
+import { DocumentNameInput } from '@/features/app/document-name-input'
 import { DocumentSteps } from '@/features/documents/document-steps'
 import { errorMessage } from '@/lib/error-message'
 import {
@@ -39,6 +43,7 @@ import { SidebarTab, useAppStore } from '@/store/app-store'
 
 const rootRoute = getRouteApi('__root__')
 const DELETE_FAILED = 'The image could not be deleted.'
+const RENAME_FAILED = 'The image could not be renamed.'
 
 const TAB_LABELS: Readonly<Record<SidebarTab, string>> = {
   [SidebarTab.Editor]: 'Editor',
@@ -66,10 +71,39 @@ function DocumentItem({
   )
   const setExpanded = useAppStore((state) => state.setDocumentExpanded)
   const forgetDocument = useAppStore((state) => state.forgetDocument)
+  const confirmDocument = useAppStore((state) => state.confirmDocument)
   const [error, setError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
 
   function handleToggle(): void {
     setExpanded(document.id, !expanded)
+  }
+
+  function handleStartRename(): void {
+    setError(null)
+    setRenaming(true)
+  }
+
+  function handleRenameKey(event: React.KeyboardEvent<HTMLElement>): void {
+    if (event.key !== 'F2') return
+    event.preventDefault()
+    handleStartRename()
+  }
+
+  function handleCancelRename(): void {
+    setRenaming(false)
+  }
+
+  async function handleRename(name: string): Promise<void> {
+    setRenaming(false)
+    try {
+      await renameDocument({ data: { id: document.id, name } })
+      const session = useAppStore.getState().documents[document.id]
+      if (session) confirmDocument({ ...session.confirmed, name }, false)
+      await router.invalidate()
+    } catch (caught) {
+      setError(errorMessage(caught, RENAME_FAILED))
+    }
   }
 
   async function handleDelete(): Promise<void> {
@@ -104,21 +138,31 @@ function DocumentItem({
             <RiArrowRightSLine aria-hidden="true" />
           )}
         </Button>
-        <SidebarMenuButton
-          asChild
-          isActive={active}
-          className="flex-1 text-foreground hover:text-foreground data-[active=true]:bg-transparent"
-        >
-          <Link
-            to="/documents/$id"
-            params={{ id: document.id }}
-            title={document.source?.fileName}
-            onClick={handleToggle}
+        {renaming ? (
+          <DocumentNameInput
+            name={document.name}
+            onCommit={(name) => void handleRename(name)}
+            onCancel={handleCancelRename}
+          />
+        ) : (
+          <SidebarMenuButton
+            asChild
+            isActive={active}
+            className="flex-1 text-foreground hover:text-foreground data-[active=true]:bg-transparent"
           >
-            <RiImageLine aria-hidden="true" />
-            <span className="truncate">{document.name}</span>
-          </Link>
-        </SidebarMenuButton>
+            <Link
+              to="/documents/$id"
+              params={{ id: document.id }}
+              title={document.source?.fileName}
+              onClick={handleToggle}
+              onDoubleClick={handleStartRename}
+              onKeyDown={handleRenameKey}
+            >
+              <RiImageLine aria-hidden="true" />
+              <span className="truncate">{document.name}</span>
+            </Link>
+          </SidebarMenuButton>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"

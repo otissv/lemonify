@@ -34,7 +34,7 @@ export function DocumentView({ id }: DocumentViewProps): React.JSX.Element {
     return (
       <div className="flex size-full items-center justify-center">
         <p role="status" className="text-body-md text-muted-foreground">
-          No image is open. Open one from the File menu.
+          This document has no image. Add one from Edit › Insert image.
         </p>
       </div>
     )
@@ -47,7 +47,7 @@ export function DocumentView({ id }: DocumentViewProps): React.JSX.Element {
 interface CanvasProps {
   url: string
   name: string
-  /** The size of the document's image, used until the picture itself has loaded. */
+  /** The size of the canvas image, used until the picture itself has loaded. */
   width: number
   height: number
 }

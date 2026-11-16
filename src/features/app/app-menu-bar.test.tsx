@@ -32,7 +32,7 @@ import {
   DOCUMENT_ID,
   documentView,
   echoChanges,
-  openImageStep,
+  baseLayer,
 } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
 
@@ -288,6 +288,23 @@ describe('AppMenuBar', () => {
       }
     })
 
+    it('greys out Replace image when the document has no layer', async () => {
+      const view = { ...documentView(), pipeline: { steps: [] } }
+      vi.mocked(getDocument).mockResolvedValue(view)
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+
+      const edit = await openMenu(user, 'Edit')
+
+      expect(
+        within(edit).getByRole('menuitem', { name: 'Replace image' }),
+      ).toHaveAttribute('aria-disabled', 'true')
+      expect(
+        within(edit).getByRole('menuitem', { name: 'Insert image' }),
+      ).not.toHaveAttribute('aria-disabled', 'true')
+    })
+
     it('inserts an image from the library as a layer on top of the selected step', async () => {
       const view = documentView([BLUR])
       vi.mocked(getDocument).mockResolvedValue(view)
@@ -353,7 +370,7 @@ describe('AppMenuBar', () => {
           data: expect.objectContaining({
             change: {
               type: 'set-source',
-              stepId: openImageStep(view.source.id).id,
+              stepId: baseLayer(view.source.id).id,
               sourceId: 'src-other',
             },
           }),

@@ -32,6 +32,8 @@ export enum Tool {
   Export = 'export',
   /** The AI results and exports kept for the document. */
   Results = 'results',
+  /** What the document is: its image, steps and dates. */
+  Document = 'document',
 }
 
 export const MAX_RECENT_UPSCALE_MODELS = 10

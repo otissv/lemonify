@@ -1,7 +1,11 @@
 import { applyEdit } from '@/features/documents/document-sync'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import type { LayerSettings } from '@/features/pipeline/layer'
-import { PipelineStepKind, createLayerStep } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  canvasLayer,
+  createLayerStep,
+} from '@/features/pipeline/pipeline'
 import type {
   AiStep,
   PipelineStep,
@@ -76,17 +80,19 @@ export function insertImage(documentId: string, sourceId: string): void {
   )
 }
 
-/** The step that replacing an image changes: the selected layer, or else the document's own image, which is the first step. */
+/** The step that replacing an image changes: the selected layer, or else the layer that sets the canvas, or the first layer when all are off. */
 function replaceTarget(
   steps: ReadonlyArray<PipelineStep>,
   selectedId: string | undefined,
 ): string | undefined {
   const selected = steps.find(({ id }) => id === selectedId)
   if (selected?.kind === PipelineStepKind.Layer) return selected.id
-  return steps.find((step) => step.kind === PipelineStepKind.Source)?.id
+  const canvas = canvasLayer({ steps })
+  return (canvas ?? steps.find((step) => step.kind === PipelineStepKind.Layer))
+    ?.id
 }
 
-/** Makes the selected layer use `sourceId` instead, or the document's own image when another kind of step is selected, as one undoable change. */
+/** Makes the selected layer use `sourceId` instead, or the layer that sets the canvas when another kind of step is selected, as one undoable change. */
 export function replaceImage(documentId: string, sourceId: string): void {
   const steps = currentPipeline(useAppStore.getState(), documentId)?.steps
   if (!steps) return
@@ -107,15 +113,13 @@ export function setSharpOptions(
   void applyEdit(documentId, { type: 'set-options', stepId, options })
 }
 
-/** Makes the document's image or a layer use another image, as one undoable change; nothing if the step is gone. */
+/** Makes a layer use another image, as one undoable change; nothing if the step is gone. */
 export function setStepSource(
   documentId: string,
   stepId: string,
   sourceId: string,
 ): void {
-  const kind = stepOf(documentId, stepId)?.kind
-  if (kind !== PipelineStepKind.Source && kind !== PipelineStepKind.Layer)
-    return
+  if (stepOf(documentId, stepId)?.kind !== PipelineStepKind.Layer) return
   void applyEdit(documentId, { type: 'set-source', stepId, sourceId })
 }
 

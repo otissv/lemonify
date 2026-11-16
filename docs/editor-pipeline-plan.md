@@ -4,7 +4,7 @@ Status: everything in this plan is built: the editor's five steps, the Documents
 
 ## Built
 
-Images are layered on the document's own image, which is the canvas: see `docs/layer-pipeline.md` for the model, the settings, the render and the migration. Where this plan says "Open image Step" or lists Composite as an editor tool, that file is current.
+Every image is a layer, and the first layer that is switched on is the canvas: see `docs/layer-pipeline.md` for the model, the settings, the render and the migration. Where this plan says "Open image Step" or lists Composite as an editor tool, that file is current.
 
 All of it follows the production bar below: nothing transitional, and the old "version per Apply" model, the in-memory open-image registry and the per-path edit files are gone.
 

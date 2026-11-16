@@ -5,7 +5,7 @@ import {
   remapPipelineSources,
   stepOperandSourceIds,
 } from '@/features/pipeline/image-operands'
-import { createSharpStep, createSourceStep } from '@/features/pipeline/pipeline'
+import { createSharpStep, createLayerStep } from '@/features/pipeline/pipeline'
 
 describe('stepOperandSourceIds', () => {
   it('reads the operand of a boolean step', () => {
@@ -67,7 +67,7 @@ describe('remapPipelineSources', () => {
   ])
 
   it('points Open image steps at the new ids', () => {
-    const open = createSourceStep('a')
+    const open = createLayerStep('a')
 
     const remapped = remapPipelineSources({ steps: [open] }, MAP)
 
@@ -102,7 +102,7 @@ describe('remapPipelineSources', () => {
 
   it('says which image is missing from the map', () => {
     expect(() =>
-      remapPipelineSources({ steps: [createSourceStep('zzz')] }, MAP),
+      remapPipelineSources({ steps: [createLayerStep('zzz')] }, MAP),
     ).toThrow(/zzz/)
   })
 })

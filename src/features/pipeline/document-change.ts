@@ -139,7 +139,7 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
     }
     case 'set-source': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (!hasImage(step)) throw wrongKind()
+      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
       return {
         type: 'set-source',
         stepId: change.stepId,
@@ -169,31 +169,11 @@ function wrongKind(): InvalidChangeError {
   return new InvalidChangeError('That step does not have those settings.')
 }
 
-function hasImage(
-  step: PipelineStep,
-): step is Extract<
-  PipelineStep,
-  { kind: typeof PipelineStepKind.Source | typeof PipelineStepKind.Layer }
-> {
-  return (
-    step.kind === PipelineStepKind.Source ||
-    step.kind === PipelineStepKind.Layer
-  )
-}
-
 function layerSettingsOf(
   step: Extract<PipelineStep, { kind: typeof PipelineStepKind.Layer }>,
 ): LayerSettings {
   const { opacity, blend, fit, scale, rotation, anchor, x, y } = step
   return { opacity, blend, fit, scale, rotation, anchor, x, y }
-}
-
-function requireNotImage(pipeline: Pipeline, stepId: string): void {
-  if (requireStep(pipeline, stepId).step.kind === PipelineStepKind.Source) {
-    throw new InvalidChangeError(
-      'The document’s image stays where it is. Replace it to use another.',
-    )
-  }
 }
 
 function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
@@ -204,10 +184,10 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       }
       return insertStep(pipeline, change.step, change.index)
     case 'remove-step':
-      requireNotImage(pipeline, change.stepId)
+      requireStep(pipeline, change.stepId)
       return removeStep(pipeline, change.stepId)
     case 'move-step':
-      requireNotImage(pipeline, change.stepId)
+      requireStep(pipeline, change.stepId)
       return moveStep(pipeline, change.stepId, change.to)
     case 'set-options': {
       const { step } = requireStep(pipeline, change.stepId)
@@ -235,12 +215,11 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
     }
     case 'set-source': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (!hasImage(step)) throw wrongKind()
+      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
       return replaceStep(pipeline, { ...step, sourceId: change.sourceId })
     }
     case 'set-enabled':
-      if (!change.enabled) requireNotImage(pipeline, change.stepId)
-      else requireStep(pipeline, change.stepId)
+      requireStep(pipeline, change.stepId)
       return setStepEnabled(pipeline, change.stepId, change.enabled)
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)

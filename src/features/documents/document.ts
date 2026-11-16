@@ -16,9 +16,9 @@ export type SourceSummary = {
 export type DocumentView = {
   id: string
   name: string
-  /** The document's own image: the first step's. Null when it is gone. */
+  /** The image of the layer that sets the canvas: the first layer that is switched on. Null when there is none. */
   source: SourceSummary | null
-  /** Every image the document's image and its layers use, in pipeline order. */
+  /** Every image the layers use, in pipeline order. */
   sources: ReadonlyArray<SourceSummary>
   pipeline: Pipeline
   /** Changes must name the revision they were made on, so two tabs never overwrite each other. */

@@ -71,12 +71,13 @@ export const documentStepAddCommand = defineAppCommand({
   summary: 'Add a Sharp, AI or layer step to a document',
   synopsis:
     '<documentId> (--op <name> [--options <json>] | --ai <tool> --settings <json> | --layer <sourceId> [--settings <json>]) [--index <n>]',
-  help: `Adds a step to the end of the pipeline, or at --index (never before the
-document's image, which is step 0). A Sharp step is an operation by name
+  help: `Adds a step to the end of the pipeline, or at --index. A Sharp step is an operation by name
 (\`${'pnpm images sharp --help'}\` and \`pnpm images schema sharp\` list them) with its
 options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings; a layer
-draws another image on top of everything before it, and the steps after it act
-on the picture with the layer in it. Layer settings, all optional: opacity
+is an image: the first layer that is switched on is the canvas, which the
+steps after it work on, and later layers are drawn on top of everything before
+them (the steps after a layer act on the picture with the layer in it). The
+canvas layer's own settings are ignored. Layer settings, all optional: opacity
 (0-100), blend (normal, multiply, screen, overlay, darken, lighten,
 colour-dodge, colour-burn, hard-light, soft-light, difference, exclusion), fit
 (inside, original, contain, cover, stretch), scale (1-1000), rotation
@@ -163,12 +164,12 @@ export const documentStepSetCommand = defineAppCommand({
     '<documentId> <stepId> (--options <json> | --settings <json> | --source <sourceId>)',
   help: `Replaces the options of a Sharp step, the settings of an AI step or of a layer
 (every layer setting not given goes back to its default), or the image of a
-layer or of the document itself (step 0).
+layer.
 
 Options:
   --options <json>     New options for a Sharp step (${JSON_VALUE})
   --settings <json>    New settings for an AI step or a layer (${JSON_VALUE})
-  --source <sourceId>  The source a layer or the document's image shows`,
+  --source <sourceId>  The source a layer shows`,
   shape: {
     documentId: id,
     stepId: id,
@@ -209,16 +210,6 @@ function requireGiven<T>(value: T | undefined, flag: string, what: string): T {
 function setChange(step: PipelineStep, given: Given): DocumentChange {
   const stepId = step.id
   switch (step.kind) {
-    case PipelineStepKind.Source:
-      return {
-        type: 'set-source',
-        stepId,
-        sourceId: requireGiven(
-          given.source,
-          '--source',
-          'the document’s image',
-        ),
-      }
     case PipelineStepKind.Layer:
       if (given.source !== undefined) {
         return { type: 'set-source', stepId, sourceId: given.source }

@@ -14,7 +14,6 @@ import {
   createAiStep,
   createLayerStep,
   createSharpStep,
-  createSourceStep,
 } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 
@@ -207,13 +206,13 @@ describe('DocumentBundleService', () => {
       Buffer.from(
         JSON.stringify({
           format: 'lemonify-document',
-          version: 1,
+          version: 2,
           name: 'Lying',
           pipeline: {
             steps: [
               {
                 id: '00000000-0000-4000-8000-000000000001',
-                kind: 'source',
+                kind: 'layer',
                 sourceId: 's1',
                 enabled: true,
               },
@@ -246,13 +245,13 @@ describe('DocumentBundleService', () => {
       Buffer.from(
         JSON.stringify({
           format: 'lemonify-document',
-          version: 1,
+          version: 2,
           name: 'Short',
           pipeline: {
             steps: [
               {
                 id: '00000000-0000-4000-8000-000000000001',
-                kind: 'source',
+                kind: 'layer',
                 sourceId: 'missing',
                 enabled: true,
               },
@@ -268,6 +267,19 @@ describe('DocumentBundleService', () => {
     await expect(
       t.app.bundles.importDocument(t.ann, file('short.lemon')),
     ).rejects.toThrow(ValidationError)
+  })
+
+  it('refuses a document made by an older version, before images were layers', async () => {
+    const writer = await ZipWriter.create(file('older.lemon'))
+    await writer.addBuffer(
+      'manifest.json',
+      Buffer.from(JSON.stringify({ format: 'lemonify-document', version: 1 })),
+    )
+    await writer.close()
+
+    await expect(
+      t.app.bundles.importDocument(t.ann, file('older.lemon')),
+    ).rejects.toThrow(/older version/)
   })
 
   it('refuses a document made by a newer version', async () => {
@@ -569,9 +581,9 @@ describe('DocumentBundleService', () => {
         Buffer.from(
           JSON.stringify({
             format: 'lemonify-document',
-            version: 1,
+            version: 2,
             name: 'Heavy',
-            pipeline: { steps: [createSourceStep('s1')] },
+            pipeline: { steps: [createLayerStep('s1')] },
             sources: [{ id: 's1', hash, fileName: 'a.png' }],
             results: [],
           }),

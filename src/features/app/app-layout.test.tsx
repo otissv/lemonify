@@ -6,6 +6,7 @@ import {
   deleteDocument,
   getDocument,
   listDocuments,
+  renameDocument,
 } from '@/features/documents/document-functions'
 import type { DocumentSummary } from '@/features/documents/document'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
@@ -23,6 +24,7 @@ vi.mock('@/features/documents/document-functions', () => ({
   getDocument: vi.fn(),
   createDocument: vi.fn(),
   deleteDocument: vi.fn(),
+  renameDocument: vi.fn(),
   changeDocument: vi.fn(),
   undoDocument: vi.fn(),
   redoDocument: vi.fn(),
@@ -301,6 +303,71 @@ describe('AppLayout', () => {
       expect(
         screen.queryByRole('link', { name: 'one.png' }),
       ).not.toBeInTheDocument()
+    })
+  })
+
+  describe('renaming a document', () => {
+    it('edits the name in place on a double-click, and saves it on Enter', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST])
+      vi.mocked(renameDocument).mockResolvedValue({
+        ...documentView(),
+        id: FIRST_ID,
+        name: 'Summer',
+      })
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      await user.dblClick(screen.getByText('one.png', { selector: 'span' }))
+      await user.keyboard('Summer{Enter}')
+
+      expect(renameDocument).toHaveBeenCalledWith({
+        data: { id: FIRST_ID, name: 'Summer' },
+      })
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('textbox', { name: 'Document name' }),
+        ).not.toBeInTheDocument()
+      })
+    })
+
+    it('starts editing on F2, so the keyboard can rename too', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST])
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      screen.getByRole('link', { name: 'one.png' }).focus()
+      await user.keyboard('{F2}')
+
+      expect(
+        await screen.findByRole('textbox', { name: 'Document name' }),
+      ).toHaveFocus()
+    })
+
+    it('leaves the name alone on Escape', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST])
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      await user.dblClick(screen.getByText('one.png', { selector: 'span' }))
+      await user.keyboard('Summer{Escape}')
+
+      expect(renameDocument).not.toHaveBeenCalled()
+      expect(screen.getByRole('link', { name: 'one.png' })).toBeVisible()
+    })
+
+    it('says why a name could not be saved, and keeps the old one', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST])
+      vi.mocked(renameDocument).mockRejectedValue(new Error('Enter a name.'))
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      await user.dblClick(screen.getByText('one.png', { selector: 'span' }))
+      await user.keyboard('Summer{Enter}')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Enter a name.',
+      )
+      expect(screen.getByRole('link', { name: 'one.png' })).toBeVisible()
     })
   })
 

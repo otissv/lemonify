@@ -9,7 +9,6 @@ import {
 
 const GENERAL = '_'
 
-export const IMAGE_LABEL = 'Image'
 export const LAYER_LABEL = 'Layer'
 
 /**
@@ -31,8 +30,6 @@ export function stepProblem(step: PipelineStep): string | undefined {
 /** "Blur" or "Auto orient": the name a step is shown by. */
 export function pipelineStepLabel(step: PipelineStep): string {
   switch (step.kind) {
-    case PipelineStepKind.Source:
-      return IMAGE_LABEL
     case PipelineStepKind.Layer:
       return LAYER_LABEL
     case PipelineStepKind.Sharp:

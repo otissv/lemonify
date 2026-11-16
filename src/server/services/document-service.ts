@@ -14,8 +14,8 @@ import type { DocumentChange } from '@/features/pipeline/document-change'
 import { pipelineOperandSourceIds } from '@/features/pipeline/image-operands'
 import {
   PipelineStepKind,
-  createSourceStep,
-  firstSourceStep,
+  canvasLayer,
+  createLayerStep,
 } from '@/features/pipeline/pipeline'
 import { PipelineSchema } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
@@ -93,7 +93,7 @@ export class DocumentService {
       ownerId: actor.userId,
       name:
         name === undefined ? nameFromFile(source.fileName) : cleanName(name),
-      pipeline: { steps: [createSourceStep(source.id)] },
+      pipeline: { steps: [createLayerStep(source.id)] },
       revision: 0,
       historyCursor: 0,
       createdAt: now,
@@ -138,11 +138,11 @@ export class DocumentService {
     const { documents } = this.#deps
     const summaries: DocumentSummary[] = []
     for (const record of await documents.listByOwner(actor.userId)) {
-      const [source] = await this.#openedSources(record.pipeline)
+      const sources = await this.#openedSources(record.pipeline)
       summaries.push({
         id: record.id,
         name: record.name,
-        source: source ?? null,
+        source: canvasSource(record.pipeline, sources),
         revision: record.revision,
         updatedAt: record.updatedAt,
       })
@@ -283,16 +283,12 @@ export class DocumentService {
     return ids
   }
 
-  /** The images the document's image and its layers use, in order, leaving out any that are gone. */
+  /** The images the layers use, in order, leaving out any that are gone. */
   async #openedSources(pipeline: Pipeline): Promise<SourceSummary[]> {
     const summaries: SourceSummary[] = []
     const seen = new Set<string>()
     for (const step of pipeline.steps) {
-      if (
-        (step.kind !== PipelineStepKind.Source &&
-          step.kind !== PipelineStepKind.Layer) ||
-        seen.has(step.sourceId)
-      ) {
+      if (step.kind !== PipelineStepKind.Layer || seen.has(step.sourceId)) {
         continue
       }
       seen.add(step.sourceId)
@@ -305,8 +301,7 @@ export class DocumentService {
   async #view(record: DocumentRecord): Promise<DocumentView> {
     const { documents } = this.#deps
     const sources = await this.#openedSources(record.pipeline)
-    const first = firstSourceStep(record.pipeline)
-    const source = sources.find(({ id }) => id === first?.sourceId) ?? null
+    const source = canvasSource(record.pipeline, sources)
     const undo = await documents.findEntry(record.id, record.historyCursor - 1)
     const redo = await documents.findEntry(record.id, record.historyCursor)
     return {
@@ -322,6 +317,15 @@ export class DocumentService {
       updatedAt: record.updatedAt,
     }
   }
+}
+
+/** The image of the layer that sets the canvas, when that image is still there. */
+function canvasSource(
+  pipeline: Pipeline,
+  sources: ReadonlyArray<SourceSummary>,
+): SourceSummary | null {
+  const canvas = canvasLayer(pipeline)
+  return sources.find(({ id }) => id === canvas?.sourceId) ?? null
 }
 
 function asValidation(error: unknown): unknown {

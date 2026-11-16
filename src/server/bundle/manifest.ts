@@ -7,7 +7,7 @@ import { ValidationError } from '../errors.ts'
 import { SOURCE_MEDIA_TYPES } from '../tools/image-inspector.ts'
 
 export const BUNDLE_FORMAT = 'lemonify-document'
-export const BUNDLE_VERSION = 1
+export const BUNDLE_VERSION = 2
 export const MANIFEST_ENTRY = 'manifest.json'
 /** The most a manifest may hold; it lists a pipeline, not images. */
 export const MAX_MANIFEST_BYTES = 8 * 1024 * 1024
@@ -15,6 +15,8 @@ export const MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 const NOT_A_BUNDLE = 'That file is not a Lemonify document.'
 const NEWER_VERSION =
   'This document was made by a newer version of Lemonify. Update Lemonify to open it.'
+const OLDER_VERSION =
+  'This document was made by an older version of Lemonify, before images were layers, so it cannot be opened. Open it in that version and save it again, or add its images again here.'
 const INVALID = 'The document file is not valid.'
 
 function isUnique(values: ReadonlyArray<string>): boolean {
@@ -24,7 +26,7 @@ function isUnique(values: ReadonlyArray<string>): boolean {
 const hashSchema = z.string().regex(/^[0-9a-f]{64}$/)
 const fileNameSchema = z.string().min(1).max(255)
 
-/** An image the document's image, its layers and second images use, by the id its pipeline gives it. */
+/** An image the layers and second images of the document use, by the id its pipeline gives it. */
 const sourceEntrySchema = z.strictObject({
   id: z.string().min(1),
   hash: hashSchema,
@@ -89,6 +91,9 @@ export function parseManifest(bytes: Buffer): Manifest {
   if (!header.success) throw new ValidationError(NOT_A_BUNDLE)
   if (header.data.version > BUNDLE_VERSION) {
     throw new ValidationError(NEWER_VERSION)
+  }
+  if (header.data.version < BUNDLE_VERSION) {
+    throw new ValidationError(OLDER_VERSION)
   }
   const manifest = ManifestSchema.safeParse(json)
   if (!manifest.success) throw new ValidationError(INVALID)

@@ -108,23 +108,29 @@ describe('DocumentSteps', () => {
     expect(await screen.findByText('No edits yet.')).toBeVisible()
   })
 
-  it('lists the document’s image last, as the bottom layer, with the name of its file', async () => {
+  it('lists the first layer last, as the canvas, with the name of its file', async () => {
     const list = await showSteps([BLUR], userEvent.setup())
 
     const items = within(list).getAllByRole('listitem')
-    const image = items.at(-1) as HTMLElement
-    expect(within(image).getByText('Image')).toBeInTheDocument()
-    expect(within(image).getByText('one.png')).toBeInTheDocument()
+    const canvas = items.at(-1) as HTMLElement
+    expect(within(canvas).getByText('Layer')).toBeInTheDocument()
+    expect(within(canvas).getByText('Canvas · one.png')).toBeInTheDocument()
   })
 
-  it('cannot hide, move or delete the document’s image', async () => {
+  it('lets the layer that sets the canvas be hidden, moved and deleted like any other', async () => {
     const list = await showSteps([BLUR], userEvent.setup())
 
-    const image = within(list).getAllByRole('listitem').at(-1) as HTMLElement
+    const canvas = within(list).getAllByRole('listitem').at(-1) as HTMLElement
     expect(
-      within(image).queryByRole('button', { name: /Hide|Delete|Move/ }),
-    ).toBeNull()
-    expect(image).not.toHaveAttribute('draggable', 'true')
+      within(canvas).getByRole('button', { name: 'Hide Layer' }),
+    ).toBeEnabled()
+    expect(
+      within(canvas).getByRole('button', { name: 'Move Layer up' }),
+    ).toBeEnabled()
+    expect(
+      within(canvas).getByRole('button', { name: 'Delete Layer' }),
+    ).toBeEnabled()
+    expect(canvas).toHaveAttribute('draggable', 'true')
   })
 
   it('lists the steps with the last on top, with what is set on each', async () => {
@@ -246,8 +252,9 @@ describe('DocumentSteps', () => {
 
     expect(screen.getByRole('button', { name: 'Move Flip up' })).toBeDisabled()
     expect(
-      screen.getByRole('button', { name: 'Move Blur down' }),
+      screen.getByRole('button', { name: 'Move Layer down' }),
     ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move Blur down' })).toBeEnabled()
   })
 
   it('selects a step and shows its options', async () => {

@@ -36,7 +36,7 @@ vi.mock('@/features/documents/document-functions', () => ({
 
 function steps() {
   const all = currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps ?? []
-  return all.filter((step) => step.kind !== 'source')
+  return all.filter((step) => step.kind !== 'layer')
 }
 
 function stepNames(): Array<string> {

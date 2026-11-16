@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import type { SourceSummary } from '@/features/documents/document'
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import { PipelineStepKind, canvasLayer } from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { thumbnailImageUrl } from '@/features/documents/image-urls'
 import { useDocument } from '@/features/documents/use-document'
@@ -20,12 +20,7 @@ function sourceNameOf(
   step: PipelineStep,
   sources: ReadonlyArray<SourceSummary> | undefined,
 ): string | undefined {
-  if (
-    step.kind !== PipelineStepKind.Source &&
-    step.kind !== PipelineStepKind.Layer
-  ) {
-    return undefined
-  }
+  if (step.kind !== PipelineStepKind.Layer) return undefined
   return sources?.find(({ id }) => id === step.sourceId)?.fileName
 }
 
@@ -34,7 +29,7 @@ interface DocumentStepsProps {
   name: string
 }
 
-/** The steps of one document, the last on top as in a layer panel, so the document's image is the bottom row: select, switch off, delete, and reorder by dragging or with the buttons. */
+/** The steps of one document, the last on top as in a layer panel, so the layer that sets the canvas is lowest: select, switch off, delete, and reorder by dragging or with the buttons. */
 export function DocumentSteps({
   documentId,
   name,
@@ -52,6 +47,7 @@ export function DocumentSteps({
 
   const steps = preview?.pipeline.steps ?? []
   const topFirst = [...steps].reverse()
+  const canvasId = preview ? canvasLayer(preview.pipeline)?.id : undefined
   if (steps.length === 0) {
     return (
       <p className="px-2 py-1 text-caption text-muted-foreground">
@@ -110,23 +106,18 @@ export function DocumentSteps({
     <ul aria-label={`Steps of ${name}`} className="flex flex-col gap-1">
       {topFirst.map((step) => {
         const position = steps.indexOf(step)
-        const isImage = step.kind === PipelineStepKind.Source
         const key = thumbnails?.find(({ stepId }) => stepId === step.id)?.key
         return (
           <li
             key={step.id}
-            draggable={!isImage}
+            draggable
             onDragStart={(event) => {
               handleDragStart(event, step.id)
             }}
-            onDragOver={isImage ? undefined : handleDragOver}
-            onDrop={
-              isImage
-                ? undefined
-                : (event) => {
-                    handleDrop(event, position)
-                  }
-            }
+            onDragOver={handleDragOver}
+            onDrop={(event) => {
+              handleDrop(event, position)
+            }}
             onDragEnd={handleDragEnd}
           >
             <StepRow
@@ -142,6 +133,7 @@ export function DocumentSteps({
                   : thumbnailImageUrl(documentId, key)
               }
               sourceName={sourceNameOf(step, preview?.document.sources)}
+              canvas={step.id === canvasId}
               outOfDate={preview?.pending.includes(step.id) ?? false}
               skipped={
                 preview?.problems.find(({ stepId }) => stepId === step.id)

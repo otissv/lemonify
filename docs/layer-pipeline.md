@@ -4,11 +4,13 @@ A document is an image and an ordered list of steps. Steps run in order, each on
 
 ## The model
 
-The document's own image is the first step and the **canvas**: its size, as the steps before a layer have left it, is the size of the picture at that point. A **layer** step places another image on the picture as it stands and carries on. The steps after the layer, including the effects, act on the picture with the layer in it, so an effect placed after a layer affects the layer too, and an effect placed before it does not.
+Every image in a document is a **layer** step. There is no separate "document image": a document starts with one layer holding the image it was opened from, and any layer can be hidden, moved, replaced or deleted. A document may have no layer at all, and then there is nothing to show until one is added.
 
-A layer is on top of everything before it in the pipeline. The sidebar lists the steps with the last on top, the way layer panels do, so the row at the top of the list is the one drawn on top of the canvas and the document's image is the row at the bottom. Moving a row up moves it later in the pipeline and so closer to the viewer.
+The first layer that is switched on, and whose image still exists, is the **canvas**. Its image, at its own size, is the picture the steps after it start from. Every later layer is drawn on the picture as it stands and carries on. The canvas layer's own settings are not used (it has nothing beneath it); they take effect when another layer is placed below it. The steps after a layer, including effects, act on the picture with the layer in it, so an effect placed after a layer affects the layer too, and an effect placed before it does not. Steps before the canvas layer have no picture to work on and are skipped, with a message.
 
-Image steps are of two kinds only: the document's image, of which there is exactly one and which is always first, and layers. There is no step that merely "opens" an image for another step to use. A step that needs a second image (boolean, join channel) names an image from the library directly, which is the same thing the document's own image and its layers do.
+A layer is on top of everything before it in the pipeline. The sidebar lists the steps with the last on top, the way layer panels do, so the row at the top of the list is drawn on top and the canvas layer is the lowest layer row. Moving a row up moves it later in the pipeline and so closer to the viewer. The canvas layer's row says so ("Canvas · file name").
+
+No step merely "opens" an image for another step to use. A step that needs a second image (boolean, join channel) names an image from the library directly, as a layer does.
 
 ## Layer settings
 
@@ -28,7 +30,7 @@ The defaults put an image in the middle of the canvas, shrunk if it is larger, f
 
 ### Decisions
 
-**The canvas never grows.** A layer larger than the canvas, or moved partly off it, is cut off at the canvas edge. The canvas is the document's image, as steps before the layer left it, so a resize step before a layer changes where the layer lands, and one after it scales the layer along with everything else. This is how a Background layer behaves in other editors and it keeps every render the size the person sees.
+**The canvas never grows.** A layer larger than the canvas, or moved partly off it, is cut off at the canvas edge. The canvas is the canvas layer's image, as steps before the layer left it, so a resize step before a layer changes where the layer lands, and one after it scales the layer along with everything else. It keeps every render the size the person sees. Hiding, moving or deleting the canvas layer makes the next layer the canvas, and the picture takes that image's size.
 
 **Layers are drawn at full resolution.** The preview is made small only at the end, so placement, scale and rotation do not depend on how big the preview is.
 
@@ -40,21 +42,21 @@ The planner turns the pipeline into a base image and an ordered list of engine s
 
 Render keys name an image by its content hash and a layer by its settings, so the same document on another machine, with the same pictures under other ids, finds the same keys. That is what lets a document file bring its AI results with it.
 
-## What changed from the earlier model
+## What changed from the earlier models
 
-The earlier model let a document hold several "Open image" steps, of which the first was the picture and the rest were available to later steps as second images. Those extra steps showed nothing. They are now layers, and the Composite tool, which did the same job with a list of images in its options, is not offered in documents any more (the workflow editor and the `sharp` command keep it, since they have no layers).
+The first model let a document hold several "Open image" steps, of which the first was the picture and the rest only made their image available to later steps. The second model made the extra ones layers and kept one locked "Image" step at the bottom. The current model removes that special step: every image is a layer. The Composite tool, which did the same job with a list of images in its options, is not offered in documents (the workflow editor and the `sharp` command keep it, since they have no layers).
 
-Existing documents are migrated once: each extra image step that nothing else uses becomes a layer; an extra image step that only supplied a second image to a boolean or join channel step is dropped, since those steps name their image themselves; each Composite step becomes one layer per image, with its blend mode and placement carried over; a step that sat before the document's image is moved after it; and the undo history of a migrated document is cleared because step positions move. A document with no image step at all cannot be migrated, and the migration stops naming it.
+Existing documents are migrated in two steps. `20260101000500-layers` made extra image steps layers (or dropped those that only supplied a second image to a boolean or join channel step) and each Composite step a layer per image, with its blend mode and placement. `20260101000600-layers-only` turns the remaining image step into a layer with the default settings, in the same place. Undo history of a migrated document is cleared because the steps change. Document files (`.lemon`) made before layers (bundle version 1) are refused with an explanation; there is no conversion for files.
 
 ## Where it lives
 
-| Concern                      | Place                                                               |
-| ---------------------------- | ------------------------------------------------------------------- |
-| Step schemas and constraints | `src/features/pipeline/pipeline.ts`                                 |
-| Changes and undo             | `src/features/pipeline/document-change.ts`                          |
-| Placement maths (pure)       | `src/server/render/layer-geometry.ts`                               |
-| Compositing                  | `src/server/tools/layer-compositor.ts`, called by `image-engine.ts` |
-| Planning and render keys     | `src/server/render/plan-pipeline.ts`, `render-key.ts`               |
-| Migration                    | `migrations/20260101000500-layers.ts`                               |
-| Sidebar, options, canvas     | `src/features/documents/`, `src/features/tools/step-options.tsx`    |
-| CLI                          | `scripts/images/commands/document-step.ts`                          |
+| Concern                      | Place                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| Step schemas and constraints | `src/features/pipeline/pipeline.ts`                                    |
+| Changes and undo             | `src/features/pipeline/document-change.ts`                             |
+| Placement maths (pure)       | `src/server/render/layer-geometry.ts`                                  |
+| Compositing                  | `src/server/tools/layer-compositor.ts`, called by `image-engine.ts`    |
+| Planning and render keys     | `src/server/render/plan-pipeline.ts`, `render-key.ts`                  |
+| Migrations                   | `migrations/20260101000500-layers.ts`, `20260101000600-layers-only.ts` |
+| Sidebar, options, canvas     | `src/features/documents/`, `src/features/tools/step-options.tsx`       |
+| CLI                          | `scripts/images/commands/document-step.ts`                             |

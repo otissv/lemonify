@@ -13,14 +13,14 @@ import {
   DOCUMENT_ID,
   documentView,
   loadDocumentIntoEditor,
-  openImageStep,
+  baseLayer,
 } from '@/test/document-fixtures'
 
 vi.mock('@/features/documents/document-sync', () => ({
   applyEdit: vi.fn().mockResolvedValue(undefined),
 }))
 
-const IMAGE = openImageStep(`source-${DOCUMENT_ID}`)
+const IMAGE = baseLayer(`source-${DOCUMENT_ID}`)
 
 beforeEach(() => {
   vi.mocked(applyEdit).mockClear()
@@ -121,6 +121,28 @@ describe('replaceImage', () => {
       stepId: IMAGE.id,
       sourceId: 'other',
     })
+  })
+
+  it('replaces the first layer when every layer is switched off', () => {
+    const off = { ...createLayerStep('only'), enabled: false }
+    const view = documentView([])
+    loadDocumentIntoEditor({ ...view, pipeline: { steps: [off] } })
+
+    replaceImage(DOCUMENT_ID, 'other')
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'set-source',
+      stepId: off.id,
+      sourceId: 'other',
+    })
+  })
+
+  it('does nothing when there is no layer to replace', () => {
+    loadDocumentIntoEditor({ ...documentView(), pipeline: { steps: [] } })
+
+    replaceImage(DOCUMENT_ID, 'other')
+
+    expect(applyEdit).not.toHaveBeenCalled()
   })
 
   it('does nothing when the document is not open', () => {

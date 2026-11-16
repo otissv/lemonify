@@ -16,8 +16,7 @@ import {
   PipelineStepKind,
   createLayerStep,
   createSharpStep,
-  createSourceStep,
-  firstSourceStep,
+  canvasLayer,
   hasEdits,
 } from '@/features/pipeline/pipeline'
 import {
@@ -25,52 +24,38 @@ import {
   stepProblem,
 } from '@/features/pipeline/step-problems'
 
-describe('the document’s image step', () => {
-  it('holds the id of the image and is called Image', () => {
-    const step = createSourceStep('src-1')
-
-    expect(step).toMatchObject({
-      kind: PipelineStepKind.Source,
-      sourceId: 'src-1',
-      enabled: true,
-    })
-    expect(pipelineStepLabel(step)).toBe('Image')
-    expect(stepProblem(step)).toBeUndefined()
-  })
-
-  it('is the first step, and there is only one', () => {
-    const image = createSourceStep('a')
+describe('the canvas layer', () => {
+  it('is the first layer that is switched on', () => {
+    const off = { ...createLayerStep('a'), enabled: false }
+    const first = createLayerStep('b')
     const blur = createSharpStep('blur')
 
-    expect(PipelineSchema.safeParse({ steps: [image, blur] }).success).toBe(
-      true,
-    )
-    expect(PipelineSchema.safeParse({ steps: [blur] }).success).toBe(true)
-    expect(PipelineSchema.safeParse({ steps: [blur, image] }).success).toBe(
-      false,
-    )
     expect(
-      PipelineSchema.safeParse({ steps: [image, createSourceStep('b')] })
-        .success,
-    ).toBe(false)
+      canvasLayer({ steps: [blur, off, first, createLayerStep('c')] }),
+    ).toBe(first)
+    expect(canvasLayer({ steps: [blur, off] })).toBeUndefined()
+    expect(canvasLayer({ steps: [] })).toBeUndefined()
   })
 
-  it('is found as the first step', () => {
-    const image = createSourceStep('a')
+  it('does not count as an edit, but any other step does', () => {
+    const base = createLayerStep('a')
 
-    expect(firstSourceStep({ steps: [image, createSharpStep('blur')] })).toBe(
-      image,
-    )
-    expect(
-      firstSourceStep({ steps: [createSharpStep('blur')] }),
-    ).toBeUndefined()
+    expect(hasEdits({ steps: [base] })).toBe(false)
+    expect(hasEdits({ steps: [base, createLayerStep('b')] })).toBe(true)
+    expect(hasEdits({ steps: [base, createSharpStep('blur')] })).toBe(true)
+    expect(hasEdits({ steps: [createSharpStep('blur')] })).toBe(true)
+    expect(hasEdits({ steps: [] })).toBe(false)
   })
 
-  it('does not count as an edit, but a layer does', () => {
-    const image = createSourceStep('a')
+  it('puts no limit on the order of steps or the number of layers', () => {
+    const steps = [
+      createSharpStep('blur'),
+      createLayerStep('a'),
+      createLayerStep('b'),
+    ]
 
-    expect(hasEdits({ steps: [image] })).toBe(false)
-    expect(hasEdits({ steps: [image, createLayerStep('b')] })).toBe(true)
+    expect(PipelineSchema.safeParse({ steps }).success).toBe(true)
+    expect(PipelineSchema.safeParse({ steps: [] }).success).toBe(true)
   })
 })
 
@@ -137,7 +122,7 @@ describe('a layer step', () => {
   })
 
   it('counts as an image the pipeline uses', () => {
-    const image = createSourceStep('src-1')
+    const image = createLayerStep('src-1')
     const layer = createLayerStep('src-2')
     const boolean = createSharpStep('boolean', { operand: 'src-3' })
 
@@ -148,7 +133,7 @@ describe('a layer step', () => {
   })
 
   it('has its image renamed when a pipeline moves to another place', () => {
-    const image = createSourceStep('a')
+    const image = createLayerStep('a')
     const layer = createLayerStep('b')
 
     const moved = remapPipelineSources(
@@ -174,7 +159,7 @@ describe('Composite is not an editing tool in a document', () => {
 })
 
 describe('changing layers', () => {
-  const image = createSourceStep('a')
+  const image = createLayerStep('a')
   const layer = createLayerStep('b')
   const pipeline = { steps: [image, layer] }
 
@@ -221,6 +206,7 @@ describe('changing layers', () => {
   })
 
   it('refuses settings that are not valid, and settings for a step that is not a layer', () => {
+    const blur = createSharpStep('blur')
     expect(() =>
       applyChange(pipeline, {
         type: 'set-layer',
@@ -229,48 +215,63 @@ describe('changing layers', () => {
       }),
     ).toThrow(InvalidChangeError)
     expect(() =>
-      applyChange(pipeline, {
-        type: 'set-layer',
-        stepId: image.id,
-        settings: DEFAULT_LAYER_SETTINGS,
-      }),
+      applyChange(
+        { steps: [image, blur] },
+        {
+          type: 'set-layer',
+          stepId: blur.id,
+          settings: DEFAULT_LAYER_SETTINGS,
+        },
+      ),
+    ).toThrow(InvalidChangeError)
+    expect(() =>
+      applyChange(
+        { steps: [image, blur] },
+        { type: 'set-source', stepId: blur.id, sourceId: 'c' },
+      ),
     ).toThrow(InvalidChangeError)
   })
 
-  it('swaps the image of a layer or of the document, keeping everything else', () => {
+  it('swaps the image of a layer, keeping everything else', () => {
     const changed = applyChange(
       { steps: [image, { ...layer, opacity: 20 }] },
       { type: 'set-source', stepId: layer.id, sourceId: 'c' },
     )
 
     expect(changed.steps[1]).toMatchObject({ sourceId: 'c', opacity: 20 })
+  })
+
+  it('lets any layer, the one that sets the canvas too, be hidden, moved and removed', () => {
+    const hidden = applyChange(pipeline, {
+      type: 'set-enabled',
+      stepId: image.id,
+      enabled: false,
+    })
+    const moved = applyChange(pipeline, {
+      type: 'move-step',
+      stepId: image.id,
+      to: 1,
+    })
+    const removed = applyChange(pipeline, {
+      type: 'remove-step',
+      stepId: image.id,
+    })
+
+    expect(hidden.steps[0]).toMatchObject({ enabled: false })
+    expect(moved.steps.map(({ id }) => id)).toEqual([layer.id, image.id])
+    expect(removed.steps).toEqual([layer])
     expect(
-      applyChange(pipeline, {
-        type: 'set-source',
-        stepId: image.id,
-        sourceId: 'c',
-      }).steps[0],
-    ).toMatchObject({ sourceId: 'c' })
+      applyChange(removed, { type: 'remove-step', stepId: layer.id }).steps,
+    ).toEqual([])
   })
 
-  it('does not take the document’s image away, hide it or move it', () => {
-    for (const change of [
-      { type: 'remove-step', stepId: image.id },
-      { type: 'set-enabled', stepId: image.id, enabled: false },
-      { type: 'move-step', stepId: image.id, to: 1 },
-      { type: 'move-step', stepId: layer.id, to: 0 },
-    ] as const) {
-      expect(() => applyChange(pipeline, change)).toThrow(InvalidChangeError)
-    }
-  })
+  it('adds a layer anywhere, even before the others', () => {
+    const added = applyChange(pipeline, {
+      type: 'add-step',
+      step: createLayerStep('c'),
+      index: 0,
+    })
 
-  it('does not add a second document image', () => {
-    expect(() =>
-      applyChange(pipeline, {
-        type: 'add-step',
-        step: createSourceStep('c'),
-        index: 2,
-      }),
-    ).toThrow(InvalidChangeError)
+    expect(added.steps).toHaveLength(3)
   })
 })

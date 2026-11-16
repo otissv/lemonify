@@ -3,13 +3,8 @@ import { catalogueFor } from '@/features/ai/ai-defaults'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiCatalogue } from '@/features/ai/ai-tools'
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import type {
-  AiStep,
-  LayerStep,
-  SharpStep,
-  SourceStep,
-} from '@/features/pipeline/pipeline'
+import { PipelineStepKind, canvasLayer } from '@/features/pipeline/pipeline'
+import type { AiStep, LayerStep, SharpStep } from '@/features/pipeline/pipeline'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import {
   setAiSettings,
@@ -44,8 +39,7 @@ interface SharpStepOptionsProps {
 
 interface ImageStepOptionsProps {
   documentId: string
-  /** The document's image or a layer. */
-  step: SourceStep | LayerStep
+  step: LayerStep
   source: SourceSummary | undefined
 }
 
@@ -136,7 +130,8 @@ function LayerStepOptions({
   documentId,
   step,
   source,
-}: ImageStepOptionsProps & { step: LayerStep }): React.JSX.Element {
+  canvas,
+}: ImageStepOptionsProps & { canvas: boolean }): React.JSX.Element {
   const stepId = step.id
   const {
     sourceId: _sourceId,
@@ -155,10 +150,17 @@ function LayerStepOptions({
   return (
     <>
       <ImageStepOptions documentId={documentId} step={step} source={source} />
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them */}
-      <div onBlur={flush}>
-        <LayerSettingsForm settings={draft} onChange={change} />
-      </div>
+      {canvas ? (
+        <p className="px-4 pb-4 text-caption text-muted-foreground">
+          This layer sets the size of the picture, so its other settings are not
+          used. They apply when another layer is below it.
+        </p>
+      ) : (
+        // biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them
+        <div onBlur={flush}>
+          <LayerSettingsForm settings={draft} onChange={change} />
+        </div>
+      )}
     </>
   )
 }
@@ -235,19 +237,12 @@ export function StepOptions({
           This step is off.
         </p>
       )}
-      {step.kind === PipelineStepKind.Source && (
-        <ImageStepOptions
-          key={step.id}
-          documentId={documentId}
-          step={step}
-          source={sourceOf(preview.document.sources, step.sourceId)}
-        />
-      )}
       {step.kind === PipelineStepKind.Layer && (
         <LayerStepOptions
           key={step.id}
           documentId={documentId}
           step={step}
+          canvas={canvasLayer(preview.pipeline)?.id === step.id}
           source={sourceOf(preview.document.sources, step.sourceId)}
         />
       )}

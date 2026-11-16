@@ -26,7 +26,7 @@ import {
   documentView,
   echoChanges,
   loadDocumentIntoEditor,
-  openImageStep,
+  baseLayer,
 } from '@/test/document-fixtures'
 import {
   INITIAL_APP_STATE,
@@ -86,14 +86,14 @@ describe('StepOptions', () => {
     ).toBeVisible()
   })
 
-  describe('an Open image step', () => {
+  describe('the layer that sets the canvas', () => {
     function showOpenImage(extra: ReadonlyArray<PipelineStep> = []): void {
       const view = documentView(extra)
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
       useAppStore
         .getState()
-        .selectStep(DOCUMENT_ID, openImageStep(view.source.id).id)
+        .selectStep(DOCUMENT_ID, baseLayer(view.source.id).id)
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
       )
@@ -104,11 +104,38 @@ describe('StepOptions', () => {
       vi.mocked(listSources).mockResolvedValue([])
     })
 
-    it('shows the image it opens under the heading Image', () => {
+    it('shows its image under the heading Layer', () => {
       showOpenImage()
 
-      expect(screen.getByRole('heading', { name: 'Image' })).toBeVisible()
+      expect(screen.getByRole('heading', { name: 'Layer' })).toBeVisible()
       expect(screen.getByText('one.png')).toBeVisible()
+    })
+
+    it('says it sets the size of the picture, and offers no settings that would not be used', () => {
+      showOpenImage()
+
+      expect(screen.getByText(/sets the size of the picture/)).toBeVisible()
+      expect(
+        screen.queryByRole('slider', { name: 'Opacity' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('offers its settings once another layer is below it', () => {
+      const lower = createLayerStep('src-lower')
+      const view = documentView([])
+      const steps = [lower, ...view.pipeline.steps]
+      loadDocumentIntoEditor({ ...view, pipeline: { steps } })
+      useAppStore
+        .getState()
+        .selectStep(DOCUMENT_ID, baseLayer(view.source.id).id)
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      expect(screen.getByRole('slider', { name: 'Opacity' })).toBeVisible()
+      expect(
+        screen.queryByText(/sets the size of the picture/),
+      ).not.toBeInTheDocument()
     })
 
     it('lists the image’s size, type and weight, and no explanation', () => {
@@ -144,7 +171,7 @@ describe('StepOptions', () => {
           data: expect.objectContaining({
             change: {
               type: 'set-source',
-              stepId: openImageStep(documentView().source.id).id,
+              stepId: baseLayer(documentView().source.id).id,
               sourceId: 'src-other',
             },
           }),

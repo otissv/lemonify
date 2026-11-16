@@ -1,5 +1,5 @@
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import { createSourceStep } from '@/features/pipeline/pipeline'
+import { createLayerStep } from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 
 import type { DocumentRecord } from '../../dao/document-dao.ts'
@@ -11,18 +11,15 @@ import { JobKind, JobState } from '../job-types.ts'
 import { ensureRender } from './preview-handler.ts'
 import type { RenderHandlerDependencies } from './preview-handler.ts'
 
-/** The steps that show only the image a step holds, for the document's image and for layers. */
+/** The steps that show only the image a layer holds: that layer alone, which then is the canvas. */
 function ownImage(step: PipelineStep): ReadonlyArray<PipelineStep> | undefined {
-  if (step.kind === PipelineStepKind.Source) return [step]
-  if (step.kind === PipelineStepKind.Layer) {
-    return [createSourceStep(step.sourceId)]
-  }
-  return undefined
+  if (step.kind !== PipelineStepKind.Layer) return undefined
+  return [createLayerStep(step.sourceId)]
 }
 
 /**
  * Renders a small picture of the Document after each of the asked-for steps,
- * and of its own image for the document's image or a layer. A step that is switched off,
+ * and of its own image for a layer. A step that is switched off,
  * not set up, or after an AI step that has no Result yet has no picture (its
  * key is null).
  */
@@ -33,7 +30,7 @@ export class ThumbnailHandler implements JobHandler {
     this.#deps = deps
   }
 
-  /** The key of a small picture of `steps`, or null when they cannot make one. The document's image and a layer show their own image. */
+  /** The key of a small picture of `steps`, or null when they cannot make one. A layer shows its own image. */
   async #thumbnailKey(
     document: DocumentRecord,
     steps: ReadonlyArray<PipelineStep>,

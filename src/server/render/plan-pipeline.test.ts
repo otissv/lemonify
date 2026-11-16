@@ -6,7 +6,6 @@ import {
   createAiStep,
   createLayerStep,
   createSharpStep,
-  createSourceStep,
 } from '@/features/pipeline/pipeline'
 import type { LayerStep, PipelineStep } from '@/features/pipeline/pipeline'
 
@@ -16,7 +15,7 @@ import { renderKey } from './render-key.ts'
 
 const SOURCE = { contentHash: 'a'.repeat(64), path: '/data/source' }
 const SECOND = { contentHash: 'b'.repeat(64), path: '/data/second' }
-const IMAGE = createSourceStep('base')
+const IMAGE = createLayerStep('base')
 const UPSCALE = {
   tool: AiToolId.Upscale,
   settings: { model: 'm', scale: 4, iterations: 1, tta: false },
@@ -122,31 +121,69 @@ describe('planPipeline', () => {
     expect(plan.pending).toEqual([])
   })
 
-  describe('the document’s image', () => {
-    it('is the picture the steps start from', async () => {
+  describe('the canvas layer', () => {
+    it('is the picture the steps start from, at its own size', async () => {
       const plan = await planPipeline([IMAGE], lookups())
       expect(plan.basePath).toBe(SOURCE.path)
       expect(plan.sourceHash).toBe(SOURCE.contentHash)
+      expect(plan.steps).toEqual([])
       expect(plan.applied).toEqual([])
     })
 
-    it('has to exist, and be switched on, for there to be a picture', async () => {
+    it('ignores its own settings, which only matter once it is drawn on something', async () => {
+      const faint = { ...IMAGE, opacity: 20, blend: 'multiply' as const }
+
+      const plain = await planPipeline([IMAGE], lookups())
+      const set = await planPipeline([faint], lookups())
+
+      expect(planKey(set)).toBe(planKey(plain))
+      expect(set.steps).toEqual([])
+    })
+
+    it('is the first layer that is switched on', async () => {
+      const off = { ...IMAGE, enabled: false }
+      const second = createLayerStep('second')
+
+      const plan = await planPipeline(
+        [off, second, createSharpStep('flip')],
+        lookups(),
+      )
+
+      expect(plan.basePath).toBe(SECOND.path)
+      expect(plan.sourceHash).toBe(SECOND.contentHash)
+    })
+
+    it('passes to the next layer when its image is gone, and says so', async () => {
+      const gone = createLayerStep('gone')
+
+      const plan = await planPipeline([gone, IMAGE], lookups())
+
+      expect(plan.basePath).toBe(SOURCE.path)
+      expect(plan.skipped).toEqual([
+        {
+          stepId: gone.id,
+          message: expect.stringMatching(/no longer available/),
+        },
+      ])
+    })
+
+    it('has to exist for there to be a picture', async () => {
       const off = { ...IMAGE, enabled: false }
       await expect(
         planPipeline([off, createSharpStep('flip')], lookups()),
       ).rejects.toThrow(/no image/i)
       await expect(planPipeline([], lookups())).rejects.toThrow(/no image/i)
       await expect(
-        planPipeline([createSourceStep('gone')], lookups()),
+        planPipeline([createLayerStep('gone')], lookups()),
       ).rejects.toThrow(/no image/i)
     })
 
-    it('skips a step that comes before it', async () => {
+    it('leaves out the steps before it, which have no picture to work on', async () => {
       const flip = createSharpStep('flip')
       const plan = await planPipeline([flip, IMAGE], lookups())
       expect(plan.applied).toEqual([])
       expect(plan.skipped[0]).toMatchObject({ stepId: flip.id })
-      expect(plan.skipped[0]?.message).toMatch(/after the document/)
+      expect(plan.skipped[0]?.message).toMatch(/after the first layer/)
     })
   })
 
@@ -251,15 +288,6 @@ describe('planPipeline', () => {
           message: expect.stringMatching(/no longer available/),
         },
       ])
-    })
-
-    it('are skipped when they come before the document’s image', async () => {
-      const layer = createLayerStep('second')
-
-      const plan = await planPipeline([layer, IMAGE], lookups())
-
-      expect(plan.applied).toEqual([])
-      expect(plan.skipped[0]).toMatchObject({ stepId: layer.id })
     })
   })
 })

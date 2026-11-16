@@ -16,9 +16,7 @@ import { SHARP_OP_CATEGORIES } from '@/lib/images/sharp/ops'
 export const PipelineStepKind = {
   Sharp: WorkflowNodeKind.Sharp,
   Ai: AI_STEP_KIND,
-  /** The document's own image: the first step, and the canvas the others work on. */
-  Source: 'source',
-  /** Another image placed over the picture as it stands. */
+  /** An image placed over the picture as it stands. The first one that is switched on is the canvas the other steps work on. */
   Layer: 'layer',
 } as const
 
@@ -56,13 +54,6 @@ export const PipelineStepSchema = z.discriminatedUnion('kind', [
   aiStepSchema({ id: z.uuid(), enabled, name }),
   z.strictObject({
     id: z.uuid(),
-    kind: z.literal(PipelineStepKind.Source),
-    sourceId: z.string().min(1),
-    enabled,
-    name,
-  }),
-  z.strictObject({
-    id: z.uuid(),
     kind: z.literal(PipelineStepKind.Layer),
     sourceId: z.string().min(1),
     enabled,
@@ -77,26 +68,12 @@ export const PipelineSchema = z.object({
     .refine(
       (steps) => new Set(steps.map((step) => step.id)).size === steps.length,
       { message: 'Each step can appear once' },
-    )
-    .refine(
-      (steps) =>
-        steps.every(
-          (step, index) => step.kind !== PipelineStepKind.Source || index === 0,
-        ),
-      {
-        message:
-          'The document’s image is the first step, and there is only one.',
-      },
     ),
 })
 
 export type PipelineStep = z.output<typeof PipelineStepSchema>
 export type Pipeline = z.output<typeof PipelineSchema>
 export type SharpStep = Extract<PipelineStep, { kind: 'sharp' }>
-export type SourceStep = Extract<
-  PipelineStep,
-  { kind: typeof PipelineStepKind.Source }
->
 export type LayerStep = Extract<
   PipelineStep,
   { kind: typeof PipelineStepKind.Layer }
@@ -116,15 +93,6 @@ export function createSharpStep(
   }
 }
 
-export function createSourceStep(sourceId: string): SourceStep {
-  return {
-    id: crypto.randomUUID(),
-    kind: PipelineStepKind.Source,
-    sourceId,
-    enabled: true,
-  }
-}
-
 export function createLayerStep(sourceId: string): LayerStep {
   return {
     id: crypto.randomUUID(),
@@ -135,15 +103,25 @@ export function createLayerStep(sourceId: string): LayerStep {
   }
 }
 
-/** Whether a pipeline has a step that changes the picture; the document's own image is not one. */
-export function hasEdits(pipeline: Pipeline): boolean {
-  return pipeline.steps.some((step) => step.kind !== PipelineStepKind.Source)
+/**
+ * The layer that sets the canvas: the first one that is switched on. Its image
+ * is the picture the steps after it work on, at its own size; later layers are
+ * drawn on it and cut off at its edges. Hiding, moving or removing it makes the
+ * next layer the canvas.
+ */
+export function canvasLayer(pipeline: {
+  steps: ReadonlyArray<PipelineStep>
+}): LayerStep | undefined {
+  for (const step of pipeline.steps) {
+    if (step.kind === PipelineStepKind.Layer && step.enabled) return step
+  }
+  return undefined
 }
 
-/** The document's image step: the first step, when it is one. */
-export function firstSourceStep(pipeline: Pipeline): SourceStep | undefined {
-  const [first] = pipeline.steps
-  return first?.kind === PipelineStepKind.Source ? first : undefined
+/** Whether a pipeline has a step that changes the picture: any step but the layer that sets the canvas. */
+export function hasEdits(pipeline: Pipeline): boolean {
+  const canvas = canvasLayer(pipeline)
+  return pipeline.steps.some((step) => step !== canvas)
 }
 
 export function createAiStep(content: AiContent<AiStep>): AiStep {

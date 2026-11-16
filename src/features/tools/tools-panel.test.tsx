@@ -79,14 +79,14 @@ describe('ToolsPanel', () => {
       expect(tablist.parentElement?.lastElementChild).toBe(tablist)
     })
 
-    it('has Tools, Options, Export and Results tabs, in that order', () => {
+    it('has Tools, Options, Export, Results and Document tabs, in that order', () => {
       renderPanel()
 
       expect(
         within(panel())
           .getAllByRole('tab')
           .map((tab) => tab.getAttribute('aria-label')),
-      ).toEqual(['Tools', 'Options', 'Export', 'Results'])
+      ).toEqual(['Tools', 'Options', 'Export', 'Results', 'Document'])
     })
 
     it('shows the Tools tab first as an icon with no visible label', () => {

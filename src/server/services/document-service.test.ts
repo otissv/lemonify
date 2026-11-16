@@ -79,11 +79,11 @@ beforeEach(async () => {
 })
 
 describe('create, list and get', () => {
-  it('creates a Document whose Pipeline opens its image, named after the image', async () => {
+  it('creates a Document whose Pipeline starts with its image as a layer, named after the image', async () => {
     const view = await service.create(ANN, 'src-1')
     expect(view.pipeline.steps).toEqual([
       expect.objectContaining({
-        kind: 'source',
+        kind: 'layer',
         sourceId: 'src-1',
         enabled: true,
       }),
@@ -346,7 +346,7 @@ describe('delete', () => {
 })
 
 describe('layers', () => {
-  it('lists the images the document and its layers use, the first being the document image', async () => {
+  it('lists the images the layers use, the first layer’s being the document image', async () => {
     await addSource('src-2', 'ann', 'mask.png')
     const created = await service.create(ANN, 'src-1')
     const layered = await service.change(ANN, created.id, 0, {
@@ -391,7 +391,7 @@ describe('layers', () => {
     ).rejects.toThrow(NotFoundError)
   })
 
-  it('replaces the document image in place, and refuses another User’s image', async () => {
+  it('replaces the image of a layer in place, and refuses another User’s image', async () => {
     await addSource('src-2')
     await addSource('src-b', 'bea')
     const created = await service.create(ANN, 'src-1')
@@ -413,16 +413,46 @@ describe('layers', () => {
     ).rejects.toThrow(NotFoundError)
   })
 
-  it('keeps the document image: it cannot be removed', async () => {
+  it('makes the next layer the document image when the first is hidden or removed', async () => {
+    await addSource('src-2', 'ann', 'mask.png')
     const created = await service.create(ANN, 'src-1')
-    const [open] = created.pipeline.steps
-    if (open === undefined) throw new Error('no step')
+    const [first] = created.pipeline.steps
+    if (first === undefined) throw new Error('no step')
+    const layered = await service.change(ANN, created.id, 0, {
+      type: 'add-step',
+      step: createLayerStep('src-2'),
+      index: 1,
+    })
 
-    await expect(
-      service.change(ANN, created.id, 0, {
-        type: 'remove-step',
-        stepId: open.id,
-      }),
-    ).rejects.toThrow(ValidationError)
+    const hidden = await service.change(ANN, created.id, 1, {
+      type: 'set-enabled',
+      stepId: first.id,
+      enabled: false,
+    })
+    const removed = await service.change(ANN, created.id, 2, {
+      type: 'remove-step',
+      stepId: first.id,
+    })
+
+    expect(layered.source?.id).toBe('src-1')
+    expect(hidden.source?.id).toBe('src-2')
+    expect(removed.source?.id).toBe('src-2')
+    expect((await service.list(ANN))[0]?.source?.id).toBe('src-2')
+    expect(await sourceDao.isReferenced('src-1')).toBe(false)
+  })
+
+  it('has no document image when no layer is left', async () => {
+    const created = await service.create(ANN, 'src-1')
+    const [first] = created.pipeline.steps
+    if (first === undefined) throw new Error('no step')
+
+    const emptied = await service.change(ANN, created.id, 0, {
+      type: 'remove-step',
+      stepId: first.id,
+    })
+
+    expect(emptied.source).toBeNull()
+    expect(emptied.sources).toEqual([])
+    expect((await service.list(ANN))[0]?.source).toBeNull()
   })
 })

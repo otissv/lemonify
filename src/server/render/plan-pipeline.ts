@@ -14,7 +14,7 @@ import { renderKey } from './render-key.ts'
 import type { KeyedStep } from './render-key.ts'
 import { resolveOperands } from './resolve-operands.ts'
 
-/** A step that changes the picture; the document's image only chooses what it starts from. */
+/** A step that changes the picture; the canvas layer only chooses what it starts from. */
 export type AppliedStep = SharpStep | LayerStep | AiStep
 
 export interface PendingAiStep {
@@ -28,8 +28,8 @@ export interface StepProblem {
 }
 
 const NO_IMAGE =
-  'There is no image to edit. Switch on the document’s image, or replace it.'
-const BEFORE_IMAGE = 'Move this step after the document’s image.'
+  'There is no image to edit. Add an image as a layer, or switch one on.'
+const BEFORE_IMAGE = 'Move this step after the first layer.'
 const IMAGE_GONE = 'This image is no longer available.'
 
 /** What planning needs to know about a stored image. */
@@ -48,7 +48,7 @@ export interface PlanLookups {
 /** What it takes to show a Pipeline: where to start and which steps to apply. */
 export interface PipelinePlan {
   sourceHash: string
-  /** The image the steps start from: the document's image, or the last AI Step's Result. */
+  /** The image the steps start from: the canvas layer's image, or the last AI Step's Result. */
   basePath: string
   /** Steps for the engine, in order, with second images and layer images resolved to files. */
   steps: ReadonlyArray<EngineStep>
@@ -86,24 +86,11 @@ function engineLayer(step: LayerStep, path: string): EngineLayer {
   return { ...settings, path }
 }
 
-/** The document's image: the first step, when it is switched on and its image exists. */
-async function findBase(
-  steps: ReadonlyArray<PipelineStep>,
-  lookups: PlanLookups,
-): Promise<PlanSource> {
-  const first = steps.find((step) => step.kind === PipelineStepKind.Source)
-  if (first === undefined || !first.enabled) throw new ValidationError(NO_IMAGE)
-  const base = await lookups.source(first.sourceId)
-  if (base === undefined) throw new ValidationError(NO_IMAGE)
-  return base
-}
-
-/** Steps that can be applied, in order, each resolved to what the engine needs. */
+/** Steps that can be applied, in order, each resolved to what the engine needs. The first layer that is switched on and still has its image is the canvas and is not applied: it is the picture the rest start from. */
 async function usableSteps(
   steps: ReadonlyArray<PipelineStep>,
   lookups: PlanLookups,
 ): Promise<UsableSteps> {
-  const base = await findBase(steps, lookups)
   const usable: Array<AppliedStep> = []
   const resolved = new Map<string, EngineStep>()
   const skipped: Array<StepProblem> = []
@@ -114,14 +101,19 @@ async function usableSteps(
     if (source !== undefined) hashes.set(id, source.contentHash)
     return source?.path
   }
-  let reachedImage = false
+  let base: PlanSource | undefined
   for (const step of steps) {
-    if (step.kind === PipelineStepKind.Source) {
-      reachedImage = true
+    if (!step.enabled) continue
+    if (step.kind === PipelineStepKind.Layer && base === undefined) {
+      const source = await lookups.source(step.sourceId)
+      if (source === undefined) {
+        skipped.push({ stepId: step.id, message: IMAGE_GONE })
+        continue
+      }
+      base = source
       continue
     }
-    if (!step.enabled) continue
-    if (!reachedImage) {
+    if (base === undefined) {
       skipped.push({ stepId: step.id, message: BEFORE_IMAGE })
       continue
     }
@@ -153,15 +145,18 @@ async function usableSteps(
     }
     usable.push(step)
   }
+  if (base === undefined) throw new ValidationError(NO_IMAGE)
   return { base, usable, identity, resolved, skipped }
 }
 
 /**
- * Works out how to show `steps`. The first step is the document's image. The
- * steps after it run on the last AI Step that has a Result (or on the image):
- * Sharp steps change the picture, layers are drawn onto it. An AI Step with no
- * Result stops the walk, and everything after it waits. Throws when the
- * document has no image to start from.
+ * Works out how to show `steps`. The first layer that is switched on is the
+ * canvas: its image, at its own size, is what the steps after it start from.
+ * They run on the last AI Step that has a Result (or on that image): Sharp
+ * steps change the picture, layers are drawn onto it. Steps before the canvas
+ * layer have nothing to work on and are skipped. An AI Step with no Result
+ * stops the walk, and everything after it waits. Throws when there is no
+ * image to start from.
  */
 export async function planPipeline(
   steps: ReadonlyArray<PipelineStep>,

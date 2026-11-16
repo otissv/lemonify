@@ -58,6 +58,20 @@ afterEach(() => {
 })
 
 describe('DocumentView', () => {
+  it('says how to add an image when the document has none', async () => {
+    vi.mocked(getDocument).mockResolvedValue({
+      ...documentView(),
+      source: null,
+      sources: [],
+      pipeline: { steps: [] },
+    })
+    await renderApp(`/documents/${DOCUMENT_ID}`)
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'This document has no image. Add one from Edit › Insert image.',
+    )
+  })
+
   it('shows the picture on a checkerboard, so transparency can be seen', async () => {
     await renderApp(`/documents/${DOCUMENT_ID}`)
 

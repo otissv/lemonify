@@ -57,7 +57,7 @@ function done(resultId: string): JobReport {
 }
 
 /**
- * Runs an AI step on the Document's image as it stands after the Sharp steps
+ * Runs an AI step on the picture as it stands after the Sharp steps
  * before it, and keeps the output as a Result under the step's key. Jobs
  * that share a batch key arrive together and go to the engine as one batch, so
  * the model loads once.

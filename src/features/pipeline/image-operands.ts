@@ -24,18 +24,13 @@ function layerIds(options: Record<string, unknown>): string[] {
 }
 
 /**
- * The Source ids a step reads: the image of the document or of a layer, or the
+ * The Source ids a step reads: the image of a layer, or the
  * second images of a boolean operand, joined channels or composite layers
  * (composite only in workflows: a document uses layers instead).
  * Images are always Sources of the same User, never paths.
  */
 export function stepOperandSourceIds(step: PipelineStep): string[] {
-  if (
-    step.kind === PipelineStepKind.Source ||
-    step.kind === PipelineStepKind.Layer
-  ) {
-    return [step.sourceId]
-  }
+  if (step.kind === PipelineStepKind.Layer) return [step.sourceId]
   if (step.kind !== PipelineStepKind.Sharp) return []
   if (step.op === 'boolean') {
     const operand = OperandSchema.safeParse(step.options)
@@ -106,10 +101,7 @@ export function remapPipelineSources(
   ids: SourceIds,
 ): Pipeline {
   const steps = pipeline.steps.map((step): PipelineStep => {
-    if (
-      step.kind === PipelineStepKind.Source ||
-      step.kind === PipelineStepKind.Layer
-    ) {
+    if (step.kind === PipelineStepKind.Layer) {
       return { ...step, sourceId: mapped(step.sourceId, ids) }
     }
     if (step.kind !== PipelineStepKind.Sharp) return step

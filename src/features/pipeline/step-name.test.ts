@@ -7,7 +7,6 @@ import {
   createAiStep,
   createLayerStep,
   createSharpStep,
-  createSourceStep,
 } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import {
@@ -16,7 +15,7 @@ import {
 } from '@/features/pipeline/step-problems'
 import { AiToolId } from '@/features/ai/ai-tools'
 
-const IMAGE = createSourceStep('base')
+const IMAGE = createLayerStep('base')
 const BLUR = createSharpStep('blur', { sigma: 2 })
 const LAYER = createLayerStep('logo')
 const UPSCALE = createAiStep({

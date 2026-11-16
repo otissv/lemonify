@@ -190,6 +190,13 @@ describe('layers through the CLI', () => {
     expect(a).toBe(255)
     expect([r, g, b]).toEqual([110, 25, 153])
     expect(await pixel(out, 40, 40)).toEqual([221, 51, 51, 255])
+
+    const [canvas] = document.pipeline.steps
+    await cli('document', 'step', 'disable', document.id, canvas?.id ?? '')
+    const alone = path.join(workDir, 'alone.png')
+    await cli('export', document.id, '--out', alone, '--format', 'png')
+    const meta = await sharp(alone).metadata()
+    expect([meta.width, meta.height]).toEqual([16, 16])
   })
 })
 
@@ -333,11 +340,25 @@ describe('workflows through the CLI', () => {
       mask.source.id,
     )
     expect(replaced.document.pipeline.steps.at(0)).toMatchObject({
-      kind: 'source',
+      kind: 'layer',
       sourceId: mask.source.id,
     })
-    await expect(
-      cli('document', 'step', 'remove', document.id, first?.id ?? ''),
-    ).rejects.toThrow(/stays where it is/)
+
+    const removed = await cli<Doc>(
+      'document',
+      'step',
+      'remove',
+      document.id,
+      first?.id ?? '',
+    )
+    expect(removed.document.pipeline.steps).toHaveLength(1)
+    const emptied = await cli<Doc>(
+      'document',
+      'step',
+      'remove',
+      document.id,
+      layer?.id ?? '',
+    )
+    expect(emptied.document.pipeline.steps).toHaveLength(0)
   })
 })

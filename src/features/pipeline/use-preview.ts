@@ -8,7 +8,7 @@ import {
   previewImageUrl,
   sourceImageUrl,
 } from '@/features/documents/image-urls'
-import { firstSourceStep, hasEdits } from '@/features/pipeline/pipeline'
+import { canvasLayer, hasEdits } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { PreviewStatus, useAppStore } from '@/store/app-store'
 
@@ -18,7 +18,7 @@ export const PREVIEW_DELAY_MS = 120
 export interface PipelinePreview {
   document: DocumentView
   pipeline: Pipeline
-  /** The document's own image. Undefined when it is gone. */
+  /** The image of the layer that sets the canvas. Undefined when there is none. */
   source: SourceSummary | undefined
   /** The picture to show: the rendered result, or the image itself while there are no edits. Undefined without an image. */
   imageUrl: string | undefined
@@ -32,13 +32,13 @@ export interface PipelinePreview {
   problems: ReadonlyArray<StepProblem>
 }
 
-/** The document's own image, as far as the document's images are known. */
+/** The image of the layer that sets the canvas, as far as the document's images are known. */
 export function activeSource(
   pipeline: Pipeline,
   sources: ReadonlyArray<SourceSummary>,
 ): SourceSummary | undefined {
-  const first = firstSourceStep(pipeline)
-  return sources.find(({ id }) => id === first?.sourceId)
+  const canvas = canvasLayer(pipeline)
+  return sources.find(({ id }) => id === canvas?.sourceId)
 }
 
 /**
