@@ -35,7 +35,7 @@ export class MemoryWorkflowDao implements WorkflowDao {
   async update(
     id: string,
     expectedRevision: number,
-    changes: Pick<WorkflowRecord, 'name' | 'graph'>,
+    changes: Pick<WorkflowRecord, 'name' | 'definition'>,
     now: string,
   ): Promise<WorkflowRecord> {
     const found = this.#workflows.get(id)
@@ -46,7 +46,7 @@ export class MemoryWorkflowDao implements WorkflowDao {
     const next: WorkflowRecord = {
       ...found,
       name: changes.name,
-      graph: structuredClone(changes.graph),
+      definition: structuredClone(changes.definition),
       revision: found.revision + 1,
       updatedAt: now,
     }

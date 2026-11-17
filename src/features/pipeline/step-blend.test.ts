@@ -4,9 +4,9 @@ import { applyChange, planChange } from '@/features/pipeline/document-change'
 import {
   PipelineSchema,
   createAiStep,
-  createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
   DEFAULT_STEP_BLEND,
   blendableOps,
@@ -14,15 +14,16 @@ import {
   supportsBlend,
 } from '@/features/pipeline/step-blend'
 import { AiToolId } from '@/features/ai/ai-tools'
+import { pipelineOf } from '@/test/pipelines'
 
 const BLUR = createSharpStep('blur', { sigma: 2 })
 const FLIP = createSharpStep('flip')
-const LAYER = createLayerStep('logo')
+const LAYER = createImageLayerStep('logo')
 const UPSCALE = createAiStep({
   tool: AiToolId.Upscale,
   settings: { model: 'm', scale: 4, iterations: 1, tta: false },
 })
-const PIPELINE = { steps: [LAYER, BLUR, FLIP, UPSCALE] }
+const PIPELINE = pipelineOf(LAYER, BLUR, FLIP, UPSCALE)
 
 describe('which steps have a blend', () => {
   it('are the filters and the colour tools, which keep the size of the picture', () => {
@@ -73,10 +74,16 @@ describe('a blend', () => {
     const blend = { mode: 'multiply', opacity: 40 }
 
     expect(
-      PipelineSchema.safeParse({ steps: [LAYER, { ...BLUR, blend }] }).success,
+      PipelineSchema.safeParse({
+        ...pipelineOf(),
+        steps: [LAYER, { ...BLUR, blend }],
+      }).success,
     ).toBe(true)
     expect(
-      PipelineSchema.safeParse({ steps: [LAYER, { ...FLIP, blend }] }).success,
+      PipelineSchema.safeParse({
+        ...pipelineOf(),
+        steps: [LAYER, { ...FLIP, blend }],
+      }).success,
     ).toBe(false)
   })
 })

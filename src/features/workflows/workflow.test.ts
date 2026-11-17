@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import { IMAGE_LAYER_KIND } from '@/features/pipeline/layer-kinds'
 import {
+  PipelineSchema,
+  createAiStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
+import { AiToolId } from '@/features/ai/ai-tools'
+import {
+  DEFAULT_WORKFLOW_CANVAS,
+  RunCanvasMode,
+  WorkflowDefinitionSchema,
   WorkflowSchema,
   createWorkflow,
   nextWorkflowName,
@@ -62,71 +73,138 @@ describe('createWorkflow', () => {
 })
 
 describe('WorkflowSchema', () => {
-  it('rejects a connection to a step that does not exist', () => {
+  it('holds a pipeline with its canvas, the images it runs on and its output settings', () => {
+    const created = createWorkflow('Test')
+
+    expect(Object.keys(created).sort()).toEqual([
+      'id',
+      'inputs',
+      'name',
+      'output',
+      'pipeline',
+    ])
+    expect(created.pipeline.canvas).toEqual(DEFAULT_WORKFLOW_CANVAS)
+    expect(created.inputs).toEqual([])
+    expect(created.output).toMatchObject({ widths: [], suffix: '' })
+  })
+
+  it('starts with one empty image layer, the slot the input images go in', () => {
+    const [slot, ...rest] = createWorkflow('Test').pipeline.steps
+
+    expect(rest).toEqual([])
+    expect(slot).toMatchObject({ kind: IMAGE_LAYER_KIND, enabled: true })
+    expect(slot).not.toHaveProperty('sourceId')
+  })
+
+  it('has no graph, no positions and no Input or Output step', () => {
+    const created = createWorkflow('Test')
+
+    expect(created).not.toHaveProperty('nodes')
+    expect(created).not.toHaveProperty('edges')
+    expect(JSON.stringify(created)).not.toMatch(
+      /"position"|"kind":"(input|output)"/,
+    )
+  })
+
+  it('refuses a graph, which is how workflows used to be stored', () => {
+    const { pipeline: _pipeline, ...rest } = createWorkflow('Test')
+    expect(
+      WorkflowSchema.safeParse({ ...rest, nodes: [], edges: [] }).success,
+    ).toBe(false)
+  })
+
+  it('refuses an unknown Sharp op, and composite, which image layers replace', () => {
+    for (const op of ['explode', 'composite']) {
+      const created = createWorkflow('Test')
+      const broken = {
+        ...created,
+        pipeline: {
+          ...created.pipeline,
+          steps: [...created.pipeline.steps, createSharpStep(op)],
+        },
+      }
+      expect(WorkflowSchema.safeParse(broken).success, op).toBe(false)
+    }
+  })
+
+  it('refuses an AI step that names no known tool', () => {
     const created = createWorkflow('Test')
     const broken = {
       ...created,
-      edges: [
-        {
-          id: crypto.randomUUID(),
-          source: created.nodes[0]?.id,
-          target: crypto.randomUUID(),
-        },
-      ],
+      pipeline: {
+        ...created.pipeline,
+        steps: [
+          ...created.pipeline.steps,
+          {
+            id: crypto.randomUUID(),
+            kind: 'ai',
+            tool: 'sky-select',
+            settings: {},
+            enabled: true,
+          },
+        ],
+      },
     }
 
     expect(WorkflowSchema.safeParse(broken).success).toBe(false)
   })
 
-  it('rejects an unknown Sharp op', () => {
-    const created = createWorkflow('Test')
-    const broken = {
+  it('takes the steps a document takes, groups and sub-documents too', () => {
+    const { id: _id, name: _name, ...created } = createWorkflow('Test')
+    const definition = WorkflowDefinitionSchema.parse({
       ...created,
-      nodes: [
-        ...created.nodes,
-        {
-          id: crypto.randomUUID(),
-          kind: 'sharp',
-          op: 'explode',
-          options: {},
-          position: { x: 0, y: 0 },
-        },
-      ],
-    }
+      pipeline: {
+        ...created.pipeline,
+        steps: [
+          ...created.pipeline.steps,
+          createSharpStep('blur', { sigma: 2 }),
+          createAiStep({
+            tool: AiToolId.Upscale,
+            settings: { model: 'm', scale: 4, iterations: 1, tta: false },
+          }),
+        ],
+      },
+    })
 
-    expect(WorkflowSchema.safeParse(broken).success).toBe(false)
+    expect(PipelineSchema.safeParse(definition.pipeline).success).toBe(true)
+    expect(definition.pipeline.steps).toHaveLength(3)
+  })
+
+  it('refuses a pipeline with no canvas', () => {
+    const created = createWorkflow('Test')
+    const { canvas: _canvas, ...pipeline } = created.pipeline
+    expect(WorkflowSchema.safeParse({ ...created, pipeline }).success).toBe(
+      false,
+    )
+  })
+
+  it('refuses the same input image twice', () => {
+    const created = createWorkflow('Test')
+    expect(
+      WorkflowSchema.safeParse({ ...created, inputs: ['a', 'a'] }).success,
+    ).toBe(false)
+    expect(
+      WorkflowSchema.safeParse({ ...created, inputs: ['a', 'b'] }).success,
+    ).toBe(true)
+  })
+
+  it('refuses an input that is not an id', () => {
+    const created = createWorkflow('Test')
+    expect(WorkflowSchema.safeParse({ ...created, inputs: [''] }).success).toBe(
+      false,
+    )
   })
 })
 
-describe('node defaults', () => {
-  it('starts Input with no sources', () => {
-    expect(
-      createWorkflow('Test').nodes.find((node) => node.kind === 'input'),
-    ).toMatchObject({ sourceIds: [] })
+describe('createWorkflow canvas', () => {
+  it('takes the canvas it is given', () => {
+    const canvas = canvasOfSize(640, 480)
+    expect(createWorkflow('Test', canvas).pipeline.canvas).toEqual(canvas)
   })
+})
 
-  it('starts Output with the default settings', () => {
-    expect(
-      createWorkflow('Test').nodes.find((node) => node.kind === 'output'),
-    ).toMatchObject({ settings: { widths: [], suffix: '' } })
-  })
-
-  it('rejects an AI step that names no known tool', () => {
-    const created = createWorkflow('Test')
-    const broken = {
-      ...created,
-      nodes: [
-        ...created.nodes,
-        {
-          id: crypto.randomUUID(),
-          kind: 'ai',
-          tool: 'sky-select',
-          settings: {},
-          position: { x: 0, y: 0 },
-        },
-      ],
-    }
-
-    expect(WorkflowSchema.safeParse(broken).success).toBe(false)
+describe('RunCanvasMode', () => {
+  it('is the workflow’s own canvas, or the size of the first image', () => {
+    expect(Object.values(RunCanvasMode)).toEqual(['workflow', 'first-image'])
   })
 })

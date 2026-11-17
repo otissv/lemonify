@@ -7,9 +7,9 @@ import {
   sharpOpFields,
   sharpOptionProblems,
 } from '@/features/workflows/sharp-op-fields'
-import type { SharpNode } from '@/features/workflows/workflow-graph'
+import type { SharpStep } from '@/features/pipeline/pipeline'
 
-type Options = SharpNode['options']
+type Options = SharpStep['options']
 
 interface SharpOptionsFormProps {
   op: string

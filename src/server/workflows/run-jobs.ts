@@ -35,7 +35,7 @@ export function segmentJobSpec({
     groupKey: runId,
     workflowRunId: runId,
   } as const
-  if (segment.kind === 'sharp') {
+  if (segment.kind === 'draw') {
     return {
       ...base,
       pool: WorkerPool.Cpu,
@@ -48,7 +48,7 @@ export function segmentJobSpec({
       },
     }
   }
-  const entry = registry.get(segment.node.tool)
+  const entry = registry.get(segment.step.tool)
   return {
     ...base,
     pool: entry.summary.pool,
@@ -58,8 +58,8 @@ export function segmentJobSpec({
       sourceId,
       segment: index,
       input,
-      tool: segment.node.tool,
-      batchKey: entry.batchKey(segment.node.settings),
+      tool: segment.step.tool,
+      batchKey: entry.batchKey(segment.step.settings),
     },
   }
 }

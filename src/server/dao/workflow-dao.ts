@@ -1,4 +1,7 @@
-import type { WorkflowGraph } from '@/features/workflows/workflow'
+import type {
+  RunCanvasMode,
+  WorkflowDefinition,
+} from '@/features/workflows/workflow'
 
 export const STALE_WORKFLOW_MESSAGE =
   'This workflow was changed somewhere else. Reload it to see the latest version.'
@@ -7,7 +10,7 @@ export type WorkflowRecord = {
   id: string
   ownerId: string
   name: string
-  graph: WorkflowGraph
+  definition: WorkflowDefinition
   revision: number
   createdAt: string
   updatedAt: string
@@ -22,11 +25,13 @@ export enum RunState {
 
 export type WorkflowRunRecord = {
   id: string
-  /** Null once the Workflow it came from was deleted; the run keeps its own copy of the graph. */
+  /** Null once the Workflow it came from was deleted; the run keeps its own copy of the definition. */
   workflowId: string | null
   ownerId: string
-  /** The graph as it was when the run started, so editing the Workflow mid-run changes nothing. */
-  graph: WorkflowGraph
+  /** The definition as it was when the run started, so editing the Workflow mid-run changes nothing. */
+  definition: WorkflowDefinition
+  /** Which canvas the run draws on, chosen when it started. */
+  canvasMode: RunCanvasMode
   state: RunState
   createdAt: string
   finishedAt: string | null
@@ -38,11 +43,11 @@ export interface WorkflowDao {
   findById(id: string): Promise<WorkflowRecord | null>
   /** Most recently changed first. */
   listByOwner(ownerId: string): Promise<WorkflowRecord[]>
-  /** Saves a new name and graph and raises the revision; a ConflictError when `expectedRevision` is not the stored one. */
+  /** Saves a new name and definition and raises the revision; a ConflictError when `expectedRevision` is not the stored one. */
   update(
     id: string,
     expectedRevision: number,
-    changes: { name: string; graph: WorkflowGraph },
+    changes: { name: string; definition: WorkflowDefinition },
     now: string,
   ): Promise<WorkflowRecord>
   delete(id: string): Promise<void>

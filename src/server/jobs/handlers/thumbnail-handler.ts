@@ -1,12 +1,11 @@
-import {
-  PipelineStepKind,
-  createLayerStep,
-  planSteps,
-} from '@/features/pipeline/pipeline'
+import { PipelineStepKind, planSteps } from '@/features/pipeline/pipeline'
 import type { LeafStep, PlanStep } from '@/features/pipeline/pipeline'
+import type { Canvas } from '@/features/pipeline/canvas'
+import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
 
 import type { DocumentRecord } from '../../dao/document-dao.ts'
-import { ValidationError } from '../../errors.ts'
 import { RenderKind } from '../../tools/render-store.ts'
 import { WrongJobKindError, runEach } from '../job-handler.ts'
 import type { JobHandler, JobItem, JobReport } from '../job-handler.ts'
@@ -14,10 +13,20 @@ import { JobKind, JobState } from '../job-types.ts'
 import { ensureRender } from './preview-handler.ts'
 import type { RenderHandlerDependencies } from './preview-handler.ts'
 
-/** The steps that show only the image a layer holds: that layer alone, which then is the canvas. */
-function ownImage(step: PlanStep): ReadonlyArray<LeafStep> | undefined {
-  if (step.kind !== PipelineStepKind.Layer) return undefined
-  return [createLayerStep(step.sourceId)]
+/** What a small picture shows: steps on a canvas; the document's own canvas when none is given. */
+type Shown = { steps: ReadonlyArray<PlanStep>; canvas?: Canvas }
+
+/** A layer shows only its own image, as it is, on a canvas the size of that image. Undefined for a layer with no image to show. */
+async function ownImage(
+  layer: ImageLayerStep,
+  document: DocumentRecord,
+  planner: RenderHandlerDependencies['planner'],
+): Promise<Shown | undefined> {
+  const [imageId] = layerKind(layer).sourceIds(layer)
+  if (imageId === undefined) return undefined
+  const canvas = await planner.imageCanvas(document.ownerId, imageId)
+  if (canvas === undefined) return undefined
+  return { steps: [{ ...layer, ...DEFAULT_LAYER_SETTINGS }], canvas }
 }
 
 /** For each step in a sub-document: the steps of that sub-document up to and including it, which make its own picture at that step. */
@@ -32,7 +41,7 @@ function stepsInSubDocuments(
     if (group.kind !== PipelineStepKind.Group) continue
     for (const [index, step] of group.steps.entries()) {
       inside.set(step.id, {
-        shown: ownImage(step) ?? group.steps.slice(0, index + 1),
+        shown: group.steps.slice(0, index + 1),
         enabled: step.enabled,
       })
     }
@@ -56,16 +65,25 @@ export class ThumbnailHandler implements JobHandler {
   /** The key of a small picture of `steps`, or null when they cannot make one. A layer shows its own image. */
   async #thumbnailKey(
     document: DocumentRecord,
-    steps: ReadonlyArray<PlanStep>,
+    shown: Shown,
   ): Promise<string | null> {
-    try {
-      const plan = await this.#deps.planner.plan(document, { steps })
-      if (plan.pending.length > 0 || plan.skipped.length > 0) return null
-      return await ensureRender(this.#deps, RenderKind.Thumbnail, plan)
-    } catch (error) {
-      if (error instanceof ValidationError) return null
-      throw error
+    const plan = await this.#deps.planner.plan(document, shown)
+    if (plan.pending.length > 0 || plan.skipped.length > 0) return null
+    return ensureRender(this.#deps, RenderKind.Thumbnail, plan)
+  }
+
+  async #shownFor(
+    document: DocumentRecord,
+    steps: ReadonlyArray<PlanStep>,
+    index: number,
+    inSubDocument: ReadonlyArray<LeafStep> | undefined,
+  ): Promise<Shown | undefined> {
+    const step = steps[index]
+    if (step === undefined) {
+      return inSubDocument === undefined ? undefined : { steps: inSubDocument }
     }
+    if (isLayerStep(step)) return ownImage(step, document, this.#deps.planner)
+    return { steps: steps.slice(0, index + 1) }
   }
 
   run(items: ReadonlyArray<JobItem>): Promise<ReadonlyArray<JobReport>> {
@@ -88,10 +106,12 @@ export class ThumbnailHandler implements JobHandler {
           const index = steps.findIndex((step) => step.id === stepId)
           const step = steps[index]
           const within = inside.get(stepId)
-          const shown =
-            step === undefined
-              ? within?.shown
-              : (ownImage(step) ?? steps.slice(0, index + 1))
+          const shown = await this.#shownFor(
+            document,
+            steps,
+            index,
+            within?.shown,
+          )
           const on = step === undefined ? within?.enabled : step.enabled
           const key =
             shown === undefined || !on

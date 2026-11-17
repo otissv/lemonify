@@ -77,6 +77,19 @@ describe('actions on a page with no document', () => {
     expect(useAppStore.getState().shortcutsOpen).toBe(false)
   })
 
+  it('open the New document dialog, with or without a document open', () => {
+    const page = context({ documentId: undefined })
+    expect(canRunAction('file.newDocument', page)).toBe(true)
+
+    expect(runAction('file.newDocument', page)).toBe(true)
+    expect(useAppStore.getState().newDocumentOpen).toBe(true)
+
+    useAppStore.getState().setNewDocumentOpen(false)
+    loadDocumentIntoEditor(documentView())
+    expect(runAction('file.newDocument', context())).toBe(true)
+    expect(useAppStore.getState().newDocumentOpen).toBe(true)
+  })
+
   it('do nothing that needs a document', () => {
     const page = context({ documentId: undefined })
     for (const id of [
@@ -128,6 +141,19 @@ describe('edit actions', () => {
     expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(true)
     runAction('edit.showOriginal', context())
     expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
+  })
+
+  it('add an empty image layer for the document', () => {
+    loadDocumentIntoEditor(documentView())
+    expect(runAction('edit.addImageLayer', context())).toBe(true)
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'add-step',
+      step: expect.objectContaining({ kind: 'image-layer' }),
+      index: 1,
+    })
+    expect(
+      runAction('edit.addImageLayer', context({ documentId: undefined })),
+    ).toBe(false)
   })
 
   it('insert and replace images, the latter only when there is a layer to replace', () => {

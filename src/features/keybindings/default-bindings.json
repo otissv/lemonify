@@ -6,6 +6,7 @@
     "edit.insertImage": ["alt+i"],
     "edit.replaceImage": ["alt+shift+i"],
     "edit.showOriginal": ["backslash"],
+    "file.newDocument": ["alt+n"],
     "file.openImage": ["alt+o"],
     "file.openLibrary": ["alt+shift+o"],
     "file.importDocument": [],

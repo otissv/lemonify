@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
+import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -36,7 +37,7 @@ vi.mock('@/features/documents/document-functions', () => ({
 
 function steps() {
   const all = currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps ?? []
-  return all.filter((step) => step.kind !== 'layer')
+  return all.filter((step) => !isLayerStep(step))
 }
 
 function stepNames(): Array<string> {

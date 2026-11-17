@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NavigatorPanel } from '@/features/viewport/navigator-panel'
 import type { ViewFrame } from '@/features/viewport/viewport'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import {
+  INITIAL_APP_STATE,
+  PreviewStatus,
+  useAppStore,
+} from '@/store/app-store'
 import {
   DOCUMENT_ID,
   documentView,
@@ -59,6 +63,12 @@ function finder(): HTMLElement {
 
 function show(): void {
   loadDocumentIntoEditor(documentView())
+  useAppStore.getState().setPreview(DOCUMENT_ID, {
+    status: PreviewStatus.Ready,
+    key: 'preview-key',
+    pendingStepIds: [],
+    problems: [],
+  })
   useAppStore.getState().setViewFrame(DOCUMENT_ID, FRAME)
   render(<NavigatorPanel documentId={DOCUMENT_ID} />)
 }

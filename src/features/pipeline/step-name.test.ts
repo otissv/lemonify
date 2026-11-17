@@ -5,30 +5,31 @@ import {
   MAX_STEP_NAME_LENGTH,
   PipelineSchema,
   createAiStep,
-  createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import {
   pipelineStepLabel,
   pipelineStepTitle,
 } from '@/features/pipeline/step-problems'
 import { AiToolId } from '@/features/ai/ai-tools'
+import { pipelineOf } from '@/test/pipelines'
 
-const IMAGE = createLayerStep('base')
+const IMAGE = createImageLayerStep('base')
 const BLUR = createSharpStep('blur', { sigma: 2 })
-const LAYER = createLayerStep('logo')
+const LAYER = createImageLayerStep('logo')
 const UPSCALE = createAiStep({
   tool: AiToolId.Upscale,
   settings: { model: 'm', scale: 4, iterations: 1, tta: false },
 })
-const PIPELINE: Pipeline = { steps: [IMAGE, BLUR, LAYER, UPSCALE] }
+const PIPELINE: Pipeline = pipelineOf(IMAGE, BLUR, LAYER, UPSCALE)
 
 describe('step names', () => {
   it('are optional, on every kind of step, and trimmed', () => {
     const named = PIPELINE.steps.map((step) => ({ ...step, name: '  Hero  ' }))
 
-    const parsed = PipelineSchema.parse({ steps: named })
+    const parsed = PipelineSchema.parse({ ...pipelineOf(), steps: named })
 
     expect(parsed.steps.map((step) => step.name)).toEqual([
       'Hero',
@@ -42,7 +43,7 @@ describe('step names', () => {
   it('are never empty or longer than the limit', () => {
     for (const name of ['', '   ', 'x'.repeat(MAX_STEP_NAME_LENGTH + 1)]) {
       expect(
-        PipelineSchema.safeParse({ steps: [{ ...IMAGE, name }] }).success,
+        PipelineSchema.safeParse(pipelineOf({ ...IMAGE, name })).success,
       ).toBe(false)
     }
   })

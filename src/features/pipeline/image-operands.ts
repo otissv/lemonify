@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type {
   LeafStep,
@@ -28,7 +29,7 @@ function layerIds(options: Record<string, unknown>): string[] {
 }
 
 /**
- * The Source ids a step reads: the image of a layer, or the
+ * The Source ids a step reads: the images a layer owns, or the
  * second images of a boolean operand, joined channels or composite layers
  * (composite only in workflows: a document uses layers instead).
  * Images are always Sources of the same User, never paths.
@@ -37,7 +38,7 @@ export function stepOperandSourceIds(step: PipelineStep): string[] {
   if (step.kind === PipelineStepKind.Group) {
     return step.steps.flatMap(stepOperandSourceIds)
   }
-  if (step.kind === PipelineStepKind.Layer) return [step.sourceId]
+  if (isLayerStep(step)) return layerKind(step).sourceIds(step)
   if (step.kind !== PipelineStepKind.Sharp) return []
   if (step.op === 'boolean') {
     const operand = OperandSchema.safeParse(step.options)
@@ -98,6 +99,13 @@ function remapOptions(
   return options
 }
 
+/** The same step with every Source id it names replaced by its entry in `ids`. */
+export function remapStepSources(step: LeafStep, ids: SourceIds): LeafStep {
+  if (isLayerStep(step)) return layerKind(step).withSourceIds(step, ids)
+  if (step.kind !== PipelineStepKind.Sharp) return step
+  return { ...step, options: remapOptions(step, ids) as typeof step.options }
+}
+
 /**
  * The same Pipeline with every Source id replaced by its entry in `ids`, for
  * a Pipeline moved to another place where the images have other ids. Throws a
@@ -107,18 +115,14 @@ export function remapPipelineSources(
   pipeline: Pipeline,
   ids: SourceIds,
 ): Pipeline {
-  const remapStep = (step: LeafStep): LeafStep => {
-    if (step.kind === PipelineStepKind.Layer) {
-      return { ...step, sourceId: mapped(step.sourceId, ids) }
-    }
-    if (step.kind !== PipelineStepKind.Sharp) return step
-    return { ...step, options: remapOptions(step, ids) as typeof step.options }
-  }
   const steps = pipeline.steps.map(
     (step): PipelineStep =>
       step.kind === PipelineStepKind.Group
-        ? { ...step, steps: step.steps.map(remapStep) }
-        : remapStep(step),
+        ? {
+            ...step,
+            steps: step.steps.map((inner) => remapStepSources(inner, ids)),
+          }
+        : remapStepSources(step, ids),
   )
-  return { steps }
+  return { ...pipeline, steps }
 }

@@ -17,6 +17,7 @@ import {
   sha256,
 } from '../testing/fakes'
 import { SourceService, cleanFileName } from './source-service'
+import { pipelineOf } from '@/test/pipelines'
 
 const ANN = { userId: 'ann', name: 'Ann' }
 const BEA = { userId: 'bea', name: 'Bea' }
@@ -146,7 +147,7 @@ describe('SourceService.delete', () => {
       id: 'doc',
       ownerId: 'ann',
       name: 'n',
-      pipeline: { steps: [] },
+      pipeline: pipelineOf(),
       revision: 0,
       historyCursor: 0,
       createdAt: '',

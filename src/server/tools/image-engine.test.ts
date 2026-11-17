@@ -7,6 +7,7 @@ import type { z } from 'zod'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ExportFormat } from '@/features/export/export-settings'
+import { canvasOfSize } from '@/features/pipeline/canvas'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 import { blendableOps } from '@/features/pipeline/step-blend'
@@ -18,9 +19,14 @@ import {
   SharpImageEngine,
   THUMBNAIL_MAX_SIZE,
 } from './image-engine.ts'
+import type { EngineBase } from './image-engine.ts'
 import { RenderError } from './render-error.ts'
 
 const engine = new SharpImageEngine()
+
+function file(path: string): EngineBase {
+  return { kind: 'file', path }
+}
 let directory: string
 let input: string
 
@@ -53,7 +59,7 @@ describe('SharpImageEngine', () => {
   it('writes a preview no larger than the preview size', async () => {
     const output = path.join(directory, 'preview.webp')
     const info = await engine.render({
-      input,
+      input: file(input),
       steps: [],
       target: { kind: EngineTargetKind.Preview },
       output,
@@ -66,14 +72,14 @@ describe('SharpImageEngine', () => {
   it('writes a thumbnail and never enlarges a small image', async () => {
     const small = await makeImage(40, 30, 'small.png')
     const info = await engine.render({
-      input: small,
+      input: file(small),
       steps: [],
       target: { kind: EngineTargetKind.Thumbnail },
       output: path.join(directory, 'thumb.webp'),
     })
     expect(info).toMatchObject({ width: 40, height: 30 })
     const big = await engine.render({
-      input,
+      input: file(input),
       steps: [],
       target: { kind: EngineTargetKind.Thumbnail },
       output: path.join(directory, 'thumb-big.webp'),
@@ -83,7 +89,7 @@ describe('SharpImageEngine', () => {
 
   it('applies the steps before sizing', async () => {
     const info = await engine.render({
-      input,
+      input: file(input),
       steps: [createSharpStep('rotate', { angle: 90 })],
       target: { kind: EngineTargetKind.Intermediate },
       output: path.join(directory, 'rotated.png'),
@@ -109,7 +115,7 @@ describe('SharpImageEngine', () => {
         .toFile(cutout)
       const output = path.join(directory, 'grey.png')
       await engine.render({
-        input: cutout,
+        input: file(cutout),
         steps: [
           { ...createSharpStep('greyscale'), ...(blend ? { blend } : {}) },
         ],
@@ -156,7 +162,7 @@ describe('SharpImageEngine', () => {
             ...(blend ? { blend } : {}),
           }
           const info = await engine.render({
-            input,
+            input: file(input),
             steps: [step],
             target: { kind: EngineTargetKind.Preview },
             output: path.join(directory, 'second.webp'),
@@ -180,7 +186,7 @@ describe('SharpImageEngine', () => {
       image: string = input,
     ): Promise<[number, number]> {
       const info = await engine.render({
-        input: image,
+        input: file(image),
         steps,
         target,
         output: path.join(directory, 'sized.out'),
@@ -268,7 +274,7 @@ describe('SharpImageEngine', () => {
     const output = path.join(directory, 'tinted.png')
 
     await engine.render({
-      input: solid,
+      input: file(solid),
       steps: [
         createSharpStep('tint', { colour: { r: 255, g: 0, b: 0, alpha: 0 } }),
       ],
@@ -285,7 +291,7 @@ describe('SharpImageEngine', () => {
   it('exports in the chosen format at the chosen width', async () => {
     const output = path.join(directory, 'out.jpg')
     const info = await engine.render({
-      input,
+      input: file(input),
       steps: [],
       target: {
         kind: EngineTargetKind.Export,
@@ -301,27 +307,130 @@ describe('SharpImageEngine', () => {
     expect(info).toMatchObject({ format: 'jpeg', width: 600, height: 400 })
   })
 
-  it('keeps the format of the image for Original', async () => {
-    const info = await engine.render({
-      input,
-      steps: [],
-      target: {
-        kind: EngineTargetKind.Export,
-        settings: {
-          format: ExportFormat.Original,
-          options: {},
-          keepMetadata: false,
+  describe('Original', () => {
+    async function exportOriginal(
+      originalFrom: string | undefined,
+      name: string,
+    ): Promise<string> {
+      const info = await engine.render({
+        input: { kind: 'canvas', canvas: canvasOfSize(20, 10) },
+        originalFrom,
+        steps: [],
+        target: {
+          kind: EngineTargetKind.Export,
+          settings: {
+            format: ExportFormat.Original,
+            options: {},
+            keepMetadata: false,
+          },
         },
-      },
-      output: path.join(directory, 'same.png'),
+        output: path.join(directory, name),
+      })
+      return info.format
+    }
+
+    it('keeps the format of the first image drawn', async () => {
+      const jpeg = path.join(directory, 'first.jpg')
+      await sharp({
+        create: { width: 4, height: 4, channels: 3, background: '#00ff00' },
+      })
+        .jpeg()
+        .toFile(jpeg)
+
+      expect(await exportOriginal(jpeg, 'same.jpg')).toBe('jpeg')
+      expect(await exportOriginal(input, 'same.png')).toBe('png')
     })
-    expect(info.format).toBe('png')
+
+    it('writes PNG when no image is drawn, since a blank canvas has no format of its own', async () => {
+      expect(await exportOriginal(undefined, 'blank.png')).toBe('png')
+    })
+
+    it('flattens a transparent canvas on white for JPEG', async () => {
+      const jpeg = path.join(directory, 'first.jpg')
+      await sharp({
+        create: { width: 4, height: 4, channels: 3, background: '#00ff00' },
+      })
+        .jpeg()
+        .toFile(jpeg)
+      const output = path.join(directory, 'flat.jpg')
+      await engine.render({
+        input: { kind: 'canvas', canvas: canvasOfSize(4, 4) },
+        originalFrom: jpeg,
+        steps: [],
+        target: {
+          kind: EngineTargetKind.Export,
+          settings: {
+            format: ExportFormat.Original,
+            options: {},
+            keepMetadata: false,
+          },
+        },
+        output,
+      })
+      const { data, info } = await sharp(output)
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      expect(info.channels).toBe(3)
+      expect([...data.subarray(0, 3)].every((value) => value > 250)).toBe(true)
+    })
+  })
+
+  describe('a canvas', () => {
+    async function renderCanvas(
+      canvas: ReturnType<typeof canvasOfSize>,
+      steps: Parameters<typeof engine.render>[0]['steps'] = [],
+    ): Promise<{ width: number; height: number; raw: Buffer }> {
+      const output = path.join(directory, 'canvas.png')
+      const info = await engine.render({
+        input: { kind: 'canvas', canvas },
+        steps,
+        target: { kind: EngineTargetKind.Intermediate },
+        output,
+      })
+      return {
+        width: info.width,
+        height: info.height,
+        raw: await sharp(output).raw().ensureAlpha().toBuffer(),
+      }
+    }
+
+    it('is a blank picture of its own size, transparent by default', async () => {
+      const picture = await renderCanvas(canvasOfSize(6, 4))
+      expect(picture).toMatchObject({ width: 6, height: 4 })
+      expect([...picture.raw.subarray(0, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('can have a background colour', async () => {
+      const picture = await renderCanvas({
+        ...canvasOfSize(2, 2),
+        background: '#ff8800',
+      })
+      expect([...picture.raw.subarray(0, 4)]).toEqual([255, 136, 0, 255])
+    })
+
+    it('has the layers drawn on it, none of them setting its size', async () => {
+      const small = await makeImage(2, 2, 'small.png')
+      const picture = await renderCanvas(canvasOfSize(8, 8), [
+        {
+          kind: 'layer',
+          path: small,
+          ...DEFAULT_LAYER_SETTINGS,
+          fit: 'original',
+          anchor: 'northwest',
+        },
+      ])
+      expect(picture).toMatchObject({ width: 8, height: 8 })
+      expect([...picture.raw.subarray(0, 4)]).toEqual([255, 0, 0, 255])
+      expect([...picture.raw.subarray(7 * 8 * 4, 7 * 8 * 4 + 4)]).toEqual([
+        0, 0, 0, 0,
+      ])
+    })
   })
 
   it('refuses export options the format does not accept', async () => {
     await expect(
       engine.render({
-        input,
+        input: file(input),
         steps: [],
         target: {
           kind: EngineTargetKind.Export,
@@ -339,7 +448,7 @@ describe('SharpImageEngine', () => {
   it('leaves nothing behind and hides paths when the image cannot be read', async () => {
     const output = path.join(directory, 'never.webp')
     const failure = engine.render({
-      input: path.join(directory, 'missing.png'),
+      input: file(path.join(directory, 'missing.png')),
       steps: [],
       target: { kind: EngineTargetKind.Preview },
       output,
@@ -351,7 +460,7 @@ describe('SharpImageEngine', () => {
 
   it('can write over the image it read', async () => {
     await engine.render({
-      input,
+      input: file(input),
       steps: [createSharpStep('flip')],
       target: { kind: EngineTargetKind.Intermediate },
       output: input,
@@ -380,7 +489,7 @@ describe('SharpImageEngine', () => {
     ): Promise<{ raw: Buffer; width: number }> {
       const output = path.join(directory, 'out.png')
       const info = await engine.render({
-        input: base,
+        input: file(base),
         steps,
         target: { kind: EngineTargetKind.Intermediate },
         output,
@@ -514,7 +623,7 @@ describe('SharpImageEngine', () => {
     it('scale changes the size of the picture, and opacity makes it see-through', async () => {
       const output = path.join(directory, 'scaled.png')
       const info = await engine.render({
-        input,
+        input: file(input),
         steps: [
           createSharpStep('scale', { percent: 10 }),
           createSharpStep('opacity', { percent: 50 }),
@@ -551,7 +660,7 @@ describe('SharpImageEngine', () => {
     ): Promise<Buffer> {
       const output = path.join(directory, 'out.png')
       await engine.render({
-        input: base,
+        input: file(base),
         steps,
         target: { kind: EngineTargetKind.Intermediate },
         output,
@@ -625,7 +734,7 @@ describe('SharpImageEngine', () => {
       const output = path.join(directory, 'out.png')
 
       await engine.render({
-        input: base,
+        input: file(base),
         steps: [
           createSharpStep('resize', { width: 4, height: 4 }),
           layerOf(layer),
@@ -651,7 +760,7 @@ describe('SharpImageEngine', () => {
       const output = path.join(directory, 'out.jpg')
 
       await engine.render({
-        input: base,
+        input: file(base),
         steps: [layerOf(layer)],
         target: {
           kind: EngineTargetKind.Export,
@@ -681,7 +790,7 @@ describe('SharpImageEngine', () => {
       const output = path.join(directory, 'out.png')
 
       await engine.render({
-        input: base,
+        input: file(base),
         steps: [layerOf(layer)],
         target: {
           kind: EngineTargetKind.Export,
@@ -700,13 +809,13 @@ describe('SharpImageEngine', () => {
 
     describe('a sub-document', () => {
       function subOf(
-        file: string,
+        source: string,
         steps: Parameters<typeof engine.render>[0]['steps'] = [],
         settings = {},
       ) {
         return {
           kind: 'sub-document' as const,
-          input: file,
+          input: file(source),
           steps,
           ...DEFAULT_LAYER_SETTINGS,
           ...settings,

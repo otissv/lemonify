@@ -24,7 +24,6 @@ const MASK = {
 }
 const ONE = { ...MASK, id: 'src-one', fileName: 'one.png' }
 const TWO = { ...MASK, id: 'src-two', fileName: 'two.png' }
-const LOGO = { ...MASK, id: 'src-logo', fileName: 'logo.png' }
 
 /** Makes the next upload answer with this Source, as the server does. */
 function uploadsAs(source: typeof MASK): void {
@@ -422,44 +421,6 @@ describe('option controls', () => {
       await user.click(screen.getByRole('button', { name: 'Remove one.png' }))
 
       expect(latest).toEqual({ images: ['src-two'] })
-    })
-  })
-
-  describe('composite layers', () => {
-    it('adds a layer from an uploaded image, then sets its place and blend mode', async () => {
-      uploadsAs(LOGO)
-      const user = userEvent.setup()
-      show('composite')
-      expect(screen.getByText('No layers yet.')).toBeVisible()
-
-      chooseFile('Upload layer… file')
-      await user.type(await screen.findByLabelText('Top'), '10')
-      await user.click(screen.getByRole('combobox', { name: 'Blend' }))
-      await user.click(screen.getByRole('option', { name: 'multiply' }))
-
-      expect(latest).toEqual({
-        images: [{ input: 'src-logo', top: 10, blend: 'multiply' }],
-      })
-    })
-
-    it('removes a layer', async () => {
-      const user = userEvent.setup()
-      show('composite', { images: [{ input: 'src-logo' }] })
-
-      await user.click(screen.getByRole('button', { name: 'Remove layer 1' }))
-
-      expect(latest).toEqual({})
-    })
-
-    it('keeps a generated layer as it is', () => {
-      show('composite', { images: [{ input: { text: { text: 'hi' } } }] })
-
-      expect(screen.getByText('Generated image')).toBeVisible()
-      expect(
-        screen.getByText(
-          'This layer is a generated image and is kept as it is.',
-        ),
-      ).toBeVisible()
     })
   })
 })

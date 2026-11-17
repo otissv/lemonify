@@ -11,12 +11,14 @@ import {
 } from '@/features/pipeline/pipeline'
 import type { Pipeline, PipelineStep } from '@/features/pipeline/pipeline'
 import {
+  addEmptyImageLayer,
   deleteStep,
   groupSteps,
   reorderStep,
   setStepOn,
   ungroupSteps,
 } from '@/features/pipeline/pipeline-actions'
+import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import { addTool } from '@/features/tools/add-tool'
 import { FAR_PAN_MULTIPLIER, KEY_PAN_STEP } from '@/features/viewport/pan-step'
 import { viewportActionsFor } from '@/features/viewport/use-viewport'
@@ -117,9 +119,7 @@ function listedStepIds(pipeline: Pipeline): string[] {
 
 function hasLayer(pipeline: Pipeline | undefined): boolean {
   if (pipeline === undefined) return false
-  return leafSteps(pipeline).some(
-    (step) => step.kind === PipelineStepKind.Layer,
-  )
+  return leafSteps(pipeline).some(isLayerStep)
 }
 
 function canMoveStep(place: Place | undefined, direction: -1 | 1): boolean {
@@ -174,6 +174,8 @@ export function canRunAction(id: string, context: ActionContext): boolean {
   if (definition === undefined) return false
   const { documentId, opener } = context
   switch (id) {
+    case 'file.newDocument':
+      return true
     case 'file.openImage':
       return !opener.opening
     case 'file.importDocument':
@@ -283,6 +285,9 @@ function runDocumentAction(
     case 'edit.redo':
       void redoEdit(documentId)
       return
+    case 'edit.addImageLayer':
+      addEmptyImageLayer(documentId)
+      return
     case 'edit.insertImage':
       context.opener.insertImage(documentId)
       return
@@ -315,6 +320,9 @@ export function runAction(id: string, context: ActionContext): boolean {
   const definition = actionById(id)
   const store = useAppStore.getState()
   switch (id) {
+    case 'file.newDocument':
+      store.setNewDocumentOpen(true)
+      return true
     case 'file.openImage':
       context.opener.openImage()
       return true

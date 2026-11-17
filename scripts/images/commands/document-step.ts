@@ -3,11 +3,15 @@ import { z } from 'zod'
 import { AiToolId, aiToolSchema } from '../../../src/features/ai/ai-tools.ts'
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
 import { layerSettingsSchema } from '../../../src/features/pipeline/layer.ts'
+import {
+  createImageLayerStep,
+  isLayerStep,
+  layerKind,
+} from '../../../src/features/pipeline/layer-kinds.ts'
 import { stepBlendSchema } from '../../../src/features/pipeline/step-blend.ts'
 import {
   createAiStep,
   createGroupStep,
-  createLayerStep,
   createSharpStep,
   findStep,
 } from '../../../src/features/pipeline/pipeline.ts'
@@ -36,10 +40,9 @@ const JSON_VALUE = 'JSON: inline, @file.json, or - for stdin'
 type StepContext<T> = AppCommandContext<T>
 
 /** Applies one change to the document as it is now and prints the result. */
-function change<T extends { documentId: string; preview?: string | undefined }>(
-  context: StepContext<T>,
-  build: (current: DocumentView) => DocumentChange,
-) {
+export function change<
+  T extends { documentId: string; preview?: string | undefined },
+>(context: StepContext<T>, build: (current: DocumentView) => DocumentChange) {
   return withPreview(context, async () => {
     const { app, actor, options } = context
     const current = await app.documents.get(actor, options.documentId)
@@ -76,11 +79,11 @@ function newStep(input: {
   blend?: Record<string, z.infer<ReturnType<typeof z.json>>>
   ai?: AiToolId
   settings?: Record<string, z.infer<ReturnType<typeof z.json>>>
-  layer?: string
+  imageLayer?: { source: string | undefined }
 }): LeafStep {
-  if (input.layer !== undefined) {
+  if (input.imageLayer !== undefined) {
     return {
-      ...createLayerStep(input.layer),
+      ...createImageLayerStep(input.imageLayer.source),
       ...layerSettingsSchema.parse(input.settings ?? {}),
     }
   }
@@ -96,16 +99,17 @@ function newStep(input: {
 
 export const documentStepAddCommand = defineAppCommand({
   name: 'document step add',
-  summary: 'Add a Sharp, AI or layer step to a document',
+  summary: 'Add a Sharp, AI or image layer step to a document',
   synopsis:
-    '<documentId> (--op <name> [--options <json>] [--blend <json>] | --ai <tool> --settings <json> | --layer <sourceId> [--settings <json>]) [--index <n>] [--group <groupId>] [--preview <path>]',
+    '<documentId> (--op <name> [--options <json>] [--blend <json>] | --ai <tool> --settings <json> | --image-layer [--source <sourceId>] [--settings <json>]) [--index <n>] [--group <groupId>] [--preview <path>]',
   help: `Adds a step to the end of the pipeline, or at --index. A Sharp step is an operation by name
 (\`${'pnpm images sharp --help'}\` and \`pnpm images schema sharp\` list them) with its
-options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings; a layer
-is an image: the first layer that is switched on is the canvas, which the
-steps after it work on, and later layers are drawn on top of everything before
-them (the steps after a layer act on the picture with the layer in it). The
-canvas layer's own settings are ignored. Layer settings, all optional: opacity
+options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings; an image
+layer is an image drawn on the document's canvas, on top of everything before it
+(the steps after a layer act on the picture with the layer in it). Give it a
+--source, or leave the source out for an empty image layer, which keeps its
+settings and draws nothing until \`document step set <id> <stepId> --source\`
+gives it an image. Image layer settings, all optional: opacity
 (0-100), blend (normal, multiply, screen, overlay, darken, lighten,
 colour-dodge, colour-burn, hard-light, soft-light, difference, exclusion), fit
 (inside, original, contain, cover, stretch), scale (1-1000), rotation
@@ -121,8 +125,9 @@ Options:
   --options <json>     The operation's options (${JSON_VALUE})
   --blend <json>       Blend of a filter or colour step: mode and opacity (${JSON_VALUE})
   --ai <tool>          An AI tool
-  --layer <sourceId>   Add this source as a layer
-  --settings <json>    The tool's settings, or the layer's (${JSON_VALUE})
+  --image-layer        Add an image layer
+  --source <sourceId>  The source the new image layer shows (none: an empty layer)
+  --settings <json>    The tool's settings, or the image layer's (${JSON_VALUE})
   --index <n>          Where to put the step (default: the end)
   --group <groupId>    Put the step inside this group (the index counts inside it)
 ${PREVIEW_HELP}`,
@@ -133,7 +138,8 @@ ${PREVIEW_HELP}`,
     blend: json.optional(),
     ai: z.enum(AiToolId).optional(),
     settings: json.optional(),
-    layer: id.optional(),
+    imageLayer: z.boolean().default(false),
+    source: id.optional(),
     index: z.coerce.number().int().nonnegative().optional(),
     group: id.optional(),
     ...PREVIEW_SHAPE,
@@ -145,22 +151,44 @@ ${PREVIEW_HELP}`,
     blend: { type: 'string', json: true },
     ai: { type: 'string' },
     settings: { type: 'string', json: true },
-    layer: { type: 'string' },
+    'image-layer': { type: 'boolean' },
+    source: { type: 'string' },
     index: { type: 'string' },
     group: { type: 'string' },
     ...PREVIEW_FLAGS,
   },
   async run(context) {
-    const { op, options, blend, ai, settings, layer, index, group } =
-      context.options
-    const given = [op, ai, layer].filter((value) => value !== undefined)
+    const {
+      op,
+      options,
+      blend,
+      ai,
+      settings,
+      imageLayer,
+      source,
+      index,
+      group,
+    } = context.options
+    const given = [op, ai, imageLayer ? true : undefined].filter(
+      (value) => value !== undefined,
+    )
     if (given.length !== 1) {
-      throw new ValidationError('Give one of --op, --ai or --layer.')
+      throw new ValidationError('Give one of --op, --ai or --image-layer.')
     }
     if (blend !== undefined && op === undefined) {
       throw new ValidationError('--blend goes with --op.')
     }
-    const step = newStep({ op, options, blend, ai, settings, layer })
+    if (source !== undefined && !imageLayer) {
+      throw new ValidationError('--source goes with --image-layer.')
+    }
+    const step = newStep({
+      op,
+      options,
+      blend,
+      ai,
+      settings,
+      ...(imageLayer ? { imageLayer: { source } } : {}),
+    })
     return change(context, (current) => ({
       type: 'add-step',
       step,
@@ -224,25 +252,26 @@ export const documentStepSetCommand = defineAppCommand({
   name: 'document step set',
   summary: "Replace a step's options, blend, settings or image",
   synopsis:
-    '<documentId> <stepId> (--options <json> | --blend <json> | --settings <json> | --source <sourceId> | --sub-document <on|off>) [--preview <path>]',
+    '<documentId> <stepId> (--options <json> | --blend <json> | --settings <json> | --source <sourceId> | --clear-source | --sub-document <on|off>) [--preview <path>]',
   help: `Replaces the options of a Sharp step, the blend of a filter or colour step,
-the settings of an AI step or of a layer (every layer setting not given goes
-back to its default), or the image of a layer. A blend of {} takes the blend
-away.
+the settings of an AI step or of an image layer (every setting not given goes
+back to its default), or the image of an image layer (--source, or
+--clear-source to leave it empty). A blend of {} takes the blend away.
 
-A group takes --sub-document on to become a picture of its own: its first layer
-that is on sets its size, its steps act on that picture only, and the result is
-placed on the canvas like a layer. Its --settings are then where and how it is
-placed (the same as a layer's: opacity, blend, fit, scale, rotation, anchor, x,
-y). With --sub-document off it goes back to being a plain group, whose steps
-are part of the one picture. A group with no layer that is on has no picture,
-and is left out with a message.
+A group takes --sub-document on to become a picture of its own: a blank canvas
+the size of the document's, which its steps draw on and act on, and the result
+is placed on the document's canvas like a layer. Its --settings are then where
+and how it is placed (the same as a layer's: opacity, blend, fit, scale,
+rotation, anchor, x, y). With --sub-document off it goes back to being a plain
+group, whose steps are part of the one picture. A sub-document with no layer
+that is on is a picture with nothing in it.
 
 Options:
   --options <json>     New options for a Sharp step (${JSON_VALUE})
   --blend <json>       New blend, mode and opacity, for a filter or colour step (${JSON_VALUE})
-  --settings <json>    New settings for an AI step or a layer (${JSON_VALUE})
-  --source <sourceId>  The source a layer shows
+  --settings <json>    New settings for an AI step or an image layer (${JSON_VALUE})
+  --source <sourceId>  The source an image layer shows
+  --clear-source       Take the image away and leave the image layer empty
   --sub-document <on|off>  Whether a group is a picture of its own
 ${PREVIEW_HELP}`,
   shape: {
@@ -252,6 +281,7 @@ ${PREVIEW_HELP}`,
     blend: json.optional(),
     settings: json.optional(),
     source: id.optional(),
+    clearSource: z.boolean().default(false),
     subDocument: z.enum(['on', 'off']).optional(),
     ...PREVIEW_SHAPE,
   },
@@ -262,17 +292,28 @@ ${PREVIEW_HELP}`,
     blend: { type: 'string', json: true },
     settings: { type: 'string', json: true },
     source: { type: 'string' },
+    'clear-source': { type: 'boolean' },
     'sub-document': { type: 'string' },
   },
   run: (context) =>
     change(context, (current) => {
-      const { stepId, options, blend, settings, source, subDocument } =
-        context.options
-      return setChange(requireStep(current, stepId), {
+      const {
+        stepId,
         options,
         blend,
         settings,
         source,
+        clearSource,
+        subDocument,
+      } = context.options
+      if (source !== undefined && clearSource) {
+        throw new ValidationError('Give --source or --clear-source, not both.')
+      }
+      return setChange(requireStep(current, stepId), {
+        options,
+        blend,
+        settings,
+        source: clearSource ? null : source,
         subDocument,
       })
     }),
@@ -282,7 +323,8 @@ type Given = {
   options: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
   blend: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
   settings: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
-  source: string | undefined
+  /** An image for an image layer; null takes it away. */
+  source: string | null | undefined
   subDocument: 'on' | 'off' | undefined
 }
 
@@ -300,6 +342,22 @@ function setChange(step: PipelineStep, given: Given): DocumentChange {
       type: 'set-blend',
       stepId,
       blend: stepBlendSchema.parse(given.blend),
+    }
+  }
+  if (isLayerStep(step)) {
+    if (given.source !== undefined) {
+      return { type: 'set-image', stepId, sourceId: given.source }
+    }
+    return {
+      type: 'set-layer',
+      stepId,
+      settings: layerSettingsSchema.parse(
+        requireGiven(
+          given.settings,
+          '--settings, --source or --clear-source',
+          `an ${layerKind(step).title.toLowerCase()}`,
+        ),
+      ),
     }
   }
   switch (step.kind) {
@@ -321,17 +379,6 @@ function setChange(step: PipelineStep, given: Given): DocumentChange {
       throw new ValidationError(
         'Give --sub-document or --settings for a group. Rename it, switch it on or off, or change the steps in it for anything else.',
       )
-    case PipelineStepKind.Layer:
-      if (given.source !== undefined) {
-        return { type: 'set-source', stepId, sourceId: given.source }
-      }
-      return {
-        type: 'set-layer',
-        stepId,
-        settings: layerSettingsSchema.parse(
-          requireGiven(given.settings, '--settings or --source', 'a layer'),
-        ),
-      }
     case PipelineStepKind.Sharp:
       return {
         type: 'set-options',

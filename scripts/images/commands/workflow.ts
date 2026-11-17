@@ -1,21 +1,25 @@
 import { z } from 'zod'
 
-import { OutputSettingsSchema } from '../../../src/features/workflows/output-settings.ts'
+import { canvasSchema } from '../../../src/features/pipeline/canvas.ts'
+import { PipelineSchema } from '../../../src/features/pipeline/pipeline.ts'
+import {
+  OutputSettingsSchema,
+  defaultOutputSettings,
+} from '../../../src/features/workflows/output-settings.ts'
+import {
+  DEFAULT_WORKFLOW_CANVAS,
+  RunCanvasMode,
+  RunCanvasModeSchema,
+} from '../../../src/features/workflows/workflow.ts'
+import type { WorkflowDefinition } from '../../../src/features/workflows/workflow.ts'
 import {
   WorkflowStepSpecsSchema,
-  workflowGraphFromSteps,
+  workflowDefinitionFromSteps,
 } from '../../../src/features/workflows/workflow-from-steps.ts'
-import { WorkflowGraphSchema } from '../../../src/features/workflows/workflow.ts'
-import {
-  addInputSources,
-  updateOutputSettings,
-} from '../../../src/features/workflows/workflow-graph.ts'
 import { RunState } from '../../../src/server/dao/workflow-dao.ts'
 import { ValidationError } from '../../../src/server/errors.ts'
 import type { Actor } from '../../../src/server/domain/actor.ts'
 import type { WorkflowView } from '../../../src/server/services/workflow-service.ts'
-import type { WorkflowGraph } from '../../../src/features/workflows/workflow.ts'
-import { WorkflowNodeKind } from '../../../src/features/workflows/workflow-graph.ts'
 import type { App } from '../../../src/server/composition.ts'
 import { defineAppCommand } from '../app-command.ts'
 import { withWorkers } from '../in-process-workers.ts'
@@ -23,13 +27,17 @@ import { EXISTING_FILES, writeRunOutputs } from '../write-outputs.ts'
 import type { ExistingFiles } from '../write-outputs.ts'
 
 const id = z.string().min(1)
+const dimension = z.coerce.number().int().positive()
 const WAIT_MS = 500
 
-const GRAPH_FLAG = 'JSON: inline, @file.json, or - for stdin'
+const JSON_FLAG = 'JSON: inline, @file.json, or - for stdin'
 const SOURCES_HELP =
-  '--sources <ids>      Comma-separated source ids to put on the Input step'
+  '--sources <ids>      Comma-separated source ids the workflow runs on'
 const OUTPUT_HELP =
   '--output <json>      Output settings: format, options, keepMetadata, widths, suffix'
+const CANVAS_HELP = `  --width <px>         Canvas width in pixels
+  --height <px>        Canvas height in pixels
+  --background <c>     A colour like #ff8000, or transparent`
 
 function sourceIds(raw: string | undefined): string[] {
   if (raw === undefined) return []
@@ -43,64 +51,97 @@ const BUILD_SHAPE = {
   sources: z.string().optional(),
   steps: WorkflowStepSpecsSchema.optional(),
   output: OutputSettingsSchema.optional(),
-  graph: WorkflowGraphSchema.optional(),
+  pipeline: PipelineSchema.optional(),
+  width: dimension.optional(),
+  height: dimension.optional(),
+  background: z.string().optional(),
 }
 
 const BUILD_FLAGS = {
   sources: { type: 'string' },
   steps: { type: 'string', json: true },
   output: { type: 'string', json: true },
-  graph: { type: 'string', json: true },
+  pipeline: { type: 'string', json: true },
+  width: { type: 'string' },
+  height: { type: 'string' },
+  background: { type: 'string' },
 } as const
 
 type BuildOptions = {
   sources?: string
   steps?: z.output<typeof WorkflowStepSpecsSchema>
   output?: z.output<typeof OutputSettingsSchema>
-  graph?: WorkflowGraph
+  pipeline?: z.output<typeof PipelineSchema>
+  width?: number
+  height?: number
+  background?: string
 }
 
-function currentParts(current: WorkflowView | undefined) {
-  const sourceIds: string[] = []
-  let output: z.output<typeof OutputSettingsSchema> | undefined
-  for (const node of current?.nodes ?? []) {
-    if (node.kind === WorkflowNodeKind.Input) sourceIds.push(...node.sourceIds)
-    if (node.kind === WorkflowNodeKind.Output) output = node.settings
-  }
-  return { sourceIds, output }
+function hasCanvasFlags(options: BuildOptions): boolean {
+  return (
+    options.width !== undefined ||
+    options.height !== undefined ||
+    options.background !== undefined
+  )
+}
+
+function chosenCanvas(
+  options: BuildOptions,
+  current: WorkflowView | undefined,
+) {
+  const base = current?.pipeline.canvas ?? DEFAULT_WORKFLOW_CANVAS
+  return canvasSchema.parse({
+    width: options.width ?? base.width,
+    height: options.height ?? base.height,
+    background: options.background ?? base.background,
+  })
+}
+
+function withNewInputs(
+  current: ReadonlyArray<string>,
+  raw: string | undefined,
+): string[] {
+  return [...new Set([...current, ...sourceIds(raw)])]
 }
 
 /**
- * The graph the flags describe. --graph is the whole graph. Otherwise the
- * graph is rebuilt from the steps (those given, or none for a new workflow),
- * keeping the current Input sources and Output settings unless new ones are
- * given. Changing only sources or output edits the current graph in place.
+ * The definition the flags describe. --pipeline is the whole pipeline (canvas
+ * and steps). Otherwise --steps rebuilds the steps (after one empty image
+ * layer for the input image), and without it a current workflow keeps its
+ * pipeline. The canvas flags change the canvas, --sources adds input images and
+ * --output replaces the Output settings.
  */
-function chooseGraph(
-  name: string,
+function chooseDefinition(
   options: BuildOptions,
   current: WorkflowView | undefined,
-): WorkflowGraph {
-  const { graph, steps, sources, output } = options
-  if (graph !== undefined) {
-    if (steps !== undefined || sources !== undefined || output !== undefined) {
+): WorkflowDefinition {
+  const { pipeline, steps, sources, output } = options
+  if (pipeline !== undefined) {
+    if (steps !== undefined || hasCanvasFlags(options)) {
       throw new ValidationError(
-        'Give --graph on its own, or --steps, --sources and --output.',
+        'Give --pipeline on its own, or --steps with the canvas flags.',
       )
     }
-    return graph
+    return {
+      pipeline,
+      inputs: withNewInputs(current?.inputs ?? [], sources),
+      output: output ?? current?.output ?? defaultOutputSettings(),
+    }
   }
+  const canvas = chosenCanvas(options, current)
+  const inputs = withNewInputs(current?.inputs ?? [], sources)
   if (current !== undefined && steps === undefined) {
-    let next: WorkflowGraph = { nodes: current.nodes, edges: current.edges }
-    if (sources !== undefined) next = addInputSources(next, sourceIds(sources))
-    if (output !== undefined) next = updateOutputSettings(next, output)
-    return next
+    return {
+      pipeline: { ...current.pipeline, canvas },
+      inputs,
+      output: output ?? current.output,
+    }
   }
-  const kept = currentParts(current)
-  return workflowGraphFromSteps(name, {
-    sourceIds: sources === undefined ? kept.sourceIds : sourceIds(sources),
+  return workflowDefinitionFromSteps({
+    inputs,
     steps: steps ?? [],
-    output: output ?? kept.output,
+    canvas,
+    output: output ?? current?.output,
   })
 }
 
@@ -108,23 +149,28 @@ export const workflowCreateCommand = defineAppCommand({
   name: 'workflow create',
   summary: 'Create a workflow',
   synopsis:
-    '<name> [--sources <ids>] [--steps <json>] [--output <json>] [--graph <json>]',
-  help: `Creates a workflow that runs its steps in order, from Input to Output.
---steps is a list: {"op":"resize","options":{"width":800}} for a Sharp
-operation, {"tool":"upscale","settings":{...}} for an AI tool. With --graph you
-give the whole {nodes, edges} yourself instead.
+    '<name> [--width <px> --height <px> --background <c>] [--sources <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
+  help: `Creates a workflow: a pipeline, like a document's, that runs on each source.
+The pipeline has an empty image layer, which is where each source is drawn, and
+then --steps in order: {"op":"resize","options":{"width":800}} for a Sharp
+operation, {"tool":"upscale","settings":{...}} for an AI tool. The canvas is
+1920x1080 unless you size it. With --pipeline you give the whole pipeline
+({canvas, steps}) yourself, with image layers and groups as in a document.
 
 Options:
+${CANVAS_HELP}
   ${SOURCES_HELP}
-  --steps <json>       The steps, in order (${GRAPH_FLAG})
+  --steps <json>       The steps after the input layer (${JSON_FLAG})
   ${OUTPUT_HELP}
-  --graph <json>       The whole graph (${GRAPH_FLAG}); not with the three above`,
+  --pipeline <json>    The whole pipeline (${JSON_FLAG}); not with --steps or the canvas flags`,
   shape: { name: z.string().min(1), ...BUILD_SHAPE },
   positionals: ['name'],
   flags: BUILD_FLAGS,
   async run({ app, actor, options }) {
-    const graph = chooseGraph(options.name, options, undefined)
-    return { workflow: await app.workflows.create(actor, options.name, graph) }
+    const definition = chooseDefinition(options, undefined)
+    return {
+      workflow: await app.workflows.create(actor, options.name, definition),
+    }
   },
 })
 
@@ -132,7 +178,7 @@ export const workflowShowCommand = defineAppCommand({
   name: 'workflow show',
   summary: 'Print a workflow',
   synopsis: '<id>',
-  help: 'Prints the workflow: its steps, how they connect and its Output settings.',
+  help: 'Prints the workflow: its canvas and steps, its source images and its Output settings.',
   shape: { id },
   positionals: ['id'],
   async run({ app, actor, options }) {
@@ -155,17 +201,19 @@ export const workflowUpdateCommand = defineAppCommand({
   name: 'workflow update',
   summary: 'Change a workflow',
   synopsis:
-    '<id> [--name <name>] [--sources <ids>] [--steps <json>] [--output <json>] [--graph <json>]',
-  help: `Changes a workflow as it is now. --sources adds sources to Input and --output
-replaces the Output settings. --steps replaces the steps between them. --graph
-replaces everything.
+    '<id> [--name <name>] [--width <px> --height <px> --background <c>] [--sources <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
+  help: `Changes a workflow as it is now. The canvas flags change the canvas and what you
+leave out stays. --sources adds source images and --output replaces the Output
+settings. --steps replaces the steps after one empty image layer. --pipeline
+replaces the whole pipeline.
 
 Options:
   --name <name>        Rename the workflow
+${CANVAS_HELP}
   ${SOURCES_HELP}
-  --steps <json>       The steps, in order (${GRAPH_FLAG})
+  --steps <json>       The steps after the input layer (${JSON_FLAG})
   ${OUTPUT_HELP}
-  --graph <json>       The whole graph (${GRAPH_FLAG}); not with the three above`,
+  --pipeline <json>    The whole pipeline (${JSON_FLAG}); not with --steps or the canvas flags`,
   shape: { id, name: z.string().min(1).optional(), ...BUILD_SHAPE },
   positionals: ['id'],
   flags: { name: { type: 'string' }, ...BUILD_FLAGS },
@@ -177,10 +225,7 @@ Options:
         actor,
         options.id,
         current.revision,
-        {
-          name,
-          graph: chooseGraph(name, options, current),
-        },
+        { name, definition: chooseDefinition(options, current) },
       ),
     }
   },
@@ -243,25 +288,40 @@ export const workflowRunCommand = defineAppCommand({
   name: 'workflow run',
   summary: 'Run a workflow on its sources',
   synopsis:
-    '<id> [--follow] [--out <folder>] [--existing <policy>] [--manifest]',
-  help: `Starts a run: one job per source. Without --follow the run is queued and this
+    '<id> [--canvas workflow|first-image] [--follow] [--out <folder>] [--existing <policy>] [--manifest]',
+  help: `Starts a run: one job per source, each source drawn in the workflow's input
+layer. By default every image is drawn on the workflow's canvas; --canvas
+first-image gives each image a canvas of its own size and the workflow's
+background. Without --follow the run is queued and this
 returns at once; the server or a \`worker\` process does the work. With --follow
 this process does the work, waits for the run to end and, with --out, writes the
 images.
 
 Options:
+  --canvas <mode>      workflow (default) or first-image
   --follow             Do the work here and wait for the run to end
 ${OUTPUT_FLAG_HELP}`,
-  shape: { id, follow: z.boolean().default(false), ...OUTPUT_SHAPE },
+  shape: {
+    id,
+    canvas: RunCanvasModeSchema.default(RunCanvasMode.Workflow),
+    follow: z.boolean().default(false),
+    ...OUTPUT_SHAPE,
+  },
   positionals: ['id'],
-  flags: { follow: { type: 'boolean' }, ...OUTPUT_FLAGS },
+  flags: {
+    canvas: { type: 'string' },
+    follow: { type: 'boolean' },
+    ...OUTPUT_FLAGS,
+  },
   async run({ app, actor, options }) {
     if (options.out !== undefined && !options.follow) {
       throw new ValidationError(
         '--out needs --follow, so the images exist when they are written.',
       )
     }
-    const started = await app.workflows.run(actor, options.id)
+    const started = await app.workflows.run(actor, options.id, {
+      canvas: options.canvas,
+    })
     if (!options.follow) return { run: started }
     return withWorkers(app, async () => {
       const run = await waitForRun(app, actor, started.id)

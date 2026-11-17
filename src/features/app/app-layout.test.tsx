@@ -12,6 +12,11 @@ import {
 } from '@/features/documents/document-functions'
 import type { DocumentSummary } from '@/features/documents/document'
 import { createSharpStep } from '@/features/pipeline/pipeline'
+import { followJob } from '@/features/jobs/follow-job'
+import {
+  requestPreview,
+  requestThumbnails,
+} from '@/features/render/render-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import {
   INITIAL_APP_STATE,
@@ -19,7 +24,8 @@ import {
   SidebarTab,
   useAppStore,
 } from '@/store/app-store'
-import { documentView } from '@/test/document-fixtures'
+import { documentView, previewJob } from '@/test/document-fixtures'
+import { workflowDefinition } from '@/test/workflow-fixtures'
 import { renderApp } from '@/test/render-app'
 
 vi.mock('@/features/documents/document-functions', () => ({
@@ -36,6 +42,12 @@ vi.mock('@/features/documents/document-functions', () => ({
 vi.mock('@/features/workflows/workflow-functions', () => ({
   listWorkflows: vi.fn(),
 }))
+vi.mock('@/features/render/render-functions', () => ({
+  requestPreview: vi.fn(),
+  requestThumbnails: vi.fn(),
+  requestAiStep: vi.fn(),
+}))
+vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
 
 const FIRST_ID = '6f1c6c4e-0f43-4a8f-9a57-2d2f0f8f2b11'
 const SECOND_ID = '7a2d7d5f-1f54-4b9a-8b68-3e3a1a9a3c22'
@@ -94,6 +106,9 @@ describe('AppLayout', () => {
     useAppStore.setState(INITIAL_APP_STATE)
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([])
+    vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
+    vi.mocked(requestThumbnails).mockResolvedValue({ id: 't' } as never)
+    vi.mocked(followJob).mockResolvedValue(previewJob())
     vi.mocked(getDocument).mockImplementation(({ data }) =>
       Promise.resolve(
         documentView([], data.id, data.id === FIRST_ID ? 'one.png' : 'two.png'),
@@ -239,8 +254,7 @@ describe('AppLayout', () => {
         {
           id: 'w1',
           name: 'Saved earlier',
-          nodes: [],
-          edges: [],
+          ...workflowDefinition(),
           revision: 0,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
@@ -286,8 +300,7 @@ describe('AppLayout', () => {
       const workflow = (id: string, name: string) => ({
         id,
         name,
-        nodes: [],
-        edges: [],
+        ...workflowDefinition(),
         revision: 0,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',

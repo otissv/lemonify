@@ -1,8 +1,6 @@
 import { layerSettingsSchema } from '../src/features/pipeline/layer.ts'
-import {
-  createLayerStep,
-  createSharpStep,
-} from '../src/features/pipeline/pipeline.ts'
+import { createSharpStep } from '../src/features/pipeline/pipeline.ts'
+import { createImageLayerStep } from '../src/features/pipeline/layer-kinds.ts'
 import type { PipelineStep } from '../src/features/pipeline/pipeline.ts'
 import { stepBlendSchema } from '../src/features/pipeline/step-blend.ts'
 import type { App } from '../src/server/composition.ts'
@@ -38,11 +36,11 @@ function resolveReferences(value: JsonValue, sources: SourceIds): JsonValue {
 }
 
 function pipelineStep(spec: StepSpec, sources: SourceIds): PipelineStep {
-  if (spec.kind === 'layer') {
+  if (spec.kind === 'image-layer') {
     const sourceId = sources[spec.image]
     if (sourceId === undefined) throw new Error(`No image ${spec.image}.`)
     return {
-      ...createLayerStep(sourceId),
+      ...createImageLayerStep(sourceId),
       ...layerSettingsSchema.parse(spec.settings),
       enabled: spec.enabled,
     }

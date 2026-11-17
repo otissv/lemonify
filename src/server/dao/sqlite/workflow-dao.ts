@@ -1,7 +1,13 @@
 import type { Knex } from 'knex'
 
-import { WorkflowGraphSchema } from '@/features/workflows/workflow'
-import type { WorkflowGraph } from '@/features/workflows/workflow'
+import {
+  RunCanvasModeSchema,
+  WorkflowDefinitionSchema,
+} from '@/features/workflows/workflow'
+import type {
+  RunCanvasMode,
+  WorkflowDefinition,
+} from '@/features/workflows/workflow'
 
 import {
   ConflictError,
@@ -20,7 +26,7 @@ type WorkflowRow = {
   id: string
   owner_id: string
   name: string
-  graph: string
+  definition: string
   revision: number
   created_at: string
   updated_at: string
@@ -30,7 +36,8 @@ type RunRow = {
   id: string
   workflow_id: string | null
   owner_id: string
-  graph: string
+  definition: string
+  canvas_mode: string
   state: string
   created_at: string
   finished_at: string | null
@@ -39,18 +46,26 @@ type RunRow = {
 const MISSING = 'That workflow does not exist.'
 const UNREADABLE = 'A saved workflow could not be read.'
 
-function parseGraph(text: string): WorkflowGraph {
+function parseDefinition(text: string): WorkflowDefinition {
   let json: unknown
   try {
     json = JSON.parse(text)
   } catch (error) {
     throw new DataIntegrityError(UNREADABLE, { cause: error })
   }
-  const graph = WorkflowGraphSchema.safeParse(json)
-  if (!graph.success) {
-    throw new DataIntegrityError(UNREADABLE, { cause: graph.error })
+  const definition = WorkflowDefinitionSchema.safeParse(json)
+  if (!definition.success) {
+    throw new DataIntegrityError(UNREADABLE, { cause: definition.error })
   }
-  return graph.data
+  return definition.data
+}
+
+function parseCanvasMode(text: string): RunCanvasMode {
+  const mode = RunCanvasModeSchema.safeParse(text)
+  if (!mode.success) {
+    throw new DataIntegrityError(UNREADABLE, { cause: mode.error })
+  }
+  return mode.data
 }
 
 function toWorkflow(row: WorkflowRow): WorkflowRecord {
@@ -58,7 +73,7 @@ function toWorkflow(row: WorkflowRow): WorkflowRecord {
     id: row.id,
     ownerId: row.owner_id,
     name: row.name,
-    graph: parseGraph(row.graph),
+    definition: parseDefinition(row.definition),
     revision: row.revision,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -70,7 +85,8 @@ function toRun(row: RunRow): WorkflowRunRecord {
     id: row.id,
     workflowId: row.workflow_id,
     ownerId: row.owner_id,
-    graph: parseGraph(row.graph),
+    definition: parseDefinition(row.definition),
+    canvasMode: parseCanvasMode(row.canvas_mode),
     state: row.state as RunState,
     createdAt: row.created_at,
     finishedAt: row.finished_at,
@@ -89,7 +105,7 @@ export class SqliteWorkflowDao implements WorkflowDao {
       id: workflow.id,
       owner_id: workflow.ownerId,
       name: workflow.name,
-      graph: JSON.stringify(workflow.graph),
+      definition: JSON.stringify(workflow.definition),
       revision: workflow.revision,
       created_at: workflow.createdAt,
       updated_at: workflow.updatedAt,
@@ -114,14 +130,14 @@ export class SqliteWorkflowDao implements WorkflowDao {
   async update(
     id: string,
     expectedRevision: number,
-    changes: Pick<WorkflowRecord, 'name' | 'graph'>,
+    changes: Pick<WorkflowRecord, 'name' | 'definition'>,
     now: string,
   ): Promise<WorkflowRecord> {
     const changed = await this.#database('workflows')
       .where({ id, revision: expectedRevision })
       .update({
         name: changes.name,
-        graph: JSON.stringify(changes.graph),
+        definition: JSON.stringify(changes.definition),
         revision: expectedRevision + 1,
         updated_at: now,
       })
@@ -144,7 +160,8 @@ export class SqliteWorkflowDao implements WorkflowDao {
       id: run.id,
       workflow_id: run.workflowId,
       owner_id: run.ownerId,
-      graph: JSON.stringify(run.graph),
+      definition: JSON.stringify(run.definition),
+      canvas_mode: run.canvasMode,
       state: run.state,
       created_at: run.createdAt,
       finished_at: run.finishedAt,

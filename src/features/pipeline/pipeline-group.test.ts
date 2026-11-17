@@ -7,10 +7,9 @@ import {
   MAX_PIPELINE_STEPS,
   PipelineSchema,
   PipelineStepKind,
-  canvasLayer,
+  firstImageLayer,
   copyStep,
   createGroupStep,
-  createLayerStep,
   createSharpStep,
   planSteps,
   findStep,
@@ -23,17 +22,19 @@ import {
   replaceStep,
   setStepEnabled,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { Pipeline } from '@/features/pipeline/pipeline'
+import { pipelineOf } from '@/test/pipelines'
 
-const A = createLayerStep('source-a')
+const A = createImageLayerStep('source-a')
 const B = createSharpStep('blur', { sigma: 2 })
 const C = createSharpStep('flop')
-const D = createLayerStep('source-d')
+const D = createImageLayerStep('source-d')
 
 function grouped(enabled = true): { pipeline: Pipeline; group: string } {
   const group = createGroupStep([B, C])
   return {
-    pipeline: { steps: [A, { ...group, enabled }, D] },
+    pipeline: pipelineOf(A, { ...group, enabled }, D),
     group: group.id,
   }
 }
@@ -55,18 +56,20 @@ describe('a group', () => {
 
   it('can be empty', () => {
     expect(
-      PipelineSchema.safeParse({ steps: [createGroupStep([])] }).success,
+      PipelineSchema.safeParse(pipelineOf(createGroupStep([]))).success,
     ).toBe(true)
   })
 
   it('cannot hold another group', () => {
     const nested = { ...createGroupStep([]), steps: [createGroupStep([B])] }
 
-    expect(PipelineSchema.safeParse({ steps: [nested] }).success).toBe(false)
+    expect(
+      PipelineSchema.safeParse({ ...pipelineOf(), steps: [nested] }).success,
+    ).toBe(false)
   })
 
   it('cannot reuse a step id, inside a group or across the pipeline', () => {
-    const twice = { steps: [B, createGroupStep([B])] }
+    const twice = pipelineOf(B, createGroupStep([B]))
 
     const result = PipelineSchema.safeParse(twice)
 
@@ -79,7 +82,7 @@ describe('a group', () => {
     )
 
     expect(
-      PipelineSchema.safeParse({ steps: [createGroupStep(many)] }).success,
+      PipelineSchema.safeParse(pipelineOf(createGroupStep(many))).success,
     ).toBe(false)
   })
 
@@ -128,7 +131,7 @@ describe('leafSteps and planSteps', () => {
   })
 
   it('gives the same list as the pipeline had before it was grouped', () => {
-    const flat: Pipeline = { steps: [A, B, C, D] }
+    const flat: Pipeline = pipelineOf(A, B, C, D)
     const { pipeline } = grouped()
 
     expect(planSteps(pipeline)).toEqual(planSteps(flat))
@@ -137,26 +140,24 @@ describe('leafSteps and planSteps', () => {
 
 describe('the canvas and edits with groups', () => {
   it('is the first layer that is on, even inside a group', () => {
-    const inside = createLayerStep('inside')
-    const pipeline: Pipeline = {
-      steps: [createGroupStep([inside]), A],
-    }
+    const inside = createImageLayerStep('inside')
+    const pipeline: Pipeline = pipelineOf(createGroupStep([inside]), A)
 
-    expect(canvasLayer(pipeline)?.id).toBe(inside.id)
+    expect(firstImageLayer(pipeline)?.id).toBe(inside.id)
   })
 
   it('skips a layer inside a group that is off', () => {
-    const inside = createLayerStep('inside')
+    const inside = createImageLayerStep('inside')
     const group = { ...createGroupStep([inside]), enabled: false }
 
-    expect(canvasLayer({ steps: [group, A] })?.id).toBe(A.id)
+    expect(firstImageLayer(pipelineOf(group, A))?.id).toBe(A.id)
   })
 
-  it('has edits when a group holds a step that is not the canvas layer', () => {
+  it('has edits when a group holds a step that is not a layer', () => {
     const { pipeline } = grouped()
 
     expect(hasEdits(pipeline)).toBe(true)
-    expect(hasEdits({ steps: [createGroupStep([A])] })).toBe(false)
+    expect(hasEdits(pipelineOf(createGroupStep([A])))).toBe(false)
   })
 })
 
@@ -261,7 +262,7 @@ describe('copyStep', () => {
 })
 
 describe('groupableSteps', () => {
-  const pipeline: Pipeline = { steps: [A, B, C, D] }
+  const pipeline: Pipeline = pipelineOf(A, B, C, D)
 
   it('returns steps that are next to each other, in pipeline order', () => {
     expect(groupableSteps(pipeline, [C.id, B.id])).toEqual([B, C])
@@ -279,7 +280,7 @@ describe('groupableSteps', () => {
 })
 
 describe('a sub-document', () => {
-  const inner = createLayerStep('logo')
+  const inner = createImageLayerStep('logo')
   const sub = (enabled = true) => ({
     ...createGroupStep([inner, B], 'Logo'),
     subDocument: true,
@@ -308,13 +309,13 @@ describe('a sub-document', () => {
 
   it('stays one step for the planner while it is on', () => {
     const group = sub()
-    const steps = planSteps({ steps: [A, group, C] })
+    const steps = planSteps(pipelineOf(A, group, C))
     expect(steps.map((step) => step.id)).toEqual([A.id, group.id, C.id])
   })
 
   it('is opened and turned off, like any group, while it is off', () => {
     const group = sub(false)
-    const steps = planSteps({ steps: [A, group] })
+    const steps = planSteps(pipelineOf(A, group))
     expect(steps.map((step) => step.id)).toEqual([A.id, inner.id, B.id])
     expect(steps.every((step, index) => index === 0 || !step.enabled)).toBe(
       true,
@@ -322,17 +323,17 @@ describe('a sub-document', () => {
   })
 
   it('does not hand its layer the canvas', () => {
-    expect(canvasLayer({ steps: [sub(), A] })?.id).toBe(A.id)
-    expect(canvasLayer({ steps: [sub()] })).toBeUndefined()
+    expect(firstImageLayer(pipelineOf(sub(), A))?.id).toBe(A.id)
+    expect(firstImageLayer(pipelineOf(sub()))).toBeUndefined()
   })
 
   it('still counts as an edit', () => {
-    expect(hasEdits({ steps: [A, sub()] })).toBe(true)
+    expect(hasEdits(pipelineOf(A, sub()))).toBe(true)
   })
 
   it('has its images and steps found like those of any group', () => {
     const group = sub()
-    const pipeline: Pipeline = { steps: [A, group] }
+    const pipeline: Pipeline = pipelineOf(A, group)
     expect(leafSteps(pipeline).map((step) => step.id)).toEqual([
       A.id,
       inner.id,

@@ -1,22 +1,20 @@
 import { rm } from 'node:fs/promises'
 
+import { leafSteps } from '@/features/pipeline/pipeline'
+import { pipelineOperandSourceIds } from '@/features/pipeline/image-operands'
 import {
   pipelineStepLabel,
   stepProblem,
 } from '@/features/pipeline/step-problems'
-import { stepOperandSourceIds } from '@/features/pipeline/image-operands'
+import { planSegments, workflowProblem } from '@/features/workflows/segments'
 import {
-  planSegments,
-  toSharpStep,
-  workflowProblem,
-} from '@/features/workflows/segments'
-import {
-  WorkflowGraphSchema,
+  RunCanvasMode,
+  RunCanvasModeSchema,
+  WorkflowDefinitionSchema,
+  WorkflowNameSchema,
   createWorkflow,
 } from '@/features/workflows/workflow'
-import type { WorkflowGraph } from '@/features/workflows/workflow'
-import { WorkflowNameSchema } from '@/features/workflows/workflow'
-import { WorkflowNodeKind } from '@/features/workflows/workflow-graph'
+import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 import type { AiToolRegistry } from '../ai/ai-tool-registry.ts'
 import type { JobDao } from '../dao/job-dao.ts'
@@ -45,13 +43,13 @@ const MISSING_WORKFLOW = 'That workflow does not exist.'
 const MISSING_RUN = 'That run does not exist.'
 const DUPLICATE_NAME = 'A workflow with this name already exists.'
 const MISSING_SOURCE = 'An image in this workflow no longer exists.'
+const UNKNOWN_CANVAS_MODE =
+  'Choose the canvas of the workflow, or the size of the first image.'
 const CANCEL_PASSES = 3
 
-export type WorkflowView = {
+export type WorkflowView = WorkflowDefinition & {
   id: string
   name: string
-  nodes: WorkflowGraph['nodes']
-  edges: WorkflowGraph['edges']
   revision: number
   createdAt: string
   updatedAt: string
@@ -70,6 +68,7 @@ export type RunJobCounts = {
 export type RunView = {
   id: string
   workflowId: string | null
+  canvasMode: RunCanvasMode
   state: RunState
   createdAt: string
   finishedAt: string | null
@@ -109,8 +108,7 @@ function toView(record: WorkflowRecord): WorkflowView {
   return {
     id: record.id,
     name: record.name,
-    nodes: record.graph.nodes,
-    edges: record.graph.edges,
+    ...record.definition,
     revision: record.revision,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -131,19 +129,9 @@ function cleanName(raw: string): string {
   return parsed.data
 }
 
-function outputWidths(graph: WorkflowGraph): number[] {
-  for (const node of graph.nodes) {
-    if (node.kind === WorkflowNodeKind.Output) return [...node.settings.widths]
-  }
-  return []
-}
-
-/** The Sources in the order the Input step lists them, so a run's outputs come back in that order whatever order its Jobs finished in. */
-function inputOrder(graph: WorkflowGraph): string[] {
-  for (const node of graph.nodes) {
-    if (node.kind === WorkflowNodeKind.Input) return [...node.sourceIds]
-  }
-  return []
+/** The Sources in the order the workflow lists them, so a run's outputs come back in that order whatever order its Jobs finished in. */
+function inputOrder(definition: WorkflowDefinition): string[] {
+  return [...definition.inputs]
 }
 
 function countJobs(jobs: ReadonlyArray<JobRecord>): RunJobCounts {
@@ -183,19 +171,21 @@ export class WorkflowService {
   async create(
     actor: Actor,
     name: string,
-    graph?: WorkflowGraph,
+    definition?: WorkflowDefinition,
   ): Promise<WorkflowView> {
     const { workflows, clock, ids } = this.#deps
     const cleaned = cleanName(name)
     await this.#requireFreeName(actor, cleaned)
-    const chosen = graph ?? this.#emptyGraph(cleaned)
-    await this.#checkGraph(actor, chosen)
+    const chosen = this.#parseDefinition(
+      definition ?? this.#emptyDefinition(cleaned),
+    )
+    await this.#checkDefinition(actor, chosen)
     const now = isoNow(clock)
     const record: WorkflowRecord = {
       id: ids.next(),
       ownerId: actor.userId,
       name: cleaned,
-      graph: chosen,
+      definition: chosen,
       revision: 0,
       createdAt: now,
       updatedAt: now,
@@ -214,22 +204,22 @@ export class WorkflowService {
     return toView(await this.#owned(actor, id))
   }
 
-  /** Saves a new name and graph; `revision` is the one the caller last saw. */
+  /** Saves a new name and definition; `revision` is the one the caller last saw. */
   async update(
     actor: Actor,
     id: string,
     revision: number,
-    changes: { name: string; graph: WorkflowGraph },
+    changes: { name: string; definition: WorkflowDefinition },
   ): Promise<WorkflowView> {
     await this.#owned(actor, id)
     const name = cleanName(changes.name)
     await this.#requireFreeName(actor, name, id)
-    const graph = this.#parseGraph(changes.graph)
-    await this.#checkGraph(actor, graph)
+    const definition = this.#parseDefinition(changes.definition)
+    await this.#checkDefinition(actor, definition)
     const saved = await this.#deps.workflows.update(
       id,
       revision,
-      { name, graph },
+      { name, definition },
       isoNow(this.#deps.clock),
     )
     this.#announce(actor.userId)
@@ -242,37 +232,45 @@ export class WorkflowService {
     this.#announce(actor.userId)
   }
 
-  /** Starts a run: one Job per Source for the first segment. Everything that can be checked is checked first, so a run never starts half-valid. */
-  async run(actor: Actor, id: string): Promise<RunView> {
-    const workflow = await this.#owned(actor, id)
-    const { graph } = workflow
-    const problem = workflowProblem(graph)
-    if (problem !== undefined) throw new ValidationError(problem)
-    await this.#checkGraph(actor, graph)
-    this.#requireSetUp(graph)
-    const input = graph.nodes.find(
-      ({ kind }) => kind === WorkflowNodeKind.Input,
+  /**
+   * Starts a run: one Job per input image for the first segment. Everything
+   * that can be checked is checked first, so a run never starts half-valid.
+   * `canvas` says whether each image is drawn on the workflow's canvas (the
+   * default) or on one of its own size.
+   */
+  async run(
+    actor: Actor,
+    id: string,
+    options: { canvas?: RunCanvasMode } = {},
+  ): Promise<RunView> {
+    const mode = RunCanvasModeSchema.safeParse(
+      options.canvas ?? RunCanvasMode.Workflow,
     )
-    const sourceIds =
-      input?.kind === WorkflowNodeKind.Input
-        ? [...new Set(input.sourceIds)]
-        : []
+    if (!mode.success) throw new ValidationError(UNKNOWN_CANVAS_MODE)
+    const canvasMode = mode.data
+    const workflow = await this.#owned(actor, id)
+    const { definition } = workflow
+    const problem = workflowProblem(definition)
+    if (problem !== undefined) throw new ValidationError(problem)
+    await this.#checkDefinition(actor, definition)
+    this.#requireSetUp(definition)
     const { workflows, jobs, registry, clock, ids } = this.#deps
     const run: WorkflowRunRecord = {
       id: ids.next(),
       workflowId: workflow.id,
       ownerId: actor.userId,
-      graph,
+      definition,
+      canvasMode,
       state: RunState.Running,
       createdAt: isoNow(clock),
       finishedAt: null,
     }
     await workflows.insertRun(run)
-    const segments = planSegments(graph)
+    const segments = planSegments(definition.pipeline)
     try {
       await jobs.enqueue(
         actor,
-        sourceIds.map((sourceId) =>
+        definition.inputs.map((sourceId) =>
           segmentJobSpec({
             runId: run.id,
             segments,
@@ -330,7 +328,7 @@ export class WorkflowService {
   async runOutputs(actor: Actor, runId: string): Promise<RunOutput[]> {
     const run = await this.#ownedRun(actor, runId)
     const { jobDao, sources, results } = this.#deps
-    const widths = outputWidths(run.graph)
+    const widths = [...run.definition.output.widths]
     const finished = await jobDao.list(run.ownerId, {
       workflowRunId: run.id,
       state: [JobState.Done],
@@ -353,7 +351,7 @@ export class WorkflowService {
       }
       outputs.push({ source: toSourceSummary(source), images })
     }
-    const order = inputOrder(run.graph)
+    const order = inputOrder(run.definition)
     return outputs.sort(
       (left, right) =>
         order.indexOf(left.source.id) - order.indexOf(right.source.id),
@@ -395,6 +393,7 @@ export class WorkflowService {
     return {
       id: run.id,
       workflowId: run.workflowId,
+      canvasMode: run.canvasMode,
       state,
       createdAt: run.createdAt,
       finishedAt,
@@ -404,13 +403,13 @@ export class WorkflowService {
     }
   }
 
-  #emptyGraph(name: string): WorkflowGraph {
-    const { nodes, edges } = createWorkflow(name)
-    return { nodes, edges }
+  #emptyDefinition(name: string): WorkflowDefinition {
+    const { pipeline, inputs, output } = createWorkflow(name)
+    return { pipeline, inputs, output }
   }
 
-  #parseGraph(graph: WorkflowGraph): WorkflowGraph {
-    const parsed = WorkflowGraphSchema.safeParse(graph)
+  #parseDefinition(definition: WorkflowDefinition): WorkflowDefinition {
+    const parsed = WorkflowDefinitionSchema.safeParse(definition)
     if (!parsed.success) {
       throw new ValidationError(
         parsed.error.issues[0]?.message ?? 'The workflow is not valid.',
@@ -419,17 +418,17 @@ export class WorkflowService {
     return parsed.data
   }
 
-  /** Every Source the workflow names exists and is the User's, and every AI tool is one the server has. */
-  async #checkGraph(actor: Actor, graph: WorkflowGraph): Promise<void> {
-    const ids = new Set<string>()
-    for (const node of graph.nodes) {
-      if (node.kind === WorkflowNodeKind.Input) {
-        for (const id of node.sourceIds) ids.add(id)
-      } else if (node.kind === WorkflowNodeKind.Sharp) {
-        for (const id of stepOperandSourceIds(toSharpStep(node))) ids.add(id)
-      } else if (node.kind === 'ai') {
-        this.#deps.registry.get(node.tool)
-      }
+  /** Every image the workflow names exists and is the User's, and every AI tool is one the server has. */
+  async #checkDefinition(
+    actor: Actor,
+    definition: WorkflowDefinition,
+  ): Promise<void> {
+    const ids = new Set([
+      ...definition.inputs,
+      ...pipelineOperandSourceIds(definition.pipeline),
+    ])
+    for (const step of leafSteps(definition.pipeline)) {
+      if (step.kind === 'ai') this.#deps.registry.get(step.tool)
     }
     for (const id of ids) {
       const source = await this.#deps.sources.findById(id)
@@ -439,11 +438,10 @@ export class WorkflowService {
     }
   }
 
-  /** Refuses a Sharp step that is not set up, saying which one. */
-  #requireSetUp(graph: WorkflowGraph): void {
-    for (const node of graph.nodes) {
-      if (node.kind !== WorkflowNodeKind.Sharp) continue
-      const step = toSharpStep(node)
+  /** Refuses a Sharp step that is on and not set up, saying which one. */
+  #requireSetUp(definition: WorkflowDefinition): void {
+    for (const step of leafSteps(definition.pipeline)) {
+      if (step.kind !== 'sharp' || !step.enabled) continue
       const problem = stepProblem(step)
       if (problem !== undefined) {
         throw new ValidationError(`${pipelineStepLabel(step)}: ${problem}`)

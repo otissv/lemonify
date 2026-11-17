@@ -121,11 +121,11 @@ export class AiStepHandler implements JobHandler {
     }
     const own = awaitingPlan(plan, step.id)
     if (own === undefined) throw new ValidationError(NOT_AN_AI_STEP)
-    let input = own.basePath
-    if (own.steps.length > 0) {
+    let input = own.base.kind === 'file' ? own.base.path : ''
+    if (own.base.kind === 'canvas' || own.steps.length > 0) {
       input = path.join(directory, `in-${job.id}.png`)
       await engine.render({
-        input: own.basePath,
+        input: own.base,
         steps: own.steps,
         target: { kind: EngineTargetKind.Intermediate },
         output: input,

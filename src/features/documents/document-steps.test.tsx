@@ -14,9 +14,9 @@ import { cancelJob } from '@/features/jobs/job-functions'
 import {
   createAiStep,
   createGroupStep,
-  createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import {
   requestPreview,
@@ -31,6 +31,7 @@ import {
   echoChanges,
 } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { pipelineOf } from '@/test/pipelines'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -100,7 +101,7 @@ describe('DocumentSteps', () => {
     await renderApp(`/documents/${DOCUMENT_ID}`)
     vi.mocked(getDocument).mockResolvedValue({
       ...documentView(),
-      pipeline: { steps: [] },
+      pipeline: pipelineOf(),
     })
     await user.click(
       await screen.findByRole('button', { name: 'Show steps of one.png' }),
@@ -109,27 +110,35 @@ describe('DocumentSteps', () => {
     expect(await screen.findByText('No edits yet.')).toBeVisible()
   })
 
-  it('lists the first layer last, as the canvas, with the name of its file', async () => {
+  it('lists a layer with the name of its file', async () => {
     const list = await showSteps([BLUR], userEvent.setup())
 
     const items = within(list).getAllByRole('listitem')
     const canvas = items.at(-1) as HTMLElement
-    expect(within(canvas).getByText('Layer')).toBeInTheDocument()
-    expect(within(canvas).getByText('Canvas · one.png')).toBeInTheDocument()
+    expect(within(canvas).getByText('Image layer')).toBeInTheDocument()
+    expect(within(canvas).getByText('one.png')).toBeInTheDocument()
   })
 
-  it('lets the layer that sets the canvas be hidden, moved and deleted like any other', async () => {
+  it('says an empty image layer has no image yet, and does not call that a problem', async () => {
+    const list = await showSteps([createImageLayerStep()], userEvent.setup())
+
+    const top = within(list).getAllByRole('listitem').at(0) as HTMLElement
+    expect(within(top).getByText('No image yet')).toBeInTheDocument()
+    expect(within(top).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('lets the first layer be hidden, moved and deleted like any other', async () => {
     const list = await showSteps([BLUR], userEvent.setup())
 
     const canvas = within(list).getAllByRole('listitem').at(-1) as HTMLElement
     expect(
-      within(canvas).getByRole('button', { name: 'Hide Layer' }),
+      within(canvas).getByRole('button', { name: 'Hide Image layer' }),
     ).toBeEnabled()
     expect(
-      within(canvas).getByRole('button', { name: 'Move Layer up' }),
+      within(canvas).getByRole('button', { name: 'Move Image layer up' }),
     ).toBeEnabled()
     expect(
-      within(canvas).getByRole('button', { name: 'Delete Layer' }),
+      within(canvas).getByRole('button', { name: 'Delete Image layer' }),
     ).toBeEnabled()
     expect(canvas).toHaveAttribute('draggable', 'true')
   })
@@ -171,7 +180,7 @@ describe('DocumentSteps', () => {
 
   it('shows a layer with its image, opacity and blend', async () => {
     const layer = {
-      ...createLayerStep('second'),
+      ...createImageLayerStep('second'),
       opacity: 50,
       blend: 'multiply' as const,
     }
@@ -263,7 +272,7 @@ describe('DocumentSteps', () => {
 
     expect(screen.getByRole('button', { name: 'Move Flip up' })).toBeDisabled()
     expect(
-      screen.getByRole('button', { name: 'Move Layer down' }),
+      screen.getByRole('button', { name: 'Move Image layer down' }),
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Move Blur down' })).toBeEnabled()
   })
@@ -391,7 +400,7 @@ describe('DocumentSteps', () => {
       const user = userEvent.setup()
       await showSteps([BLUR, FLIP], user)
 
-      await user.click(screen.getByRole('button', { name: 'Layer' }))
+      await user.click(screen.getByRole('button', { name: 'Image layer' }))
       await user.keyboard('{Control>}')
       await user.click(screen.getByRole('button', { name: 'Flip' }))
       await user.keyboard('{/Control}')

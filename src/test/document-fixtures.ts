@@ -6,8 +6,12 @@ import type { AiToolSummary } from '@/features/ai/ai-tools'
 import type { DocumentView, SourceSummary } from '@/features/documents/document'
 import { applyChange } from '@/features/pipeline/document-change'
 import type { DocumentChange } from '@/features/pipeline/document-change'
-import { createLayerStep } from '@/features/pipeline/pipeline'
-import type { LayerStep, PipelineStep } from '@/features/pipeline/pipeline'
+import { pipelineOf } from '@/test/pipelines'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
+import type { PipelineStep } from '@/features/pipeline/pipeline'
+import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
+import { JobKind, JobState } from '@/server/jobs/job-types'
+import type { JobView } from '@/server/services/job-service'
 import { useAppStore } from '@/store/app-store'
 
 export const DOCUMENT_ID = '6f1c6c4e-0f43-4a8f-9a57-2d2f0f8f2b11'
@@ -47,9 +51,9 @@ export const AI_CATALOGUES: AiCatalogues = [
 ]
 
 /** The layer every document starts with, which sets its canvas, with an id that stays the same between calls. */
-export function baseLayer(sourceId: string): LayerStep {
+export function baseLayer(sourceId: string): ImageLayerStep {
   return {
-    ...createLayerStep(sourceId),
+    ...createImageLayerStep(sourceId),
     id: '00000000-0000-4000-8000-0000000000aa',
   }
 }
@@ -72,7 +76,7 @@ export function documentView(
     name,
     source,
     sources: [source],
-    pipeline: { steps: [baseLayer(source.id), ...steps] },
+    pipeline: pipelineOf(baseLayer(source.id), ...steps),
     revision: 0,
     canUndo: false,
     canRedo: false,
@@ -103,4 +107,21 @@ export function echoChanges(changeDocument: Mock, start: DocumentView): void {
       return Promise.resolve(current)
     },
   )
+}
+
+/** A finished preview job, for tests that need the picture to be shown. */
+export function previewJob(key = 'preview-key'): JobView {
+  return {
+    id: 'preview-job',
+    kind: JobKind.Preview,
+    state: JobState.Done,
+    progress: 1,
+    result: { kind: JobKind.Preview, key, pendingStepIds: [], problems: [] },
+    error: null,
+    documentId: DOCUMENT_ID,
+    workflowRunId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    startedAt: null,
+    finishedAt: null,
+  }
 }

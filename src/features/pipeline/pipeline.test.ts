@@ -14,6 +14,7 @@ import {
 } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import type { UpscaleSettings } from '@/features/upscale/upscale-settings'
+import { pipelineOf } from '@/test/pipelines'
 
 const SETTINGS: UpscaleSettings = {
   model: 'siax',
@@ -23,13 +24,13 @@ const SETTINGS: UpscaleSettings = {
   tta: false,
 }
 
-const EMPTY: Pipeline = { steps: [] }
+const EMPTY: Pipeline = pipelineOf()
 
 function threeSteps(): Pipeline {
   const first = createSharpStep('resize')
   const second = createSharpStep('sharpen')
   const third = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
-  return { steps: [first, second, third] }
+  return pipelineOf(first, second, third)
 }
 
 function ids(pipeline: Pipeline): Array<string> {
@@ -51,13 +52,13 @@ describe('PipelineSchema', () => {
   it('treats a saved step without `enabled` as on', () => {
     const { enabled: _enabled, ...saved } = createSharpStep('resize')
 
-    const parsed = PipelineSchema.parse({ steps: [saved] })
+    const parsed = PipelineSchema.parse({ ...pipelineOf(), steps: [saved] })
 
     expect(parsed.steps.at(0)?.enabled).toBe(true)
   })
 
   it('rejects an unknown Sharp tool', () => {
-    const bad = { steps: [{ ...createSharpStep('resize'), op: 'sparkle' }] }
+    const bad = pipelineOf({ ...createSharpStep('resize'), op: 'sparkle' })
 
     expect(PipelineSchema.safeParse(bad).success).toBe(false)
   })
@@ -65,13 +66,11 @@ describe('PipelineSchema', () => {
   it('rejects the same step twice', () => {
     const step = createSharpStep('resize')
 
-    expect(PipelineSchema.safeParse({ steps: [step, step] }).success).toBe(
-      false,
-    )
+    expect(PipelineSchema.safeParse(pipelineOf(step, step)).success).toBe(false)
   })
 
   it('rejects the Output group: Export covers those tools', () => {
-    const bad = { steps: [{ ...createSharpStep('resize'), op: 'jpeg' }] }
+    const bad = pipelineOf({ ...createSharpStep('resize'), op: 'jpeg' })
 
     expect(PipelineSchema.safeParse(bad).success).toBe(false)
   })

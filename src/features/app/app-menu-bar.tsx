@@ -64,6 +64,11 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
         <MenubarMenu>
           <MenubarTrigger>File</MenubarTrigger>
           <MenubarContent>
+            <ActionMenuItem
+              actionId="file.newDocument"
+              context={context}
+              label="New document…"
+            />
             <ActionMenuItem actionId="file.openImage" context={context} />
             <ActionMenuItem actionId="file.openLibrary" context={context} />
             <ActionMenuItem
@@ -92,6 +97,7 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
             <ActionMenuItem actionId="edit.undo" context={context} />
             <ActionMenuItem actionId="edit.redo" context={context} />
             <MenubarSeparator />
+            <ActionMenuItem actionId="edit.addImageLayer" context={context} />
             <ActionMenuItem actionId="edit.insertImage" context={context} />
             <ActionMenuItem actionId="edit.replaceImage" context={context} />
             <MenubarSeparator />

@@ -45,6 +45,7 @@ export const SCRATCH_ACCOUNTS = {
   copy: scratchAccount('copy', ['blur-default', 'scale-50']),
   groups: scratchAccount('groups', ['blur-default']),
   keys: scratchAccount('keys', ['blur-default']),
+  canvas: scratchAccount('canvas', ['blur-default']),
 } as const
 
 export const E2E_USER = {

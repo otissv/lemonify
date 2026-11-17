@@ -27,13 +27,13 @@ export function DocumentView({ id }: DocumentViewProps): React.JSX.Element {
   if (!session || !preview) return <div className="size-full" />
 
   const { name } = preview.document
-  const { source } = preview
+  const { canvas } = preview.pipeline
   const url = pictureUrl(preview, showOriginal)
-  if (source === undefined || url === undefined) {
+  if (url === undefined) {
     return (
       <div className="flex size-full items-center justify-center">
         <p role="status" className="text-body-md text-muted-foreground">
-          This document has no image. Add one from Edit › Insert image.
+          Rendering…
         </p>
       </div>
     )
@@ -43,8 +43,8 @@ export function DocumentView({ id }: DocumentViewProps): React.JSX.Element {
       id={id}
       url={url}
       name={name}
-      width={source.width}
-      height={source.height}
+      width={canvas.width}
+      height={canvas.height}
     />
   )
 }

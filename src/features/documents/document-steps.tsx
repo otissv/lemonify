@@ -2,11 +2,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import type { SourceSummary } from '@/features/documents/document'
-import {
-  PipelineStepKind,
-  canvasLayer,
-  findStep,
-} from '@/features/pipeline/pipeline'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
 import type {
   GroupStep,
   LeafStep,
@@ -33,8 +30,9 @@ function sourceNameOf(
   step: PipelineStep,
   sources: ReadonlyArray<SourceSummary> | undefined,
 ): string | undefined {
-  if (step.kind !== PipelineStepKind.Layer) return undefined
-  return sources?.find(({ id }) => id === step.sourceId)?.fileName
+  if (!isLayerStep(step)) return undefined
+  const [imageId] = layerKind(step).sourceIds(step)
+  return sources?.find(({ id }) => id === imageId)?.fileName
 }
 
 /** Where a dragged step would land: at `index` among the steps of `groupId`, or of the top level. */
@@ -48,7 +46,7 @@ interface DocumentStepsProps {
   name: string
 }
 
-/** The steps of one document, the last on top as in a layer panel, so the layer that sets the canvas is lowest. Groups list their steps under them and can be folded. Select, pick several with ctrl or shift, switch off, delete, and reorder by dragging (into or out of a group too) or with the buttons. Dragging one onto another document in the sidebar copies it there. */
+/** The steps of one document, the last on top as in a layer panel, so the first layer is lowest. Groups list their steps under them and can be folded. Select, pick several with ctrl or shift, switch off, delete, and reorder by dragging (into or out of a group too) or with the buttons. Dragging one onto another document in the sidebar copies it there. */
 export function DocumentSteps({
   documentId,
   name,
@@ -71,7 +69,6 @@ export function DocumentSteps({
 
   const steps = preview?.pipeline.steps ?? []
   const topFirst = [...steps].reverse()
-  const canvasId = preview ? canvasLayer(preview.pipeline)?.id : undefined
   if (steps.length === 0) {
     return (
       <p className="px-2 py-1 text-caption text-muted-foreground">
@@ -207,7 +204,6 @@ export function DocumentSteps({
               : thumbnailImageUrl(documentId, key)
           }
           sourceName={sourceNameOf(step, preview?.document.sources)}
-          canvas={step.id === canvasId}
           outOfDate={preview?.pending.includes(step.id) ?? false}
           skipped={
             preview?.problems.find(({ stepId }) => stepId === step.id)?.message

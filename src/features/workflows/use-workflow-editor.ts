@@ -59,8 +59,8 @@ export function useWorkflowEditor(id: string): WorkflowEditor {
     setStatus(EditorStatus.Loading)
     try {
       const loaded = await getWorkflow({ data: { id } })
-      const { name, nodes, edges } = loaded
-      const next = { id: loaded.id, name, nodes, edges }
+      const { id: loadedId, name, pipeline, inputs, output } = loaded
+      const next = { id: loadedId, name, pipeline, inputs, output }
       latest.current = next
       revision.current = loaded.revision
       dirty.current = false
@@ -91,7 +91,11 @@ export function useWorkflowEditor(id: string): WorkflowEditor {
             id: current.id,
             revision: revision.current,
             name: current.name,
-            graph: { nodes: current.nodes, edges: current.edges },
+            definition: {
+              pipeline: current.pipeline,
+              inputs: current.inputs,
+              output: current.output,
+            },
           },
         })
         revision.current = saved.revision

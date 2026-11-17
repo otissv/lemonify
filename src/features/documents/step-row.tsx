@@ -11,14 +11,11 @@ import { Button } from '@/components/ui/button'
 import { aiStepSummary } from '@/features/ai/ai-defaults'
 import type { AiRun } from '@/features/documents/document-render'
 import { cancelAiRun } from '@/features/documents/document-render-sync'
-import {
-  DEFAULT_LAYER_SETTINGS,
-  MAX_LAYER_OPACITY,
-} from '@/features/pipeline/layer'
 import { DEFAULT_STEP_BLEND } from '@/features/pipeline/step-blend'
 import type { StepBlend } from '@/features/pipeline/step-blend'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import type { LayerStep, LeafStep } from '@/features/pipeline/pipeline'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import type { LeafStep } from '@/features/pipeline/pipeline'
 import {
   pipelineStepTitle,
   stepProblem,
@@ -51,8 +48,6 @@ export interface StepRowProps {
   outOfDate: boolean
   /** For a layer: the file name of its image. */
   sourceName: string | undefined
-  /** The layer sets the canvas: it is the first one that is switched on. */
-  canvas: boolean
   /** Why the server left this step out of the picture, if it did. */
   skipped: string | undefined
   run: AiRun | undefined
@@ -80,19 +75,6 @@ function runStatus(run: AiRun): StepStatus {
   return { text: 'Waiting to run', problem: false, running: true }
 }
 
-/** "logo.png · 50% · multiply": the layer's image and what differs from the defaults; the layer that sets the canvas says so instead, since its settings are not used. */
-function layerSummary(
-  step: LayerStep,
-  sourceName: string | undefined,
-  canvas: boolean,
-): string {
-  const parts = [sourceName ?? 'Image not available']
-  if (canvas) return ['Canvas', ...parts].join(' · ')
-  if (step.opacity !== MAX_LAYER_OPACITY) parts.push(`${step.opacity}%`)
-  if (step.blend !== DEFAULT_LAYER_SETTINGS.blend) parts.push(step.blend)
-  return parts.join(' · ')
-}
-
 /** "multiply 50%": how a step's result is blended, naming only what differs from normal and 100%. */
 function blendSummary(blend: StepBlend): string {
   const parts: string[] = []
@@ -105,7 +87,6 @@ function blendSummary(blend: StepBlend): string {
 function statusOf(
   step: LeafStep,
   sourceName: string | undefined,
-  canvas: boolean,
   outOfDate: boolean,
   skipped: string | undefined,
   run: AiRun | undefined,
@@ -113,12 +94,9 @@ function statusOf(
   const problem = stepProblem(step) ?? skipped
   if (problem !== undefined)
     return { text: problem, problem: true, running: false }
-  if (step.kind === PipelineStepKind.Layer) {
-    return {
-      text: layerSummary(step, sourceName, canvas),
-      problem: sourceName === undefined,
-      running: false,
-    }
+  if (isLayerStep(step)) {
+    const { text, problem } = layerKind(step).display(step, sourceName)
+    return { text, problem, running: false }
   }
   if (step.kind === PipelineStepKind.Sharp) {
     const count = Object.keys(step.options).length
@@ -146,7 +124,6 @@ export function StepRow({
   dragging,
   thumbnail,
   sourceName,
-  canvas,
   outOfDate,
   skipped,
   run,
@@ -156,7 +133,7 @@ export function StepRow({
   onMove,
 }: StepRowProps): React.JSX.Element {
   const label = pipelineStepTitle(step)
-  const status = statusOf(step, sourceName, canvas, outOfDate, skipped, run)
+  const status = statusOf(step, sourceName, outOfDate, skipped, run)
 
   function handleSelect(event: React.MouseEvent<HTMLButtonElement>): void {
     onSelect(step.id, {

@@ -1,64 +1,65 @@
-import { AI_TOOLS, AiToolId } from '@/features/ai/ai-tools'
+import { AiToolId } from '@/features/ai/ai-tools'
 import { EXPORT_FORMAT_LABELS } from '@/features/export/export-settings'
-import {
-  missingSharpOptions,
-  opLabel,
-} from '@/features/workflows/sharp-op-fields'
-import { WorkflowNodeKind } from '@/features/workflows/workflow-graph'
-import type { WorkflowNode } from '@/features/workflows/workflow-graph'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import type { AiStep, PipelineStep } from '@/features/pipeline/pipeline'
+import { pipelineStepTitle } from '@/features/pipeline/step-problems'
+import type { OutputSettings } from '@/features/workflows/output-settings'
+import { missingSharpOptions } from '@/features/workflows/sharp-op-fields'
 
-/** The name a step is shown by on the canvas and in the inspector. */
-export function stepLabel(node: WorkflowNode): string {
-  switch (node.kind) {
-    case WorkflowNodeKind.Input:
-      return 'Input'
-    case WorkflowNodeKind.Output:
-      return 'Output'
-    case WorkflowNodeKind.Sharp:
-      return opLabel(node.op)
-    case 'ai':
-      return AI_TOOLS[node.tool].label
-  }
+export const INPUT_SLOT_SUMMARY = 'Each input image goes here'
+export const NO_IMAGES_SUMMARY = 'No images yet'
+
+/** The name a step is shown by in the list and in the options. */
+export function stepLabel(step: PipelineStep): string {
+  return pipelineStepTitle(step)
 }
 
 function plural(count: number, one: string, many: string): string {
   return count === 1 ? `1 ${one}` : `${count} ${many}`
 }
 
-function aiSummary(node: Extract<WorkflowNode, { kind: 'ai' }>): string {
-  switch (node.tool) {
+function aiSummary(step: AiStep): string {
+  switch (step.tool) {
     case AiToolId.Upscale:
-      return `${node.settings.model} · ${node.settings.scale}×`
+      return `${step.settings.model} · ${step.settings.scale}×`
   }
 }
 
-/** A short line under the step's name saying how it is set up. */
-export function stepSummary(node: WorkflowNode): string {
-  switch (node.kind) {
-    case WorkflowNodeKind.Input:
-      if (node.sourceIds.length === 0) return 'No images yet'
-      return plural(node.sourceIds.length, 'image', 'images')
-    case WorkflowNodeKind.Output: {
-      const { format, widths } = node.settings
-      const label = EXPORT_FORMAT_LABELS[format]
-      if (widths.length === 0) return label
-      return `${label} · ${plural(widths.length, 'size', 'sizes')}`
-    }
-    case 'ai':
-      return aiSummary(node)
-    case WorkflowNodeKind.Sharp: {
-      const missing = missingSharpOptions(node.op, node.options).length
+/**
+ * A short line under the step's name saying how it is set up. `imageName`
+ * finds the name of a layer's image, which only the page's list of images knows.
+ */
+export function stepSummary(
+  step: PipelineStep,
+  imageName: (sourceId: string) => string,
+): string {
+  if (isLayerStep(step)) {
+    const [sourceId] = layerKind(step).sourceIds(step)
+    return sourceId === undefined ? INPUT_SLOT_SUMMARY : imageName(sourceId)
+  }
+  switch (step.kind) {
+    case PipelineStepKind.Group:
+      return `${plural(step.steps.length, 'step', 'steps')}${step.subDocument ? ' · own picture' : ''}`
+    case PipelineStepKind.Ai:
+      return aiSummary(step)
+    case PipelineStepKind.Sharp: {
+      const missing = missingSharpOptions(step.op, step.options).length
       if (missing > 0) return `Needs ${plural(missing, 'option', 'options')}`
-      const count = Object.keys(node.options).length
+      const count = Object.keys(step.options).length
       if (count === 0) return 'Default options'
       return plural(count, 'option set', 'options set')
     }
   }
 }
 
-export function isEndpoint(node: WorkflowNode): boolean {
-  return (
-    node.kind === WorkflowNodeKind.Input ||
-    node.kind === WorkflowNodeKind.Output
-  )
+export function inputsSummary(count: number): string {
+  if (count === 0) return NO_IMAGES_SUMMARY
+  return plural(count, 'image', 'images')
+}
+
+export function outputSummary({ format, widths }: OutputSettings): string {
+  const label = EXPORT_FORMAT_LABELS[format]
+  if (widths.length === 0) return label
+  return `${label} · ${plural(widths.length, 'size', 'sizes')}`
 }

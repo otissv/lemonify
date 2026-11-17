@@ -28,6 +28,8 @@ vi.mock('@/features/documents/document-functions', () => ({
   redoDocument: vi.fn(),
 }))
 
+import { pipelineOf } from '@/test/pipelines'
+
 function view(
   revision: number,
   steps: DocumentView['pipeline']['steps'],
@@ -45,7 +47,7 @@ function view(
       height: 10,
     },
     sources: [],
-    pipeline: { steps },
+    pipeline: pipelineOf(...steps),
     revision,
     canUndo,
     canRedo: false,

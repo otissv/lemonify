@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { createWorkflow } from '@/features/workflows/workflow'
-import {
-  addInputSources,
-  appendStep,
-  createSharpNode,
-} from '@/features/workflows/workflow-graph'
+import { createSharpStep } from '@/features/pipeline/pipeline'
+import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 import { ConflictError, NotFoundError } from '../../errors.ts'
 import { RunState } from '../workflow-dao.ts'
@@ -25,9 +22,9 @@ const T0 = '2026-01-01T00:00:00.000Z'
 const T1 = '2026-01-02T00:00:00.000Z'
 const T2 = '2026-01-03T00:00:00.000Z'
 
-function graphOf(name = 'Test') {
-  const { nodes, edges } = createWorkflow(name)
-  return { nodes, edges }
+function definitionOf(name = 'Test'): WorkflowDefinition {
+  const { pipeline, inputs, output } = createWorkflow(name)
+  return { pipeline, inputs, output }
 }
 
 export function workflow(
@@ -37,7 +34,7 @@ export function workflow(
     id: 'wf-1',
     ownerId: 'ann',
     name: 'Resize',
-    graph: graphOf(),
+    definition: definitionOf(),
     revision: 0,
     createdAt: T0,
     updatedAt: T0,
@@ -52,7 +49,8 @@ export function run(
     id: 'run-1',
     workflowId: 'wf-1',
     ownerId: 'ann',
-    graph: graphOf(),
+    definition: definitionOf(),
+    canvasMode: RunCanvasMode.Workflow,
     state: RunState.Running,
     createdAt: T0,
     finishedAt: null,
@@ -94,21 +92,31 @@ export function workflowDaoContract(
       await close()
     })
 
-    it('saves a new name and graph and raises the revision', async () => {
+    it('saves a new name and definition and raises the revision', async () => {
       const { dao, close } = await prepare(create)
       await dao.insert(workflow())
-      const graph = appendStep(
-        addInputSources(graphOf(), ['src-1']),
-        createSharpNode('flip', { x: 0, y: 0 }),
+      const base = definitionOf()
+      const definition: WorkflowDefinition = {
+        ...base,
+        pipeline: {
+          ...base.pipeline,
+          steps: [...base.pipeline.steps, createSharpStep('flip')],
+        },
+        inputs: ['src-1'],
+      }
+      const updated = await dao.update(
+        'wf-1',
+        0,
+        { name: 'Flip', definition },
+        T1,
       )
-      const updated = await dao.update('wf-1', 0, { name: 'Flip', graph }, T1)
       expect(updated).toMatchObject({
         name: 'Flip',
         revision: 1,
         updatedAt: T1,
         createdAt: T0,
       })
-      expect(updated.graph).toEqual(graph)
+      expect(updated.definition).toEqual(definition)
       expect(await dao.findById('wf-1')).toEqual(updated)
       await close()
     })
@@ -116,18 +124,18 @@ export function workflowDaoContract(
     it('refuses to save over a newer revision, and says when it is gone', async () => {
       const { dao, close } = await prepare(create)
       await dao.insert(workflow())
-      await dao.update('wf-1', 0, { name: 'A', graph: graphOf() }, T1)
+      await dao.update('wf-1', 0, { name: 'A', definition: definitionOf() }, T1)
       await expect(
-        dao.update('wf-1', 0, { name: 'B', graph: graphOf() }, T2),
+        dao.update('wf-1', 0, { name: 'B', definition: definitionOf() }, T2),
       ).rejects.toBeInstanceOf(ConflictError)
       await expect(
-        dao.update('missing', 0, { name: 'B', graph: graphOf() }, T2),
+        dao.update('missing', 0, { name: 'B', definition: definitionOf() }, T2),
       ).rejects.toBeInstanceOf(NotFoundError)
       expect((await dao.findById('wf-1'))?.name).toBe('A')
       await close()
     })
 
-    it('stores runs with their own copy of the graph', async () => {
+    it('stores runs with their own copy of the definition and the canvas mode', async () => {
       const { dao, close } = await prepare(create)
       await dao.insert(workflow())
       const started = run()
@@ -135,11 +143,17 @@ export function workflowDaoContract(
       await dao.update(
         'wf-1',
         0,
-        { name: 'Changed', graph: addInputSources(graphOf(), ['x']) },
+        { name: 'Changed', definition: { ...definitionOf(), inputs: ['x'] } },
         T1,
       )
       expect(await dao.findRun('run-1')).toEqual(started)
       expect(await dao.findRun('missing')).toBeNull()
+      await dao.insertRun(
+        run({ id: 'run-2', canvasMode: RunCanvasMode.FirstImage }),
+      )
+      expect((await dao.findRun('run-2'))?.canvasMode).toBe(
+        RunCanvasMode.FirstImage,
+      )
       await close()
     })
 

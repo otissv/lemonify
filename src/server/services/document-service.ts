@@ -11,12 +11,18 @@ import {
   planChange,
 } from '@/features/pipeline/document-change'
 import type { DocumentChange } from '@/features/pipeline/document-change'
+import { canvasOfSize, canvasSchema } from '@/features/pipeline/canvas'
+import type { Canvas } from '@/features/pipeline/canvas'
 import { pipelineOperandSourceIds } from '@/features/pipeline/image-operands'
 import {
-  PipelineStepKind,
-  canvasLayer,
+  createImageLayerStep,
+  isLayerStep,
+  layerKind,
+} from '@/features/pipeline/layer-kinds'
+import {
+  createPipeline,
   leafSteps,
-  createLayerStep,
+  originalSourceId,
 } from '@/features/pipeline/pipeline'
 import { PipelineSchema } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
@@ -80,6 +86,7 @@ export class DocumentService {
     this.#deps = deps
   }
 
+  /** Opens an image as a new Document: a canvas the size of the image, with the image as its first layer. The canvas is set once, here; after that nothing follows the image. */
   async create(
     actor: Actor,
     sourceId: string,
@@ -97,13 +104,44 @@ export class DocumentService {
       ownerId: actor.userId,
       name:
         name === undefined ? nameFromFile(source.fileName) : cleanName(name),
-      pipeline: { steps: [createLayerStep(source.id)] },
+      pipeline: createPipeline(canvasOfSize(source.width, source.height), [
+        createImageLayerStep(source.id),
+      ]),
       revision: 0,
       historyCursor: 0,
       createdAt: now,
       updatedAt: now,
     }
     await documents.insert(record, [source.id])
+    this.#announceList(actor)
+    return this.#view(record)
+  }
+
+  /** Makes a new Document with nothing in it, on the canvas given. */
+  async createBlank(
+    actor: Actor,
+    canvas: Canvas,
+    name: string,
+  ): Promise<DocumentView> {
+    const checked = canvasSchema.safeParse(canvas)
+    if (!checked.success) {
+      throw new ValidationError(
+        checked.error.issues[0]?.message ?? 'That canvas is not valid.',
+      )
+    }
+    const { documents, clock, ids } = this.#deps
+    const now = isoNow(clock)
+    const record: DocumentRecord = {
+      id: ids.next(),
+      ownerId: actor.userId,
+      name: cleanName(name),
+      pipeline: createPipeline(checked.data),
+      revision: 0,
+      historyCursor: 0,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await documents.insert(record, [])
     this.#announceList(actor)
     return this.#view(record)
   }
@@ -148,7 +186,7 @@ export class DocumentService {
       summaries.push({
         id: record.id,
         name: record.name,
-        source: canvasSource(record.pipeline, sources),
+        source: originalSource(record.pipeline, sources),
         revision: record.revision,
         updatedAt: record.updatedAt,
       })
@@ -277,8 +315,7 @@ export class DocumentService {
   ): void {
     this.#announceUpdated(actor, after)
     if (
-      canvasLayer(before.pipeline)?.sourceId !==
-      canvasLayer(after.pipeline)?.sourceId
+      originalSourceId(before.pipeline) !== originalSourceId(after.pipeline)
     ) {
       this.#announceList(actor)
     }
@@ -338,12 +375,13 @@ export class DocumentService {
     const summaries: SourceSummary[] = []
     const seen = new Set<string>()
     for (const step of leafSteps(pipeline)) {
-      if (step.kind !== PipelineStepKind.Layer || seen.has(step.sourceId)) {
-        continue
+      if (!isLayerStep(step)) continue
+      for (const id of layerKind(step).sourceIds(step)) {
+        if (seen.has(id)) continue
+        seen.add(id)
+        const source = await this.#deps.sources.findById(id)
+        if (source !== null) summaries.push(toSourceSummary(source))
       }
-      seen.add(step.sourceId)
-      const source = await this.#deps.sources.findById(step.sourceId)
-      if (source !== null) summaries.push(toSourceSummary(source))
     }
     return summaries
   }
@@ -351,7 +389,7 @@ export class DocumentService {
   async #view(record: DocumentRecord): Promise<DocumentView> {
     const { documents } = this.#deps
     const sources = await this.#openedSources(record.pipeline)
-    const source = canvasSource(record.pipeline, sources)
+    const source = originalSource(record.pipeline, sources)
     const undo = await documents.findEntry(record.id, record.historyCursor - 1)
     const redo = await documents.findEntry(record.id, record.historyCursor)
     return {
@@ -369,13 +407,13 @@ export class DocumentService {
   }
 }
 
-/** The image of the layer that sets the canvas, when that image is still there. */
-function canvasSource(
+/** The image of the first image layer that is on, when that image is still there: the document's original. */
+function originalSource(
   pipeline: Pipeline,
   sources: ReadonlyArray<SourceSummary>,
 ): SourceSummary | null {
-  const canvas = canvasLayer(pipeline)
-  return sources.find(({ id }) => id === canvas?.sourceId) ?? null
+  const id = originalSourceId(pipeline)
+  return sources.find((source) => source.id === id) ?? null
 }
 
 function asValidation(error: unknown): unknown {

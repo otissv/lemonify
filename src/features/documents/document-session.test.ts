@@ -9,6 +9,7 @@ import {
 } from '@/features/documents/document-session'
 import type { DocumentSession } from '@/features/documents/document-session'
 import { createSharpStep } from '@/features/pipeline/pipeline'
+import { pipelineOf } from '@/test/pipelines'
 
 function view(steps: ReturnType<typeof createSharpStep>[]): DocumentView {
   return {
@@ -23,7 +24,7 @@ function view(steps: ReturnType<typeof createSharpStep>[]): DocumentView {
       height: 10,
     },
     sources: [],
-    pipeline: { steps },
+    pipeline: pipelineOf(...steps),
     revision: 3,
     canUndo: false,
     canRedo: true,
@@ -131,7 +132,7 @@ describe('replayPending', () => {
     canUndo = false,
     canRedo = false,
   ) => ({
-    pipeline: { steps },
+    pipeline: pipelineOf(...steps),
     canUndo,
     canRedo,
   })

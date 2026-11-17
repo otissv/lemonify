@@ -11,20 +11,21 @@ import type { DocumentChange } from '@/features/pipeline/document-change'
 import {
   MAX_GROUP_STEPS,
   createGroupStep,
-  createLayerStep,
   createSharpStep,
   findStep,
   leafSteps,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
+import { pipelineOf } from '@/test/pipelines'
 
-const A = createLayerStep('source-a')
+const A = createImageLayerStep('source-a')
 const B = createSharpStep('blur', { sigma: 2 })
 const C = createSharpStep('flop')
 const D = createSharpStep('negate')
 
-const FLAT: Pipeline = { steps: [A, B, C, D] }
+const FLAT: Pipeline = pipelineOf(A, B, C, D)
 
 /** Applies a change, then its inverse, and expects the original back; then redo. */
 function roundTrip(pipeline: Pipeline, change: DocumentChange): Pipeline {
@@ -78,7 +79,7 @@ describe('grouping steps', () => {
 
   it('refuses a step that is not there, or is already in a group', () => {
     const inside = createGroupStep([B])
-    const pipeline: Pipeline = { steps: [A, inside, C] }
+    const pipeline: Pipeline = pipelineOf(A, inside, C)
 
     expect(() =>
       applyChange(FLAT, {
@@ -96,7 +97,7 @@ describe('grouping steps', () => {
 
   it('refuses an empty group made from steps, and a group that is already there', () => {
     const existing = createGroupStep([B])
-    const pipeline: Pipeline = { steps: [A, existing, C] }
+    const pipeline: Pipeline = pipelineOf(A, existing, C)
 
     expect(() =>
       applyChange(FLAT, { type: 'group-steps', group: createGroupStep([]) }),
@@ -111,7 +112,7 @@ describe('grouping steps', () => {
 
   it('groups the steps of one group’s neighbours, but never a group', () => {
     const inner = createGroupStep([B])
-    const pipeline: Pipeline = { steps: [A, inner, C] }
+    const pipeline: Pipeline = pipelineOf(A, inner, C)
 
     expect(() =>
       applyChange(pipeline, {
@@ -124,7 +125,7 @@ describe('grouping steps', () => {
 
 describe('ungrouping', () => {
   const group = createGroupStep([B, C], 'Soften')
-  const grouped: Pipeline = { steps: [A, group, D] }
+  const grouped: Pipeline = pipelineOf(A, group, D)
 
   it('puts the steps back in the place of the group, and undo brings it back as it was', () => {
     const next = roundTrip(grouped, { type: 'ungroup', groupId: group.id })
@@ -133,9 +134,7 @@ describe('ungrouping', () => {
   })
 
   it('brings back a group that was switched off, with its steps’ own switches', () => {
-    const off: Pipeline = {
-      steps: [A, { ...group, enabled: false }, D],
-    }
+    const off: Pipeline = pipelineOf(A, { ...group, enabled: false }, D)
 
     const next = roundTrip(off, { type: 'ungroup', groupId: group.id })
 
@@ -154,7 +153,7 @@ describe('ungrouping', () => {
 
 describe('adding to a group', () => {
   const group = createGroupStep([B])
-  const grouped: Pipeline = { steps: [A, group, D] }
+  const grouped: Pipeline = pipelineOf(A, group, D)
 
   it('adds a step inside a group, and undo takes it out', () => {
     const added = createSharpStep('flip')
@@ -213,22 +212,19 @@ describe('adding to a group', () => {
     )
 
     expect(() =>
-      applyChange(
-        { steps: [full] },
-        {
-          type: 'add-step',
-          step: createSharpStep('flip'),
-          index: 0,
-          groupId: full.id,
-        },
-      ),
+      applyChange(pipelineOf(full), {
+        type: 'add-step',
+        step: createSharpStep('flip'),
+        index: 0,
+        groupId: full.id,
+      }),
     ).toThrow(InvalidChangeError)
   })
 })
 
 describe('moving between a group and the top', () => {
   const group = createGroupStep([B, C])
-  const grouped: Pipeline = { steps: [A, group, D] }
+  const grouped: Pipeline = pipelineOf(A, group, D)
 
   it('moves a step out of a group, and undo puts it back in its place', () => {
     const next = roundTrip(grouped, { type: 'move-step', stepId: B.id, to: 0 })
@@ -290,7 +286,7 @@ describe('moving between a group and the top', () => {
 
 describe('other edits with groups', () => {
   const group = createGroupStep([B, C], 'Soften')
-  const grouped: Pipeline = { steps: [A, group, D] }
+  const grouped: Pipeline = pipelineOf(A, group, D)
 
   it('removes a step inside a group, and undo puts it back', () => {
     const next = roundTrip(grouped, { type: 'remove-step', stepId: B.id })
@@ -340,7 +336,7 @@ describe('other edits with groups', () => {
     ).toThrow(InvalidChangeError)
     expect(() =>
       applyChange(grouped, {
-        type: 'set-source',
+        type: 'set-image',
         stepId: group.id,
         sourceId: 'x',
       }),
@@ -373,7 +369,7 @@ describe('the change schema with groups', () => {
 
 describe('a group as a sub-document', () => {
   const group = createGroupStep([B, C], 'Logo')
-  const base: Pipeline = { steps: [A, group, D] }
+  const base: Pipeline = pipelineOf(A, group, D)
 
   it('is switched on and off, undoing back to how it was', () => {
     const on = roundTrip(base, {
@@ -433,7 +429,7 @@ describe('a group as a sub-document', () => {
   it('still refuses options and an image, which a group does not have', () => {
     expect(() =>
       applyChange(base, {
-        type: 'set-source',
+        type: 'set-image',
         stepId: group.id,
         sourceId: 'x',
       }),
@@ -450,10 +446,10 @@ describe('a group as a sub-document', () => {
       opacity: 30,
       steps: group.steps,
     }
-    const next = roundTrip(
-      { steps: [A, B, C, D] },
-      { type: 'group-steps', group: placed },
-    )
+    const next = roundTrip(pipelineOf(A, B, C, D), {
+      type: 'group-steps',
+      group: placed,
+    })
     const undone = roundTrip(next, { type: 'ungroup', groupId: placed.id })
     expect(undone.steps).toHaveLength(4)
   })

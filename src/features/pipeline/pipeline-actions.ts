@@ -5,10 +5,9 @@ import { supportsBlend } from '@/features/pipeline/step-blend'
 import type { StepBlend } from '@/features/pipeline/step-blend'
 import {
   PipelineStepKind,
-  canvasLayer,
+  firstImageLayer,
   copyStep,
   createGroupStep,
-  createLayerStep,
   findStep,
   groupableSteps,
   leafSteps,
@@ -19,6 +18,10 @@ import type {
   PipelineStep,
   SharpStep,
 } from '@/features/pipeline/pipeline'
+import {
+  createImageLayerStep,
+  isLayerStep,
+} from '@/features/pipeline/layer-kinds'
 import { Tool, currentPipeline, useAppStore } from '@/store/app-store'
 import type { AiContent } from '@/features/ai/ai-tools'
 import { errorMessage } from '@/lib/error-message'
@@ -169,31 +172,37 @@ export async function copyStepToDocument(
   return useAppStore.getState().documents[toId]?.error
 }
 
-/** Adds a layer for `sourceId` just after the selected step, on top of it (on top of everything when none is selected), as one undoable change. */
+/** Adds an image layer for `sourceId` just after the selected step, on top of it (on top of everything when none is selected), as one undoable change. */
 export function insertImage(documentId: string, sourceId: string): void {
   addStepAfter(
     documentId,
-    createLayerStep(sourceId),
+    createImageLayerStep(sourceId),
     useAppStore.getState().selectedSteps[documentId],
   )
 }
 
-/** The step that replacing an image changes: the selected layer, or else the layer that sets the canvas, or the first layer when all are off. */
+/** Adds an empty image layer in the same place, as one undoable change. It keeps its settings and draws nothing until it is given an image. */
+export function addEmptyImageLayer(documentId: string): void {
+  addStepAfter(
+    documentId,
+    createImageLayerStep(),
+    useAppStore.getState().selectedSteps[documentId],
+  )
+}
+
+/** The step that replacing an image changes: the selected layer, or else the first layer that is on and has an image, or the first layer. */
 function replaceTarget(
   pipeline: Pipeline,
   selectedId: string | undefined,
 ): string | undefined {
   const selected =
     selectedId === undefined ? undefined : findStep(pipeline, selectedId)?.step
-  if (selected?.kind === PipelineStepKind.Layer) return selected.id
-  const canvas = canvasLayer(pipeline)
-  return (
-    canvas ??
-    leafSteps(pipeline).find((step) => step.kind === PipelineStepKind.Layer)
-  )?.id
+  if (selected !== undefined && isLayerStep(selected)) return selected.id
+  return (firstImageLayer(pipeline) ?? leafSteps(pipeline).find(isLayerStep))
+    ?.id
 }
 
-/** Makes the selected layer use `sourceId` instead, or the layer that sets the canvas when another kind of step is selected, as one undoable change. */
+/** Makes the selected layer use `sourceId` instead (filling it if it is empty), or the first layer with an image when another kind of step is selected, as one undoable change. */
 export function replaceImage(documentId: string, sourceId: string): void {
   const pipeline = currentPipeline(useAppStore.getState(), documentId)
   if (!pipeline) return
@@ -201,7 +210,7 @@ export function replaceImage(documentId: string, sourceId: string): void {
     pipeline,
     useAppStore.getState().selectedSteps[documentId],
   )
-  if (stepId !== undefined) setStepSource(documentId, stepId, sourceId)
+  if (stepId !== undefined) setStepImage(documentId, stepId, sourceId)
 }
 
 /** Sets the options of a Sharp step, as one undoable change; nothing if the step is gone. */
@@ -214,14 +223,15 @@ export function setSharpOptions(
   void applyEdit(documentId, { type: 'set-options', stepId, options })
 }
 
-/** Makes a layer use another image, as one undoable change; nothing if the step is gone. */
-export function setStepSource(
+/** Makes a layer use another image, or with null takes its image away, as one undoable change; nothing if the step is gone or is not a layer. */
+export function setStepImage(
   documentId: string,
   stepId: string,
-  sourceId: string,
+  sourceId: string | null,
 ): void {
-  if (stepOf(documentId, stepId)?.kind !== PipelineStepKind.Layer) return
-  void applyEdit(documentId, { type: 'set-source', stepId, sourceId })
+  const step = stepOf(documentId, stepId)
+  if (step === undefined || !isLayerStep(step)) return
+  void applyEdit(documentId, { type: 'set-image', stepId, sourceId })
 }
 
 /** Gives a step a name, or with an empty one takes it away, as one undoable change; nothing if the step is gone. */
@@ -251,8 +261,9 @@ export function setLayerSettings(
   stepId: string,
   settings: LayerSettings,
 ): void {
-  const kind = stepOf(documentId, stepId)?.kind
-  if (kind !== PipelineStepKind.Layer && kind !== PipelineStepKind.Group) return
+  const step = stepOf(documentId, stepId)
+  if (step === undefined) return
+  if (!isLayerStep(step) && step.kind !== PipelineStepKind.Group) return
   void applyEdit(documentId, { type: 'set-layer', stepId, settings })
 }
 

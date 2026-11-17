@@ -2,7 +2,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import {
-  WorkflowGraphSchema,
+  RunCanvasModeSchema,
+  WorkflowDefinitionSchema,
   WorkflowNameSchema,
 } from '@/features/workflows/workflow'
 import { PROTECTED_CHAIN, protectedChain } from '@/server/http/chains'
@@ -35,21 +36,21 @@ export const createWorkflowFn = createServerFn({ method: 'POST' })
     return app.workflows.create(actor, data.name)
   })
 
-/** Saves a workflow's name and graph; `revision` is the one the editor last saw. */
+/** Saves a workflow's name and definition; `revision` is the one the editor last saw. */
 export const updateWorkflow = createServerFn({ method: 'POST' })
   .middleware(PROTECTED_CHAIN)
   .validator(
     IdSchema.extend({
       revision: z.number().int().nonnegative(),
       name: WorkflowNameSchema,
-      graph: WorkflowGraphSchema,
+      definition: WorkflowDefinitionSchema,
     }),
   )
   .handler(async ({ context, data }): Promise<WorkflowView> => {
     const { app, actor } = await appFor(context)
     return app.workflows.update(actor, data.id, data.revision, {
       name: data.name,
-      graph: data.graph,
+      definition: data.definition,
     })
   })
 
@@ -61,13 +62,13 @@ export const deleteWorkflow = createServerFn({ method: 'POST' })
     await app.workflows.delete(actor, data.id)
   })
 
-/** Starts a run over the Sources in the workflow's Input; follow it with `getWorkflowRun`. */
+/** Starts a run over the input images of the workflow, on its canvas or on one the size of each image; follow it with `getWorkflowRun`. */
 export const runWorkflow = createServerFn({ method: 'POST' })
   .middleware(protectedChain('queue'))
-  .validator(IdSchema)
+  .validator(IdSchema.extend({ canvas: RunCanvasModeSchema.optional() }))
   .handler(async ({ context, data }): Promise<RunView> => {
     const { app, actor } = await appFor(context)
-    return app.workflows.run(actor, data.id)
+    return app.workflows.run(actor, data.id, { canvas: data.canvas })
   })
 
 export const getWorkflowRun = createServerFn({ method: 'GET' })

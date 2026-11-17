@@ -1,4 +1,5 @@
 import { AI_TOOLS } from '@/features/ai/ai-tools'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type { LeafStep, PipelineStep } from '@/features/pipeline/pipeline'
 import {
@@ -9,7 +10,6 @@ import {
 
 const GENERAL = '_'
 
-export const LAYER_LABEL = 'Layer'
 export const GROUP_LABEL = 'Group'
 
 /**
@@ -17,6 +17,7 @@ export const GROUP_LABEL = 'Group'
  * set up. Uses the image CLI's own checks, so the preview and the CLI agree.
  */
 export function stepProblem(step: LeafStep): string | undefined {
+  if (isLayerStep(step)) return layerKind(step).problem(step)
   if (step.kind !== PipelineStepKind.Sharp) return undefined
   const missing = missingSharpOptions(step.op, step.options)
   if (missing.length > 0) return `Needs ${missing.join(', ')}.`
@@ -30,11 +31,10 @@ export function stepProblem(step: LeafStep): string | undefined {
 
 /** "Blur" or "Auto orient": the name a step is shown by. */
 export function pipelineStepLabel(step: PipelineStep): string {
+  if (isLayerStep(step)) return layerKind(step).title
   switch (step.kind) {
     case PipelineStepKind.Group:
       return GROUP_LABEL
-    case PipelineStepKind.Layer:
-      return LAYER_LABEL
     case PipelineStepKind.Sharp:
       return opLabel(step.op)
     case PipelineStepKind.Ai:

@@ -8,6 +8,8 @@ import type { PipelinePlan } from './plan-pipeline.ts'
 import type { PlanLookups } from './plan-pipeline.ts'
 import { planSteps } from '@/features/pipeline/pipeline'
 import type { PlanStep } from '@/features/pipeline/pipeline'
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import type { Canvas } from '@/features/pipeline/canvas'
 
 const ASSUMED = 'assumed'
 
@@ -15,6 +17,8 @@ export type PlanOptions = {
   /** The steps to plan, as they count when the picture is made; the whole pipeline, groups that are not sub-documents opened, when not given. */
   steps?: ReadonlyArray<PlanStep>
   assumeAiResults?: boolean
+  /** The canvas to plan on; the Document's own when not given. */
+  canvas?: Canvas
 }
 
 export type DocumentPlannerDependencies = {
@@ -65,9 +69,26 @@ export class DocumentPlanner {
     document: DocumentRecord,
     options: PlanOptions = {},
   ): Promise<PipelinePlan> {
-    const { steps = planSteps(document.pipeline), assumeAiResults = false } =
-      options
-    return planPipeline(steps, this.#lookups(document.ownerId, assumeAiResults))
+    const {
+      steps = planSteps(document.pipeline),
+      assumeAiResults = false,
+      canvas = document.pipeline.canvas,
+    } = options
+    return planPipeline(
+      canvas,
+      steps,
+      this.#lookups(document.ownerId, assumeAiResults),
+    )
+  }
+
+  /** A canvas the size of a stored image, or undefined when the image is gone or not the owner's. */
+  async imageCanvas(
+    ownerId: string,
+    sourceId: string,
+  ): Promise<Canvas | undefined> {
+    const source = await this.#deps.sources.findById(sourceId)
+    if (source === null || source.ownerId !== ownerId) return undefined
+    return canvasOfSize(source.width, source.height)
   }
 
   #lookups(ownerId: string, assumeAiResults: boolean): PlanLookups {

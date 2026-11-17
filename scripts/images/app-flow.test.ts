@@ -177,7 +177,8 @@ describe('layers through the CLI', () => {
       'step',
       'add',
       document.id,
-      '--layer',
+      '--image-layer',
+      '--source',
       source.id,
       '--settings',
       '{"fit":"original","anchor":"northwest"}',
@@ -191,12 +192,14 @@ describe('layers through the CLI', () => {
     expect([r, g, b]).toEqual([110, 25, 153])
     expect(await pixel(out, 40, 40)).toEqual([221, 51, 51, 255])
 
-    const [canvas] = document.pipeline.steps
-    await cli('document', 'step', 'disable', document.id, canvas?.id ?? '')
+    const [first] = document.pipeline.steps
+    await cli('document', 'step', 'disable', document.id, first?.id ?? '')
     const alone = path.join(workDir, 'alone.png')
     await cli('export', document.id, '--out', alone, '--format', 'png')
     const meta = await sharp(alone).metadata()
-    expect([meta.width, meta.height]).toEqual([16, 16])
+    expect([meta.width, meta.height]).toEqual([64, 48])
+    expect(await pixel(alone, 40, 40)).toEqual([0, 0, 0, 0])
+    expect((await pixel(alone, 4, 4))[3]).toBe(128)
   })
 })
 
@@ -352,6 +355,95 @@ describe('workflows through the CLI', () => {
     expect(existsSync(path.join(folder, 'manifest.json'))).toBe(true)
   })
 
+  it('makes a pipeline with a canvas and one empty image layer, and changes the canvas', async () => {
+    const { workflow } = await cli<{
+      workflow: {
+        id: string
+        pipeline: { canvas: unknown; steps: Array<{ kind: string }> }
+      }
+    }>('workflow', 'create', 'Sized', '--width', '300', '--height', '200')
+    expect(workflow.pipeline.canvas).toEqual({
+      width: 300,
+      height: 200,
+      background: 'transparent',
+    })
+    expect(workflow.pipeline.steps.map(({ kind }) => kind)).toEqual([
+      'image-layer',
+    ])
+
+    const changed = await cli<{
+      workflow: { pipeline: { canvas: unknown; steps: unknown[] } }
+    }>('workflow', 'update', workflow.id, '--background', '#ff0000')
+    expect(changed.workflow.pipeline.canvas).toEqual({
+      width: 300,
+      height: 200,
+      background: '#ff0000',
+    })
+    expect(changed.workflow.pipeline.steps).toHaveLength(1)
+  })
+
+  it('refuses --pipeline together with --steps or the canvas flags', async () => {
+    await expect(
+      cli(
+        'workflow',
+        'create',
+        'Both',
+        '--pipeline',
+        '{"canvas":{"width":1,"height":1},"steps":[]}',
+        '--width',
+        '5',
+      ),
+    ).rejects.toThrow(/--pipeline on its own/)
+  })
+
+  it('runs on a canvas the size of each image with --canvas first-image', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('wide.png'),
+    )
+    const { workflow } = await cli<{ workflow: { id: string } }>(
+      'workflow',
+      'create',
+      'Own size',
+      '--width',
+      '999',
+      '--height',
+      '999',
+      '--sources',
+      source.id,
+      '--output',
+      JSON.stringify({
+        format: 'png',
+        options: {},
+        keepMetadata: false,
+        widths: [],
+        suffix: '',
+      }),
+    )
+    const folder = path.join(workDir, 'first-image')
+    const ran = await cli<{ run: { state: string; canvasMode: string } }>(
+      'workflow',
+      'run',
+      workflow.id,
+      '--canvas',
+      'first-image',
+      '--follow',
+      '--out',
+      folder,
+    )
+    expect(ran.run).toMatchObject({ state: 'done', canvasMode: 'first-image' })
+    const meta = await sharp(path.join(folder, 'wide.png')).metadata()
+    const original = await sharp(await makeImage('wide2.png')).metadata()
+    expect([meta.width, meta.height]).toEqual([original.width, original.height])
+  })
+
+  it('refuses a canvas mode it does not know', async () => {
+    await expect(
+      cli('workflow', 'run', 'nope', '--canvas', 'huge'),
+    ).rejects.toThrow()
+  })
+
   it('refuses --out without --follow', async () => {
     await expect(
       cli('workflow', 'run', 'nope', '--out', path.join(workDir, 'x')),
@@ -377,7 +469,8 @@ describe('workflows through the CLI', () => {
       'step',
       'add',
       document.id,
-      '--layer',
+      '--image-layer',
+      '--source',
       mask.source.id,
       '--settings',
       '{"opacity":40,"blend":"multiply"}',
@@ -385,7 +478,7 @@ describe('workflows through the CLI', () => {
     const layer = added.document.pipeline.steps.at(-1)
     expect(added.document.pipeline.steps).toHaveLength(2)
     expect(layer).toMatchObject({
-      kind: 'layer',
+      kind: 'image-layer',
       sourceId: mask.source.id,
       opacity: 40,
       blend: 'multiply',
@@ -403,7 +496,7 @@ describe('workflows through the CLI', () => {
       '{"rotation":90,"anchor":"north"}',
     )
     expect(restyled.document.pipeline.steps.at(-1)).toMatchObject({
-      kind: 'layer',
+      kind: 'image-layer',
       opacity: 100,
       rotation: 90,
       anchor: 'north',
@@ -419,7 +512,7 @@ describe('workflows through the CLI', () => {
       base.source.id,
     )
     expect(swapped.document.pipeline.steps.at(-1)).toMatchObject({
-      kind: 'layer',
+      kind: 'image-layer',
       sourceId: base.source.id,
     })
 
@@ -446,7 +539,7 @@ describe('workflows through the CLI', () => {
       mask.source.id,
     )
     expect(replaced.document.pipeline.steps.at(0)).toMatchObject({
-      kind: 'layer',
+      kind: 'image-layer',
       sourceId: mask.source.id,
     })
 
@@ -537,7 +630,7 @@ describe('groups through the CLI', () => {
     )
     expect(out.document.pipeline.steps.map(({ kind }) => kind)).toEqual([
       'sharp',
-      'layer',
+      'image-layer',
       'group',
     ])
 
@@ -580,7 +673,7 @@ describe('groups through the CLI', () => {
       group?.id ?? '',
     )
     expect(ungrouped.document.pipeline.steps.map(({ kind }) => kind)).toEqual([
-      'layer',
+      'image-layer',
       'sharp',
       'sharp',
       'sharp',
@@ -612,8 +705,11 @@ describe('groups through the CLI', () => {
       'step',
       'add',
       document.id,
-      '--layer',
+      '--image-layer',
+      '--source',
       source.id,
+      '--settings',
+      '{"fit":"original","anchor":"northwest"}',
     )
     const layer = added.document.pipeline.steps.at(-1)
     const grouped = await cli<GroupDoc>(
@@ -995,5 +1091,296 @@ describe('keys', () => {
     ).rejects.toThrow()
     const after = await cli<Keys>('keys', 'list')
     expect(after.keybindings.overrides.bindings).toEqual({})
+  })
+})
+
+describe('the canvas through the CLI', () => {
+  type CanvasDoc = {
+    document: {
+      id: string
+      pipeline: {
+        canvas: { width: number; height: number; background: string }
+        steps: Array<{ id: string }>
+      }
+    }
+  }
+
+  it('opens an image onto a canvas of its size, and makes a blank document on a canvas you size', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('base.png'),
+    )
+
+    const opened = await cli<CanvasDoc>('document', 'create', source.id)
+    expect(opened.document.pipeline.canvas).toEqual({
+      width: 64,
+      height: 48,
+      background: 'transparent',
+    })
+    expect(opened.document.pipeline.steps).toHaveLength(1)
+
+    const blank = await cli<CanvasDoc>(
+      'document',
+      'create',
+      '--width',
+      '20',
+      '--height',
+      '10',
+      '--background',
+      '#FF8800',
+      '--name',
+      'Banner',
+    )
+    expect(blank.document.pipeline.canvas).toEqual({
+      width: 20,
+      height: 10,
+      background: '#ff8800',
+    })
+    expect(blank.document.pipeline.steps).toEqual([])
+  })
+
+  it('refuses a document that is neither from a source nor on a canvas, and mixes of the two', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('base.png'),
+    )
+
+    await expect(cli('document', 'create')).rejects.toThrow(/--width/)
+    await expect(
+      cli('document', 'create', '--width', '20', '--height', '10'),
+    ).rejects.toThrow(/--name/)
+    await expect(
+      cli('document', 'create', source.id, '--width', '20'),
+    ).rejects.toThrow(/canvas from the image/)
+    await expect(
+      cli(
+        'document',
+        'create',
+        '--width',
+        '0',
+        '--height',
+        '10',
+        '--name',
+        'Bad',
+      ),
+    ).rejects.toThrow()
+    await expect(
+      cli(
+        'document',
+        'create',
+        '--width',
+        '20',
+        '--height',
+        '10',
+        '--background',
+        'red',
+        '--name',
+        'Bad',
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('changes the canvas, keeps what is left out, undoes, and exports at the canvas size', async () => {
+    const blank = await cli<CanvasDoc>(
+      'document',
+      'create',
+      '--width',
+      '20',
+      '--height',
+      '10',
+      '--name',
+      'Banner',
+    )
+    const { id } = blank.document
+
+    const changed = await cli<CanvasDoc>(
+      'document',
+      'canvas',
+      id,
+      '--width',
+      '30',
+      '--background',
+      '#00ff00',
+    )
+    expect(changed.document.pipeline.canvas).toEqual({
+      width: 30,
+      height: 10,
+      background: '#00ff00',
+    })
+
+    const out = path.join(workDir, 'banner.png')
+    await cli('export', id, '--out', out, '--format', 'png')
+    const meta = await sharp(out).metadata()
+    expect([meta.width, meta.height]).toEqual([30, 10])
+
+    const undone = await cli<CanvasDoc>('document', 'undo', id)
+    expect(undone.document.pipeline.canvas).toEqual({
+      width: 20,
+      height: 10,
+      background: 'transparent',
+    })
+  })
+
+  it('refuses a canvas that is too large or has a bad colour', async () => {
+    const blank = await cli<CanvasDoc>(
+      'document',
+      'create',
+      '--width',
+      '20',
+      '--height',
+      '10',
+      '--name',
+      'Banner',
+    )
+    await expect(
+      cli('document', 'canvas', blank.document.id, '--width', '70000'),
+    ).rejects.toThrow()
+    await expect(
+      cli('document', 'canvas', blank.document.id, '--background', 'nope'),
+    ).rejects.toThrow()
+  })
+})
+
+describe('empty image layers through the CLI', () => {
+  type LayerDoc = {
+    document: {
+      id: string
+      source: { id: string } | null
+      pipeline: {
+        steps: Array<{ id: string; kind: string; sourceId?: string }>
+      }
+    }
+  }
+
+  async function blank(): Promise<LayerDoc['document']> {
+    const { document } = await cli<LayerDoc>(
+      'document',
+      'create',
+      '--width',
+      '20',
+      '--height',
+      '10',
+      '--name',
+      'Blank',
+    )
+    return document
+  }
+
+  it('adds an empty image layer, fills it with an image, and empties it again', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('base.png'),
+    )
+    const document = await blank()
+
+    const added = await cli<LayerDoc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--image-layer',
+      '--settings',
+      '{"opacity":40}',
+    )
+    const [empty] = added.document.pipeline.steps
+    expect(empty).toMatchObject({ kind: 'image-layer', opacity: 40 })
+    expect(empty).not.toHaveProperty('sourceId')
+    expect(added.document.source).toBeNull()
+
+    const filled = await cli<LayerDoc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      empty?.id ?? '',
+      '--source',
+      source.id,
+    )
+    expect(filled.document.pipeline.steps[0]).toMatchObject({
+      sourceId: source.id,
+      opacity: 40,
+    })
+    expect(filled.document.source?.id).toBe(source.id)
+
+    const emptied = await cli<LayerDoc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      empty?.id ?? '',
+      '--clear-source',
+    )
+    expect(emptied.document.pipeline.steps[0]).not.toHaveProperty('sourceId')
+    expect(emptied.document.pipeline.steps[0]).toMatchObject({ opacity: 40 })
+    expect(emptied.document.source).toBeNull()
+  })
+
+  it('exports a document whose only layer is empty as the blank canvas', async () => {
+    const document = await blank()
+    await cli('document', 'step', 'add', document.id, '--image-layer')
+
+    const out = path.join(workDir, 'empty.png')
+    await cli('export', document.id, '--out', out, '--format', 'png')
+
+    const { data, info } = await sharp(out)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    expect([info.width, info.height]).toEqual([20, 10])
+    expect([...data.subarray(0, 4)]).toEqual([0, 0, 0, 0])
+  })
+
+  it('refuses the flags that do not go together', async () => {
+    const document = await blank()
+    const added = await cli<LayerDoc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--image-layer',
+    )
+    const layerId = added.document.pipeline.steps[0]?.id ?? ''
+
+    await expect(
+      cli(
+        'document',
+        'step',
+        'add',
+        document.id,
+        '--op',
+        'blur',
+        '--source',
+        'x',
+      ),
+    ).rejects.toThrow(/--source goes with --image-layer/)
+    await expect(
+      cli(
+        'document',
+        'step',
+        'add',
+        document.id,
+        '--image-layer',
+        '--op',
+        'blur',
+      ),
+    ).rejects.toThrow(/Give one of/)
+    await expect(
+      cli(
+        'document',
+        'step',
+        'set',
+        document.id,
+        layerId,
+        '--source',
+        'x',
+        '--clear-source',
+      ),
+    ).rejects.toThrow(/not both/)
+    await expect(
+      cli('document', 'step', 'set', document.id, layerId),
+    ).rejects.toThrow(/--settings, --source or --clear-source/)
   })
 })

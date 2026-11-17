@@ -33,8 +33,10 @@ import {
   documentView,
   echoChanges,
   baseLayer,
+  previewJob,
 } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { pipelineOf } from '@/test/pipelines'
 
 vi.mock('@/features/auth/auth-client', () => ({ signOut: vi.fn() }))
 vi.mock('@/features/documents/document-functions', () => ({
@@ -127,6 +129,20 @@ describe('AppMenuBar', () => {
 
       expect(lined).toHaveLength(0)
       expect(menu.parentElement).not.toHaveClass('px-2', 'py-1')
+    })
+
+    it('opens the New document dialog from File, with its key shown', async () => {
+      const user = userEvent.setup()
+      await renderApp()
+
+      const file = await openMenu(user, 'File')
+      const item = within(file).getByRole('menuitem', {
+        name: /New document/,
+      })
+      expect(item).toHaveTextContent('Alt+N')
+      await user.click(item)
+
+      expect(useAppStore.getState().newDocumentOpen).toBe(true)
     })
 
     it('opens an image from this computer', async () => {
@@ -289,7 +305,7 @@ describe('AppMenuBar', () => {
     })
 
     it('greys out Replace image when the document has no layer', async () => {
-      const view = { ...documentView(), pipeline: { steps: [] } }
+      const view = { ...documentView(), pipeline: pipelineOf() }
       vi.mocked(getDocument).mockResolvedValue(view)
       const user = userEvent.setup()
       await renderApp(`/documents/${DOCUMENT_ID}`)
@@ -330,7 +346,7 @@ describe('AppMenuBar', () => {
             change: {
               type: 'add-step',
               step: expect.objectContaining({
-                kind: 'layer',
+                kind: 'image-layer',
                 sourceId: 'src-other',
               }),
               index: 2,
@@ -343,6 +359,39 @@ describe('AppMenuBar', () => {
           screen.queryByRole('dialog', { name: 'Insert image' }),
         ).not.toBeInTheDocument()
       })
+    })
+
+    it('adds an empty image layer from Edit, on top of the selected step, and selects it', async () => {
+      const view = documentView([BLUR])
+      vi.mocked(getDocument).mockResolvedValue(view)
+      echoChanges(vi.mocked(changeDocument), view)
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+      useAppStore.getState().selectStep(DOCUMENT_ID, BLUR.id)
+
+      const edit = await openMenu(user, 'Edit')
+      await user.click(
+        within(edit).getByRole('menuitem', { name: 'Add image layer' }),
+      )
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: {
+              type: 'add-step',
+              step: expect.objectContaining({ kind: 'image-layer' }),
+              index: 2,
+            },
+          }),
+        })
+      })
+      const added = vi.mocked(changeDocument).mock.calls[0]?.[0].data.change
+      if (added?.type !== 'add-step') throw new Error('no step added')
+      expect(added.step).not.toHaveProperty('sourceId')
+      expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
+        added.step.id,
+      )
     })
 
     it('replaces the document’s image with one from the library, adding no step', async () => {
@@ -369,7 +418,7 @@ describe('AppMenuBar', () => {
         expect(changeDocument).toHaveBeenCalledWith({
           data: expect.objectContaining({
             change: {
-              type: 'set-source',
+              type: 'set-image',
               stepId: baseLayer(view.source.id).id,
               sourceId: 'src-other',
             },
@@ -565,10 +614,20 @@ describe('AppMenuBar', () => {
     })
 
     it('compares with the original', async () => {
+      class LoadingImage {
+        onload: (() => void) | null = null
+        naturalWidth = 10
+        naturalHeight = 10
+        set src(_value: string) {
+          queueMicrotask(() => this.onload?.())
+        }
+      }
+      vi.stubGlobal('Image', LoadingImage)
+      vi.mocked(followJob).mockResolvedValue(previewJob())
       vi.mocked(getDocument).mockResolvedValue(documentView([BLUR]))
       const user = userEvent.setup()
       await renderApp(`/documents/${DOCUMENT_ID}`)
-      const image = await screen.findByRole('img', { name: 'one.png' })
+      await screen.findByRole('img', { name: 'one.png' })
       const originalUrl = `/api/sources/source-${DOCUMENT_ID}`
       await screen.findByRole('dialog', { name: 'Tools' })
 
@@ -576,7 +635,12 @@ describe('AppMenuBar', () => {
       await user.click(
         within(edit).getByRole('menuitemcheckbox', { name: 'Show original' }),
       )
-      expect(image).toHaveAttribute('src', originalUrl)
+      await waitFor(() =>
+        expect(screen.getByRole('img', { name: 'one.png' })).toHaveAttribute(
+          'src',
+          originalUrl,
+        ),
+      )
       expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(true)
 
       const again = await openMenu(user, 'Edit')
@@ -586,6 +650,7 @@ describe('AppMenuBar', () => {
       expect(toggle).toBeChecked()
       await user.click(toggle)
       expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
+      vi.unstubAllGlobals()
     })
 
     it('saves the document as a file from File, and says so', async () => {

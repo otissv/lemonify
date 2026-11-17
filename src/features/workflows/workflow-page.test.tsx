@@ -21,7 +21,11 @@ import {
   INITIAL_SOURCES_STATE,
   useSourcesStore,
 } from '@/features/workflows/sources-store'
-import { WorkflowSchema, createWorkflow } from '@/features/workflows/workflow'
+import {
+  RunCanvasMode,
+  WorkflowSchema,
+  createWorkflow,
+} from '@/features/workflows/workflow'
 import type { Workflow } from '@/features/workflows/workflow'
 import {
   cancelWorkflowRun,
@@ -31,10 +35,7 @@ import {
   runWorkflow,
   updateWorkflow,
 } from '@/features/workflows/workflow-functions'
-import {
-  WorkflowNodeKind,
-  pipelineSteps,
-} from '@/features/workflows/workflow-graph'
+import { IMAGE_LAYER_KIND } from '@/features/pipeline/layer-kinds'
 import { WorkflowPage } from '@/features/workflows/workflow-page'
 import { RunState } from '@/server/dao/workflow-dao'
 import type { RunView } from '@/server/services/workflow-service'
@@ -97,6 +98,7 @@ function run(overrides: Partial<RunView>): RunView {
   return {
     id: 'run-1',
     workflowId: 'wf',
+    canvasMode: RunCanvasMode.Workflow,
     state: RunState.Done,
     createdAt: NOW,
     finishedAt: NOW,
@@ -118,8 +120,8 @@ function run(overrides: Partial<RunView>): RunView {
 function savedWorkflow(): Workflow {
   const call = vi.mocked(updateWorkflow).mock.calls.at(-1)
   if (!call) throw new Error('Nothing was saved')
-  const { id, name, graph } = call[0].data
-  return WorkflowSchema.parse({ id, name, ...graph })
+  const { id, name, definition } = call[0].data
+  return WorkflowSchema.parse({ id, name, ...definition })
 }
 
 async function renderPage(workflow: Workflow): Promise<void> {
@@ -128,19 +130,15 @@ async function renderPage(workflow: Workflow): Promise<void> {
   await screen.findByRole('heading', { name: workflow.name })
 }
 
-/**
- * Selects a step on the canvas. A plain click event is used because
- * user-event's mouse-down has no `view`, which React Flow's drag handling
- * (d3-drag) requires; selecting needs only the click.
- */
-/** Selects a step; the canvas takes a moment to attach its handlers, so the click is repeated until the options show the step. */
+/** Selects a row of the workflow: a step by its name, or Canvas, Input images or Output. */
 async function clickStep(name: string): Promise<void> {
+  const list = screen.getByRole('region', { name: 'Workflow steps' })
+  const matches = within(list).getAllByRole('button', { name })
+  const row = matches.at(0)
+  if (row === undefined) throw new Error(`No row named ${name}`)
+  fireEvent.click(row)
   await waitFor(() => {
-    const canvas = screen.getByRole('application', { name: 'Workflow canvas' })
-    fireEvent.click(within(canvas).getByText(name))
-    expect(
-      screen.getByRole('region', { name: 'Step options' }),
-    ).not.toHaveTextContent('Select a step')
+    expect(inspector()).not.toHaveTextContent('Select a step')
   })
 }
 
@@ -150,6 +148,13 @@ function palette(): HTMLElement {
 
 function inspector(): HTMLElement {
   return screen.getByRole('region', { name: 'Step options' })
+}
+
+/** The kind of each step in the last save, with a Sharp step shown by its op. */
+function stepKinds(): string[] {
+  return savedWorkflow().pipeline.steps.map((step) =>
+    step.kind === 'sharp' ? step.op : step.kind,
+  )
 }
 
 /** Saves wait for the autosave delay, so waiting for them needs more than the default second. */
@@ -173,7 +178,11 @@ describe('WorkflowPage', () => {
     vi.mocked(listResults).mockResolvedValue([])
     vi.mocked(updateWorkflow).mockImplementation(async ({ data }) => ({
       ...viewOf(
-        WorkflowSchema.parse({ id: data.id, name: data.name, ...data.graph }),
+        WorkflowSchema.parse({
+          id: data.id,
+          name: data.name,
+          ...data.definition,
+        }),
         data.revision + 1,
       ),
     }))
@@ -198,12 +207,21 @@ describe('WorkflowPage', () => {
     )
   })
 
-  it('shows the Input and Output steps on the canvas', async () => {
+  it('shows the canvas, the input images, the input layer and the output, in order', async () => {
     await renderPage(createWorkflow('Test'))
-    const canvas = screen.getByRole('application', { name: 'Workflow canvas' })
+    const list = screen.getByRole('region', { name: 'Workflow steps' })
 
-    expect(within(canvas).getByText('Input')).toBeInTheDocument()
-    expect(within(canvas).getByText('Output')).toBeInTheDocument()
+    expect(
+      within(list)
+        .getAllByRole('button', { pressed: false })
+        .map((button) => button.textContent),
+    ).toEqual([
+      'Canvas1920 × 1080 px · transparent',
+      'Input imagesNo images yet',
+      'Image layerEach input image goes here',
+      'OutputSame as original',
+    ])
+    expect(list).not.toHaveTextContent('Input1')
   })
 
   describe('output', () => {
@@ -212,13 +230,8 @@ describe('WorkflowPage', () => {
       return inspector()
     }
 
-    function outputSettings(_id: string): OutputSettings | undefined {
-      const output = savedWorkflow().nodes.find(
-        (node) => node.kind === WorkflowNodeKind.Output,
-      )
-      return output?.kind === WorkflowNodeKind.Output
-        ? output.settings
-        : undefined
+    function outputSettings(_id: string): OutputSettings {
+      return savedWorkflow().output
     }
 
     async function chooseOption(
@@ -266,7 +279,7 @@ describe('WorkflowPage', () => {
         within(panel).getByRole('slider', { name: 'Compression' }),
       ).toBeInTheDocument()
       await waitFor(() => {
-        expect(outputSettings(workflow.id)?.format).toBe(ExportFormat.Png)
+        expect(outputSettings(workflow.id).format).toBe(ExportFormat.Png)
       })
     })
 
@@ -315,7 +328,7 @@ describe('WorkflowPage', () => {
         )
 
         await waitFor(() => {
-          expect(outputSettings(workflow.id)?.widths).toEqual([480, 768])
+          expect(outputSettings(workflow.id).widths).toEqual([480, 768])
         })
       })
 
@@ -333,7 +346,7 @@ describe('WorkflowPage', () => {
         )
 
         await waitFor(() => {
-          expect(outputSettings(workflow.id)?.widths).toEqual([
+          expect(outputSettings(workflow.id).widths).toEqual([
             480, 768, 1024, 1440,
           ])
         })
@@ -356,7 +369,7 @@ describe('WorkflowPage', () => {
         )
 
         await waitFor(() => {
-          expect(outputSettings(workflow.id)?.widths).toEqual([480, 1024, 1440])
+          expect(outputSettings(workflow.id).widths).toEqual([480, 1024, 1440])
         })
       })
 
@@ -417,15 +430,12 @@ describe('WorkflowPage', () => {
 
   describe('input images', () => {
     async function selectInput(): Promise<HTMLElement> {
-      await clickStep('Input')
+      await clickStep('Input images')
       return inspector()
     }
 
     function inputSourceIds(): ReadonlyArray<string> {
-      const input = savedWorkflow().nodes.find(
-        (node) => node.kind === WorkflowNodeKind.Input,
-      )
-      return input?.kind === WorkflowNodeKind.Input ? input.sourceIds : []
+      return savedWorkflow().inputs
     }
 
     it('says there are no images yet and offers to upload some', async () => {
@@ -455,7 +465,7 @@ describe('WorkflowPage', () => {
       })
       expect(
         within(
-          screen.getByRole('application', { name: 'Workflow canvas' }),
+          screen.getByRole('region', { name: 'Workflow steps' }),
         ).getByText('1 image'),
       ).toBeInTheDocument()
     })
@@ -515,17 +525,18 @@ describe('WorkflowPage', () => {
       await user.click(
         within(palette()).getByRole('button', { name: 'Add Rotate' }),
       )
-      await clickStep('Input')
+      await clickStep('Image layer')
       await user.click(
         within(palette()).getByRole('button', { name: 'Add Sharpen' }),
       )
 
       await waitFor(() => {
-        const ops: Array<string> = []
-        for (const node of pipelineSteps(savedWorkflow())) {
-          ops.push(node.kind === WorkflowNodeKind.Sharp ? node.op : node.kind)
-        }
-        expect(ops).toEqual(['input', 'sharpen', 'resize', 'rotate', 'output'])
+        expect(stepKinds()).toEqual([
+          IMAGE_LAYER_KIND,
+          'sharpen',
+          'resize',
+          'rotate',
+        ])
       })
     })
 
@@ -539,10 +550,10 @@ describe('WorkflowPage', () => {
       expect(palette()).not.toHaveTextContent(/Adds (after|to the end)/)
     })
 
-    it('offers AI upscale and every group of Sharp ops from the image CLI', async () => {
+    it('offers layers, AI upscale and the tools a document offers, and no Composite', async () => {
       await renderPage(createWorkflow('Test'))
 
-      for (const group of ['AI', 'Geometry', 'Filters', 'Colour', 'Output']) {
+      for (const group of ['Layers', 'AI', 'Geometry', 'Filters', 'Colour']) {
         expect(
           within(palette()).getByRole('heading', { name: group }),
         ).toBeInTheDocument()
@@ -553,6 +564,12 @@ describe('WorkflowPage', () => {
       expect(
         within(palette()).getByRole('button', { name: 'Add Resize' }),
       ).toBeInTheDocument()
+      expect(
+        within(palette()).queryByRole('heading', { name: 'Output' }),
+      ).not.toBeInTheDocument()
+      expect(
+        within(palette()).queryByRole('button', { name: 'Add Composite' }),
+      ).not.toBeInTheDocument()
     })
 
     it('adds a step to the end of the pipeline and selects it', async () => {
@@ -565,12 +582,7 @@ describe('WorkflowPage', () => {
       )
 
       await waitFor(() => {
-        const steps = pipelineSteps(savedWorkflow())
-        expect(steps.map((node) => node.kind)).toEqual([
-          WorkflowNodeKind.Input,
-          WorkflowNodeKind.Sharp,
-          WorkflowNodeKind.Output,
-        ])
+        expect(stepKinds()).toEqual([IMAGE_LAYER_KIND, 'resize'])
       })
       expect(
         within(inspector()).getByRole('heading', { name: 'Resize' }),
@@ -590,10 +602,10 @@ describe('WorkflowPage', () => {
     }
 
     function resizeOptions(_id: string): unknown {
-      const step = savedWorkflow().nodes.find(
-        (node) => node.kind === WorkflowNodeKind.Sharp,
+      const step = savedWorkflow().pipeline.steps.find(
+        ({ kind }) => kind === 'sharp',
       )
-      return step?.kind === WorkflowNodeKind.Sharp ? step.options : undefined
+      return step?.kind === 'sharp' ? step.options : undefined
     }
 
     it('asks for something to be selected at first', async () => {
@@ -689,7 +701,9 @@ describe('WorkflowPage', () => {
       await user.click(screen.getByRole('option', { name: '2×' }))
 
       await waitFor(() => {
-        const step = savedWorkflow().nodes.find((node) => node.kind === 'ai')
+        const step = savedWorkflow().pipeline.steps.find(
+          ({ kind }) => kind === 'ai',
+        )
         expect(step?.kind === 'ai' && step.settings).toMatchObject({
           model: 'siax',
           scale: 2,
@@ -706,9 +720,185 @@ describe('WorkflowPage', () => {
       )
 
       await waitFor(() => {
-        expect(savedWorkflow().nodes).toHaveLength(2)
+        expect(savedWorkflow().pipeline.steps).toHaveLength(1)
       })
       expect(inspector()).toHaveTextContent('Select a step')
+    })
+  })
+
+  describe('layers and groups', () => {
+    it('adds an empty image layer, the place an input image goes, and selects it', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+
+      await user.click(
+        within(palette()).getByRole('button', { name: 'Add Image layer' }),
+      )
+
+      await waitFor(() => {
+        expect(stepKinds()).toEqual([IMAGE_LAYER_KIND, IMAGE_LAYER_KIND])
+      })
+      expect(inspector()).toHaveTextContent('Each input image goes here')
+      expect(
+        within(inspector()).getByRole('button', { name: 'Use a fixed image…' }),
+      ).toBeInTheDocument()
+    })
+
+    it('gives a layer a fixed image, and goes back to the input image', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      await clickStep('Image layer')
+
+      await user.click(
+        await within(inspector()).findByRole('button', {
+          name: 'Choose an image for image',
+        }),
+      )
+      await user.click(await screen.findByRole('menuitem', { name: 'a.jpg' }))
+
+      await waitFor(() => {
+        const [layer] = savedWorkflow().pipeline.steps
+        expect(layer).toMatchObject({ sourceId: 'src-a' })
+      })
+      expect(inspector()).toHaveTextContent('always draws a.jpg')
+
+      await user.click(
+        within(inspector()).getByRole('button', {
+          name: 'Use the input image',
+        }),
+      )
+
+      await waitFor(() => {
+        expect(savedWorkflow().pipeline.steps[0]).not.toHaveProperty('sourceId')
+      })
+    })
+
+    it('saves the placement of a layer', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      await clickStep('Image layer')
+
+      await user.click(
+        within(inspector()).getByRole('combobox', { name: 'Blend mode' }),
+      )
+      await user.click(screen.getByRole('option', { name: 'Multiply' }))
+
+      await waitFor(() => {
+        expect(savedWorkflow().pipeline.steps[0]).toMatchObject({
+          blend: 'multiply',
+        })
+      })
+    })
+
+    it('adds a group, then steps into it, and gives it a picture of its own', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+
+      await user.click(
+        within(palette()).getByRole('button', { name: 'Add Group' }),
+      )
+      await user.click(
+        within(palette()).getByRole('button', { name: 'Add Blur' }),
+      )
+      await clickStep('Group')
+      await user.click(
+        within(inspector()).getByRole('switch', { name: 'Own picture' }),
+      )
+
+      await waitFor(() => {
+        const group = savedWorkflow().pipeline.steps.at(-1)
+        expect(group).toMatchObject({ kind: 'group', subDocument: true })
+        expect(group?.kind === 'group' && group.steps).toHaveLength(1)
+      })
+    })
+  })
+
+  describe('the list of steps', () => {
+    it('switches a step off and on', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+
+      await user.click(screen.getByRole('switch', { name: 'Image layer on' }))
+
+      await waitFor(() => {
+        expect(savedWorkflow().pipeline.steps[0]).toMatchObject({
+          enabled: false,
+        })
+      })
+    })
+
+    it('moves a step earlier and later', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      await user.click(
+        within(palette()).getByRole('button', { name: 'Add Blur' }),
+      )
+
+      await user.click(
+        screen.getByRole('button', { name: 'Move Blur earlier' }),
+      )
+
+      await waitFor(() => {
+        expect(stepKinds()).toEqual(['blur', IMAGE_LAYER_KIND])
+      })
+    })
+
+    it('removes a step from its row', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      await user.click(
+        within(palette()).getByRole('button', { name: 'Add Blur' }),
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Remove Blur' }))
+
+      await waitFor(() => {
+        expect(stepKinds()).toEqual([IMAGE_LAYER_KIND])
+      })
+    })
+  })
+
+  describe('canvas', () => {
+    it('changes the size and the background of the canvas', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      await clickStep('Canvas')
+      const panel = inspector()
+
+      const width = within(panel).getByLabelText('Width (px)')
+      await user.clear(width)
+      await user.type(width, '800')
+      await user.click(
+        within(panel).getByRole('switch', { name: 'Transparent background' }),
+      )
+      await user.click(
+        within(panel).getByRole('button', { name: 'Apply canvas' }),
+      )
+
+      await waitFor(() => {
+        expect(savedWorkflow().pipeline.canvas).toEqual({
+          width: 800,
+          height: 1080,
+          background: '#ffffff',
+        })
+      })
+    })
+
+    it('refuses a canvas that is not valid, and saves nothing', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      await clickStep('Canvas')
+      const panel = inspector()
+
+      const width = within(panel).getByLabelText('Width (px)')
+      await user.clear(width)
+      await user.type(width, '0')
+      await user.click(
+        within(panel).getByRole('button', { name: 'Apply canvas' }),
+      )
+
+      expect(await within(panel).findByRole('alert')).toBeInTheDocument()
+      expect(updateWorkflow).not.toHaveBeenCalled()
     })
   })
 
@@ -794,7 +984,7 @@ describe('WorkflowPage', () => {
 
       expect(updateWorkflow).toHaveBeenCalled()
       expect(runWorkflow).toHaveBeenCalledWith({
-        data: { id: expect.any(String) },
+        data: { id: expect.any(String), canvas: RunCanvasMode.Workflow },
       })
       const saveOrder =
         vi.mocked(updateWorkflow).mock.invocationCallOrder[0] ?? 0
@@ -802,9 +992,27 @@ describe('WorkflowPage', () => {
       expect(saveOrder).toBeLessThan(runOrder)
     })
 
+    it('runs on a canvas the size of each image when asked to', async () => {
+      vi.mocked(runWorkflow).mockResolvedValue(run({ state: RunState.Running }))
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+
+      await user.click(screen.getByRole('combobox', { name: 'Run on' }))
+      await user.click(
+        screen.getByRole('option', { name: 'Size of each image' }),
+      )
+      await user.click(screen.getByRole('button', { name: 'Run' }))
+
+      await waitFor(() => {
+        expect(runWorkflow).toHaveBeenCalledWith({
+          data: { id: expect.any(String), canvas: RunCanvasMode.FirstImage },
+        })
+      })
+    })
+
     it('says why a run could not start', async () => {
       vi.mocked(runWorkflow).mockRejectedValue(
-        new Error('Connect every step from Input to Output.'),
+        new Error('Add at least one image to run the workflow on.'),
       )
       const user = userEvent.setup()
       await renderPage(createWorkflow('Test'))
@@ -813,7 +1021,7 @@ describe('WorkflowPage', () => {
 
       const runs = screen.getByRole('region', { name: 'Runs' })
       expect(await within(runs).findByRole('alert')).toHaveTextContent(
-        'Connect every step',
+        'Add at least one image',
       )
     })
 

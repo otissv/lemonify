@@ -13,9 +13,9 @@ import { ExportFormat } from '@/features/export/export-settings'
 import {
   createAiStep,
   createGroupStep,
-  createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 
 import { LimitError, NotFoundError, ValidationError } from '../errors.ts'
@@ -24,6 +24,7 @@ import { workDir } from '../config/config.ts'
 import { isTerminal } from '../jobs/job-types.ts'
 import { createTestApp } from '../testing/test-app.ts'
 import type { TestApp } from '../testing/test-app.ts'
+import { pipelineOf } from '@/test/pipelines'
 
 const SETTINGS = { model: 'm', scale: 4, iterations: 1, tta: false } as const
 const sha256 = (bytes: Buffer): string =>
@@ -80,13 +81,13 @@ async function makeDocument() {
   const base = await t.uploadImage(t.ann, '#336699', 'base.png')
   const mask = await t.uploadImage(t.ann, '#cc0000', 'mask.png')
   const created = await t.app.documents.create(t.ann, base.id, 'Collage')
-  const layer = createLayerStep(mask.id)
+  const layer = createImageLayerStep(mask.id)
   const boolean = createSharpStep('boolean', {
     operand: mask.id,
     operator: 'and',
   })
   const upscale = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
-  await change(created.id, { steps: [layer, boolean, upscale] })
+  await change(created.id, pipelineOf(layer, boolean, upscale))
   await runAiStep(created.id, upscale.id)
   return { base, mask, created, layer, boolean, upscale }
 }
@@ -160,11 +161,11 @@ describe('DocumentBundleService', () => {
     const upscale = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     const plain = createGroupStep([createSharpStep('flip')], 'Tidy')
     const sub = {
-      ...createGroupStep([createLayerStep(logo.id), upscale], 'Logo'),
+      ...createGroupStep([createImageLayerStep(logo.id), upscale], 'Logo'),
       subDocument: true,
       opacity: 60,
     }
-    await change(created.id, { steps: [plain, sub] })
+    await change(created.id, pipelineOf(plain, sub))
     await runAiStep(created.id, upscale.id)
     const bundle = file('poster.lemon')
 
@@ -194,7 +195,7 @@ describe('DocumentBundleService', () => {
     )
     expect(theirLogo?.id).not.toBe(logo.id)
     expect(logoGroup?.kind === 'group' && logoGroup.steps[0]).toMatchObject({
-      kind: 'layer',
+      kind: 'image-layer',
       sourceId: theirLogo?.id,
     })
     await expect(
@@ -209,9 +210,10 @@ describe('DocumentBundleService', () => {
   it('leaves out results that were never made', async () => {
     const base = await t.uploadImage(t.ann)
     const created = await t.app.documents.create(t.ann, base.id)
-    await change(created.id, {
-      steps: [createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })],
-    })
+    await change(
+      created.id,
+      pipelineOf(createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })),
+    )
 
     const exported = await t.app.bundles.exportDocument(
       t.ann,
@@ -263,10 +265,11 @@ describe('DocumentBundleService', () => {
           version: 2,
           name: 'Lying',
           pipeline: {
+            ...pipelineOf(),
             steps: [
               {
                 id: '00000000-0000-4000-8000-000000000001',
-                kind: 'layer',
+                kind: 'image-layer',
                 sourceId: 's1',
                 enabled: true,
               },
@@ -302,10 +305,11 @@ describe('DocumentBundleService', () => {
           version: 2,
           name: 'Short',
           pipeline: {
+            ...pipelineOf(),
             steps: [
               {
                 id: '00000000-0000-4000-8000-000000000001',
-                kind: 'layer',
+                kind: 'image-layer',
                 sourceId: 'missing',
                 enabled: true,
               },
@@ -320,6 +324,47 @@ describe('DocumentBundleService', () => {
 
     await expect(
       t.app.bundles.importDocument(t.ann, file('short.lemon')),
+    ).rejects.toThrow(ValidationError)
+  })
+
+  it('carries the canvas of a blank document, with its size and background', async () => {
+    const created = await t.app.documents.createBlank(
+      t.ann,
+      { width: 30, height: 20, background: '#ff8800' },
+      'Banner',
+    )
+    const bundle = file('banner.lemon')
+
+    await t.app.bundles.exportDocument(t.ann, created.id, bundle)
+    const imported = await t.app.bundles.importDocument(t.bob, bundle)
+
+    expect(imported.document.pipeline.canvas).toEqual({
+      width: 30,
+      height: 20,
+      background: '#ff8800',
+    })
+    expect(imported.document.pipeline.steps).toEqual([])
+  })
+
+  it('refuses a document whose pipeline has no canvas, as one made before canvases were explicit', async () => {
+    const writer = await ZipWriter.create(file('nocanvas.lemon'))
+    await writer.addBuffer(
+      'manifest.json',
+      Buffer.from(
+        JSON.stringify({
+          format: 'lemonify-document',
+          version: 2,
+          name: 'Old',
+          pipeline: { steps: [] },
+          sources: [],
+          results: [],
+        }),
+      ),
+    )
+    await writer.close()
+
+    await expect(
+      t.app.bundles.importDocument(t.ann, file('nocanvas.lemon')),
     ).rejects.toThrow(ValidationError)
   })
 
@@ -637,7 +682,7 @@ describe('DocumentBundleService', () => {
             format: 'lemonify-document',
             version: 2,
             name: 'Heavy',
-            pipeline: { steps: [createLayerStep('s1')] },
+            pipeline: pipelineOf(createImageLayerStep('s1')),
             sources: [{ id: 's1', hash, fileName: 'a.png' }],
             results: [],
           }),

@@ -1,13 +1,16 @@
 import { z } from 'zod'
 
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import type { Canvas } from '@/features/pipeline/canvas'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
+import { PipelineSchema, createPipeline } from '@/features/pipeline/pipeline'
 import {
-  WorkflowEdgeSchema,
-  WorkflowNodeKind,
-  WorkflowNodeSchema,
-  createEndpointNode,
-} from '@/features/workflows/workflow-graph'
+  OutputSettingsSchema,
+  defaultOutputSettings,
+} from '@/features/workflows/output-settings'
 
 export const MAX_WORKFLOW_NAME_LENGTH = 80
+export const MAX_WORKFLOW_INPUTS = 1000
 
 export const WorkflowNameSchema = z
   .string()
@@ -18,49 +21,51 @@ export const WorkflowNameSchema = z
     `Use ${MAX_WORKFLOW_NAME_LENGTH} characters or fewer.`,
   )
 
-const INPUT_POSITION = { x: 0, y: 0 }
-const OUTPUT_POSITION = { x: 640, y: 0 }
+export const DEFAULT_WORKFLOW_CANVAS: Canvas = canvasOfSize(1920, 1080)
 
-const GraphShape = {
-  nodes: z.array(WorkflowNodeSchema),
-  edges: z.array(WorkflowEdgeSchema),
+/**
+ * Which canvas a run draws on. `workflow` uses the canvas the workflow was
+ * made with; `first-image` takes the size of each input image and keeps the
+ * workflow's background.
+ */
+export const RunCanvasMode = {
+  Workflow: 'workflow',
+  FirstImage: 'first-image',
+} as const
+
+export const RunCanvasModeSchema = z.enum([
+  RunCanvasMode.Workflow,
+  RunCanvasMode.FirstImage,
+])
+export type RunCanvasMode = z.infer<typeof RunCanvasModeSchema>
+
+const InputsSchema = z
+  .array(z.string().min(1))
+  .max(MAX_WORKFLOW_INPUTS)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'Each input image can be used once',
+  })
+
+const DefinitionShape = {
+  pipeline: PipelineSchema,
+  inputs: InputsSchema,
+  output: OutputSettingsSchema,
 }
 
-type GraphParts = {
-  nodes: ReadonlyArray<z.output<typeof WorkflowNodeSchema>>
-  edges: ReadonlyArray<z.output<typeof WorkflowEdgeSchema>>
-}
+/**
+ * What a workflow is, and what a run copies: the same pipeline a document has
+ * (canvas and steps), the library images it runs on, and how it writes its
+ * results. Its input slots are the empty image layers in the pipeline.
+ */
+export const WorkflowDefinitionSchema = z.strictObject(DefinitionShape)
 
-function checkGraph(
-  { nodes, edges }: GraphParts,
-  context: z.RefinementCtx,
-): void {
-  const ids = new Set(nodes.map(({ id }) => id))
-  for (const edge of edges) {
-    if (ids.has(edge.source) && ids.has(edge.target)) continue
-    context.addIssue({
-      code: 'custom',
-      message: `Connection ${edge.id} refers to a step that does not exist`,
-    })
-  }
-  for (const kind of [WorkflowNodeKind.Input, WorkflowNodeKind.Output]) {
-    const count = nodes.filter((node) => node.kind === kind).length
-    if (count === 1) continue
-    context.addIssue({
-      code: 'custom',
-      message: `A workflow needs exactly one ${kind} step`,
-    })
-  }
-}
+export const WorkflowSchema = z.strictObject({
+  id: z.uuid(),
+  name: WorkflowNameSchema,
+  ...DefinitionShape,
+})
 
-/** The steps and connections of a workflow; what is stored and what a run copies. */
-export const WorkflowGraphSchema = z.object(GraphShape).superRefine(checkGraph)
-
-export const WorkflowSchema = z
-  .object({ id: z.uuid(), name: WorkflowNameSchema, ...GraphShape })
-  .superRefine(checkGraph)
-
-export type WorkflowGraph = z.output<typeof WorkflowGraphSchema>
+export type WorkflowDefinition = z.output<typeof WorkflowDefinitionSchema>
 export type Workflow = z.infer<typeof WorkflowSchema>
 
 const NAME_PREFIX = 'Workflow'
@@ -95,15 +100,16 @@ export function workflowNameProblem(
   return taken ? DUPLICATE_NAME : null
 }
 
-/** A new, empty workflow. The name must already have passed `workflowNameProblem`. */
-export function createWorkflow(name: string): Workflow {
+/** A new workflow: one empty image layer for the input, no steps, the default canvas and output. */
+export function createWorkflow(
+  name: string,
+  canvas: Canvas = DEFAULT_WORKFLOW_CANVAS,
+): Workflow {
   return WorkflowSchema.parse({
     id: crypto.randomUUID(),
     name,
-    nodes: [
-      createEndpointNode(WorkflowNodeKind.Input, INPUT_POSITION),
-      createEndpointNode(WorkflowNodeKind.Output, OUTPUT_POSITION),
-    ],
-    edges: [],
+    pipeline: createPipeline(canvas, [createImageLayerStep()]),
+    inputs: [],
+    output: defaultOutputSettings(),
   })
 }

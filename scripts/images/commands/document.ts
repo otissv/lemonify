@@ -2,6 +2,8 @@ import path from 'node:path'
 
 import { z } from 'zod'
 
+import { canvasSchema } from '../../../src/features/pipeline/canvas.ts'
+import { ValidationError } from '../../../src/server/errors.ts'
 import { defineAppCommand } from '../app-command.ts'
 import { withWorkers } from '../in-process-workers.ts'
 import { writePreview } from '../preview-document.ts'
@@ -15,24 +17,67 @@ import {
 
 const id = z.string().min(1)
 
+const dimension = z.coerce.number().int().positive()
+
 export const documentCreateCommand = defineAppCommand({
   name: 'document create',
-  summary: 'Create a document from a source',
-  synopsis: '<sourceId> [--name <name>]',
-  help: `Creates an editable document (an empty pipeline and its undo history) on a
-source. The name defaults to the source's file name without its extension.
+  summary: 'Create a document from a source, or a blank one',
+  synopsis:
+    '(<sourceId> | --width <px> --height <px> [--background <colour>]) [--name <name>]',
+  help: `Creates an editable document (and its undo history). With a <sourceId> it opens
+that image: the canvas is the size of the image, and the image is the first
+layer. The name defaults to the source's file name without its extension.
+
+Without a source it makes a blank document on a canvas you size, with --width
+and --height in pixels and an optional --background (a colour like #ff8000, or
+transparent, the default). A blank document needs --name.
 
 Options:
-  --name <name>        Name the document`,
-  shape: { sourceId: id, name: z.string().optional() },
+  --name <name>        Name the document
+  --width <px>         Canvas width of a blank document
+  --height <px>        Canvas height of a blank document
+  --background <c>     Canvas background of a blank document: #rrggbb or transparent`,
+  shape: {
+    sourceId: id.optional(),
+    name: z.string().optional(),
+    width: dimension.optional(),
+    height: dimension.optional(),
+    background: z.string().optional(),
+  },
   positionals: ['sourceId'],
-  flags: { name: { type: 'string' } },
+  flags: {
+    name: { type: 'string' },
+    width: { type: 'string' },
+    height: { type: 'string' },
+    background: { type: 'string' },
+  },
   async run({ app, actor, options }) {
+    const { sourceId, name, width, height, background } = options
+    if (sourceId !== undefined) {
+      if (
+        width !== undefined ||
+        height !== undefined ||
+        background !== undefined
+      ) {
+        throw new ValidationError(
+          'A document opened from a source takes its canvas from the image. Use `document canvas` to change it afterwards.',
+        )
+      }
+      return { document: await app.documents.create(actor, sourceId, name) }
+    }
+    if (width === undefined || height === undefined) {
+      throw new ValidationError(
+        'Give a <sourceId>, or --width and --height for a blank document.',
+      )
+    }
+    if (name === undefined) {
+      throw new ValidationError('Give --name for a blank document.')
+    }
     return {
-      document: await app.documents.create(
+      document: await app.documents.createBlank(
         actor,
-        options.sourceId,
-        options.name,
+        canvasSchema.parse({ width, height, background }),
+        name,
       ),
     }
   },

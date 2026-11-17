@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
 
+import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type { LayerSettings } from '@/features/pipeline/layer'
-import type { AiStep, LayerStep, SharpStep } from '@/features/pipeline/pipeline'
+import type { AiStep, SharpStep } from '@/features/pipeline/pipeline'
+import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
 
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)
@@ -14,17 +16,21 @@ function sortKeys(value: unknown): unknown {
   return sorted
 }
 
-/** A sub-document as the key sees it: the content hash of its first image, the steps it applies as the key sees them, and where it is placed. */
+/** A sub-document as the key sees it: what its picture starts from, the steps it applies as the key sees them, and where it is placed. */
 export interface KeyedSubDocument extends LayerSettings {
   kind: typeof PipelineStepKind.Group
-  source: string
+  base: string
   steps: ReadonlyArray<KeyedStep>
 }
 
 /** A step as the key sees it. A layer's `sourceId` must already be the image's content hash, so the key means the same wherever the image is stored. */
-export type KeyedStep = SharpStep | LayerStep | AiStep | KeyedSubDocument
+export type KeyedStep = SharpStep | ImageLayerStep | AiStep | KeyedSubDocument
 
 function stepIdentity(step: KeyedStep): unknown {
+  if (isLayerStep(step)) {
+    const { id: _id, enabled: _enabled, name: _name, ...identity } = step
+    return identity
+  }
   switch (step.kind) {
     case PipelineStepKind.Sharp:
       return {
@@ -33,10 +39,6 @@ function stepIdentity(step: KeyedStep): unknown {
         options: step.options,
         blend: step.blend,
       }
-    case PipelineStepKind.Layer: {
-      const { id: _id, enabled: _enabled, name: _name, ...identity } = step
-      return identity
-    }
     case PipelineStepKind.Ai:
       return { kind: step.kind, tool: step.tool, settings: step.settings }
     case PipelineStepKind.Group:
@@ -45,17 +47,17 @@ function stepIdentity(step: KeyedStep): unknown {
 }
 
 /**
- * A hash of a Source's content and the steps applied to it, in order. Equal
- * keys mean equal pixels, so an image found under a key can be reused. Step
- * ids, whether a step is switched on, and the order options were written in
- * do not matter.
+ * A hash of what a picture starts from (the canvas) and the steps applied to
+ * it, in order. Equal keys mean equal pixels, so an image found under a key
+ * can be reused. Step ids, whether a step is switched on, and the order
+ * options were written in do not matter.
  */
 export function renderKey(
-  sourceHash: string,
+  baseKey: string,
   steps: ReadonlyArray<KeyedStep>,
 ): string {
   const identity = sortKeys({
-    source: sourceHash,
+    base: baseKey,
     steps: steps.map(stepIdentity),
   })
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex')

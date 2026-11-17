@@ -33,6 +33,7 @@ import {
   documentStepRunCommand,
   documentStepSetCommand,
 } from './document-step.ts'
+import { documentCanvasCommand } from './document-canvas.ts'
 import { exportCommand } from './export.ts'
 import {
   keysExportCommand,
@@ -95,12 +96,13 @@ export const DOCUMENT_CHANGE_COMMANDS = {
   'group-steps': [documentStepGroupCommand],
   ungroup: [documentStepUngroupCommand],
   'rename-step': [documentStepRenameCommand],
+  'set-canvas': [documentCanvasCommand],
   'set-enabled': [documentStepEnableCommand, documentStepDisableCommand],
   'set-blend': [documentStepSetCommand],
   'set-layer': [documentStepSetCommand],
   'set-options': [documentStepSetCommand],
   'set-settings': [documentStepSetCommand],
-  'set-source': [documentStepSetCommand],
+  'set-image': [documentStepSetCommand],
   'set-sub-document': [documentStepSetCommand],
 } as const satisfies Record<DocumentChange['type'], ReadonlyArray<ImageCommand>>
 
@@ -109,6 +111,7 @@ const LIFECYCLE = { internal: 'called by another service when something ends' }
 
 export const DOCUMENT_COMMANDS = {
   create: [documentCreateCommand],
+  createBlank: [documentCreateCommand],
   createFromPipeline: [documentImportCommand],
   list: [documentListCommand],
   get: [documentShowCommand],

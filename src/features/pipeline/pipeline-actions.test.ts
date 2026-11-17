@@ -2,12 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { applyEdit, loadDocument } from '@/features/documents/document-sync'
+import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
-  createGroupStep,
-  createLayerStep,
-  createSharpStep,
-} from '@/features/pipeline/pipeline'
-import {
+  addEmptyImageLayer,
   addStepAfter,
   copyStepToDocument,
   groupSteps,
@@ -19,6 +17,7 @@ import {
   renameStep,
   setLayerSettings,
   setStepBlend,
+  setStepImage,
 } from '@/features/pipeline/pipeline-actions'
 import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
 import {
@@ -27,6 +26,7 @@ import {
   loadDocumentIntoEditor,
   baseLayer,
 } from '@/test/document-fixtures'
+import { pipelineOf } from '@/test/pipelines'
 
 vi.mock('@/features/documents/document-sync', () => ({
   applyEdit: vi.fn().mockResolvedValue(undefined),
@@ -52,7 +52,7 @@ describe('insertImage', () => {
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
       type: 'add-step',
-      step: expect.objectContaining({ kind: 'layer', sourceId: 'mask' }),
+      step: expect.objectContaining({ kind: 'image-layer', sourceId: 'mask' }),
       index: 2,
     })
   })
@@ -64,7 +64,7 @@ describe('insertImage', () => {
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
       type: 'add-step',
-      step: expect.objectContaining({ kind: 'layer', sourceId: 'mask' }),
+      step: expect.objectContaining({ kind: 'image-layer', sourceId: 'mask' }),
       index: 2,
     })
   })
@@ -77,7 +77,7 @@ describe('insertImage', () => {
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
       type: 'add-step',
-      step: expect.objectContaining({ kind: 'layer' }),
+      step: expect.objectContaining({ kind: 'image-layer' }),
       index: 1,
     })
   })
@@ -96,16 +96,95 @@ describe('insertImage', () => {
   })
 })
 
+describe('addEmptyImageLayer', () => {
+  it('adds an image layer with no image just after the selected step', () => {
+    const blur = createSharpStep('blur')
+    loadDocumentIntoEditor(documentView([blur, createSharpStep('flip')]))
+    useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+
+    addEmptyImageLayer(DOCUMENT_ID)
+
+    const call = vi.mocked(applyEdit).mock.calls[0]?.[1]
+    if (call?.type !== 'add-step') throw new Error('no step added')
+    expect(call.index).toBe(2)
+    expect(call.step).toMatchObject({ kind: 'image-layer', enabled: true })
+    expect(call.step).not.toHaveProperty('sourceId')
+    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(call.step.id)
+    expect(useAppStore.getState().activeTool).toBe('options')
+  })
+})
+
+describe('setStepImage', () => {
+  it('gives an image to a layer, or takes it away', () => {
+    const layer = createImageLayerStep()
+    loadDocumentIntoEditor(documentView([layer]))
+
+    setStepImage(DOCUMENT_ID, layer.id, 'mask')
+    setStepImage(DOCUMENT_ID, layer.id, null)
+
+    expect(applyEdit).toHaveBeenNthCalledWith(1, DOCUMENT_ID, {
+      type: 'set-image',
+      stepId: layer.id,
+      sourceId: 'mask',
+    })
+    expect(applyEdit).toHaveBeenNthCalledWith(2, DOCUMENT_ID, {
+      type: 'set-image',
+      stepId: layer.id,
+      sourceId: null,
+    })
+  })
+
+  it('does nothing for a step that is not a layer or is gone', () => {
+    const blur = createSharpStep('blur')
+    loadDocumentIntoEditor(documentView([blur]))
+
+    setStepImage(DOCUMENT_ID, blur.id, 'mask')
+    setStepImage(DOCUMENT_ID, 'gone', 'mask')
+
+    expect(applyEdit).not.toHaveBeenCalled()
+  })
+})
+
 describe('replaceImage', () => {
+  it('fills the selected layer when it is empty', () => {
+    const empty = createImageLayerStep()
+    loadDocumentIntoEditor(documentView([empty]))
+    useAppStore.getState().selectStep(DOCUMENT_ID, empty.id)
+
+    replaceImage(DOCUMENT_ID, 'other')
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: 'other',
+    })
+  })
+
+  it('fills the first layer when none has an image and none is selected', () => {
+    const empty = createImageLayerStep()
+    loadDocumentIntoEditor({
+      ...documentView(),
+      pipeline: pipelineOf(empty),
+    })
+
+    replaceImage(DOCUMENT_ID, 'other')
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: 'other',
+    })
+  })
+
   it('makes the selected layer use the other image', () => {
-    const layer = createLayerStep('second')
+    const layer = createImageLayerStep('second')
     loadDocumentIntoEditor(documentView([layer]))
     useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
 
     replaceImage(DOCUMENT_ID, 'other')
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
-      type: 'set-source',
+      type: 'set-image',
       stepId: layer.id,
       sourceId: 'other',
     })
@@ -119,40 +198,40 @@ describe('replaceImage', () => {
     replaceImage(DOCUMENT_ID, 'other')
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
-      type: 'set-source',
+      type: 'set-image',
       stepId: IMAGE.id,
       sourceId: 'other',
     })
   })
 
   it('replaces the document’s image when nothing is selected', () => {
-    loadDocumentIntoEditor(documentView([createLayerStep('second')]))
+    loadDocumentIntoEditor(documentView([createImageLayerStep('second')]))
 
     replaceImage(DOCUMENT_ID, 'other')
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
-      type: 'set-source',
+      type: 'set-image',
       stepId: IMAGE.id,
       sourceId: 'other',
     })
   })
 
   it('replaces the first layer when every layer is switched off', () => {
-    const off = { ...createLayerStep('only'), enabled: false }
+    const off = { ...createImageLayerStep('only'), enabled: false }
     const view = documentView([])
-    loadDocumentIntoEditor({ ...view, pipeline: { steps: [off] } })
+    loadDocumentIntoEditor({ ...view, pipeline: pipelineOf(off) })
 
     replaceImage(DOCUMENT_ID, 'other')
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
-      type: 'set-source',
+      type: 'set-image',
       stepId: off.id,
       sourceId: 'other',
     })
   })
 
   it('does nothing when there is no layer to replace', () => {
-    loadDocumentIntoEditor({ ...documentView(), pipeline: { steps: [] } })
+    loadDocumentIntoEditor({ ...documentView(), pipeline: pipelineOf() })
 
     replaceImage(DOCUMENT_ID, 'other')
 
@@ -184,7 +263,7 @@ describe('setStepBlend', () => {
 
   it('does nothing for a geometry step, a layer, or a step that is gone', () => {
     const flip = createSharpStep('flip')
-    const layer = createLayerStep('logo')
+    const layer = createImageLayerStep('logo')
     loadDocumentIntoEditor(documentView([flip, layer]))
 
     for (const id of [flip.id, layer.id, 'gone']) {
@@ -231,7 +310,7 @@ describe('setLayerSettings', () => {
   } as const
 
   it('sets a layer’s settings as one change', () => {
-    const layer = createLayerStep('second')
+    const layer = createImageLayerStep('second')
     loadDocumentIntoEditor(documentView([layer]))
 
     setLayerSettings(DOCUMENT_ID, layer.id, SETTINGS)
@@ -256,8 +335,8 @@ describe('setLayerSettings', () => {
 describe('copyStepToDocument', () => {
   const OTHER_ID = '7a2d7d5f-1f54-4b9a-8b68-3e3a1a9a3c22'
 
-  function load(): { layer: ReturnType<typeof createLayerStep> } {
-    const layer = createLayerStep('second')
+  function load(): { layer: ReturnType<typeof createImageLayerStep> } {
+    const layer = createImageLayerStep('second')
     loadDocumentIntoEditor(documentView([createSharpStep('blur'), layer]))
     loadDocumentIntoEditor(documentView([createSharpStep('flip')], OTHER_ID))
     return { layer }
@@ -424,7 +503,7 @@ describe('groups', () => {
   })
 
   it('says why steps cannot be grouped, and changes nothing', () => {
-    const layer = createLayerStep('second')
+    const layer = createImageLayerStep('second')
     loadDocumentIntoEditor(documentView([blur, layer, flip]))
 
     expect(groupSteps(DOCUMENT_ID, [blur.id, flip.id])).toMatch(

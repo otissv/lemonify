@@ -2,10 +2,13 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
 import { outputFileNames } from '@/features/workflows/output-settings'
-import type { OutputSettings } from '@/features/workflows/output-settings'
-import { planSegments, toSharpStep } from '@/features/workflows/segments'
-import type { AiSegment, Segment } from '@/features/workflows/segments'
-import { WorkflowNodeKind } from '@/features/workflows/workflow-graph'
+import type { Pipeline } from '@/features/pipeline/pipeline'
+import { itemPipeline, planSegments } from '@/features/workflows/segments'
+import type {
+  AiSegment,
+  DrawSegment,
+  Segment,
+} from '@/features/workflows/segments'
 
 import type { AiToolRegistry } from '../../ai/ai-tool-registry.ts'
 import { ResultKind } from '../../dao/result-dao.ts'
@@ -14,11 +17,16 @@ import type { WorkflowDao, WorkflowRunRecord } from '../../dao/workflow-dao.ts'
 import { actorForOwner } from '../../domain/system-actor.ts'
 import { ValidationError } from '../../errors.ts'
 import type { Logger } from '../../http/logger.ts'
-import { resolveOperands } from '../../render/resolve-operands.ts'
+import { planPipeline } from '../../render/plan-pipeline.ts'
+import type { PlanLookups } from '../../render/plan-pipeline.ts'
 import type { ResultService } from '../../services/result-service.ts'
 import type { JobService } from '../../services/job-service.ts'
 import { EngineTargetKind } from '../../tools/image-engine.ts'
-import type { ImageEngine } from '../../tools/image-engine.ts'
+import type {
+  EngineBase,
+  EngineStep,
+  ImageEngine,
+} from '../../tools/image-engine.ts'
 import {
   fileNameForFormat,
   mediaTypeOfFormat,
@@ -49,24 +57,23 @@ export type RunItemHandlerDependencies = {
 type Loaded = {
   job: JobRecord
   run: WorkflowRunRecord
+  /** The pipeline this input image runs through: the workflow's, with the image in its first slot. */
+  pipeline: Pipeline
   segments: Segment[]
   /** Which of the run's segments this Job runs. */
   index: number
   segment: Segment
   source: SourceRecord
-  input: string
+  /** The work image the previous segment left; absent on the first segment. */
+  input: string | undefined
   output: string
 }
 
 const MISSING_SOURCE = 'An image in this workflow no longer exists.'
 const NO_SEGMENT = 'This workflow run has no such step.'
 
-function outputSettingsOf(run: WorkflowRunRecord): OutputSettings {
-  for (const node of run.graph.nodes) {
-    if (node.kind === WorkflowNodeKind.Output) return node.settings
-  }
-  throw new ValidationError('This workflow has no Output step.')
-}
+const NO_WORK_IMAGE = 'This workflow run lost the image it was working on.'
+const NOT_DRAWN = 'A step of this workflow could not be applied.'
 
 /**
  * Runs one segment of a workflow run on one Source. A segment that is not
@@ -89,7 +96,8 @@ export class RunItemHandler implements JobHandler {
       try {
         const loaded = await this.#load(item)
         if (loaded.segment.kind === 'ai') aiEntries.push({ loaded, item })
-        else reports.set(item, await this.#runSharp(loaded, item))
+        else
+          reports.set(item, await this.#runDraw(loaded, loaded.segment, item))
       } catch (error) {
         this.#log(error, item)
         reports.set(item, { outcome: outcomeOfError(error) })
@@ -110,65 +118,84 @@ export class RunItemHandler implements JobHandler {
   }
 
   async #load({ job }: JobItem): Promise<Loaded> {
-    const { workflows, sources, sourceStore, workRoot } = this.#deps
+    const { workflows, sources, workRoot } = this.#deps
     const { payload } = job
     if (payload.kind !== JobKind.RunItem) throw new WrongJobKindError(job)
     const run = await workflows.findRun(payload.workflowRunId)
     if (run === null || run.ownerId !== job.ownerId) throw new StaleJobError()
-    const segments = planSegments(run.graph)
-    const segment = segments[payload.segment]
-    if (segment === undefined) throw new ValidationError(NO_SEGMENT)
     const source = await sources.findById(payload.sourceId)
     if (source === null || source.ownerId !== job.ownerId) {
       throw new ValidationError(MISSING_SOURCE)
     }
+    const pipeline = itemPipeline(run.definition, run.canvasMode, source)
+    const segments = planSegments(pipeline)
+    const segment = segments[payload.segment]
+    if (segment === undefined) throw new ValidationError(NO_SEGMENT)
     const directory = runWorkDirectory(workRoot, run.id)
     await mkdir(directory, { recursive: true })
     return {
       job,
       run,
+      pipeline,
       segments,
       index: payload.segment,
       segment,
       source,
-      input: payload.input ?? sourceStore.pathOf(source.contentHash),
+      input: payload.input,
       output: path.join(directory, `${source.id}-${payload.segment}.png`),
     }
   }
 
-  async #sourcePath(
-    ownerId: string,
-    sourceId: string,
-  ): Promise<string | undefined> {
-    const source = await this.#deps.sources.findById(sourceId)
-    if (source === null || source.ownerId !== ownerId) return undefined
-    return this.#deps.sourceStore.pathOf(source.contentHash)
+  async #lookups(ownerId: string): Promise<PlanLookups> {
+    const { sources, sourceStore } = this.#deps
+    return {
+      aiResultPath: async () => undefined,
+      source: async (sourceId) => {
+        const source = await sources.findById(sourceId)
+        if (source === null || source.ownerId !== ownerId) return undefined
+        return {
+          contentHash: source.contentHash,
+          path: sourceStore.pathOf(source.contentHash),
+        }
+      },
+    }
   }
 
-  async #runSharp(loaded: Loaded, item: JobItem): Promise<JobReport> {
-    if (loaded.segment.kind !== 'sharp') throw new WrongJobKindError(loaded.job)
-    const { engine, results, jobs } = this.#deps
-    const { job, run, segments, segment, source, index } = loaded
-    const steps = []
-    for (const node of segment.nodes) {
-      const resolved = await resolveOperands(toSharpStep(node), (id) =>
-        this.#sourcePath(job.ownerId, id),
-      )
-      if (resolved.problem !== undefined) {
-        throw new ValidationError(resolved.problem)
-      }
-      steps.push(resolved.step)
+  /** What the engine does in a draw segment: the work image the last AI step left, or the blank canvas, with the segment's steps on it. */
+  async #planDraw(loaded: Loaded, segment: DrawSegment) {
+    const plan = await planPipeline(
+      loaded.pipeline.canvas,
+      segment.steps,
+      await this.#lookups(loaded.job.ownerId),
+    )
+    const [problem] = plan.skipped
+    if (problem !== undefined) {
+      throw new ValidationError(problem.message || NOT_DRAWN)
     }
-    const actor = actorForOwner(job.ownerId)
+    const base: EngineBase =
+      loaded.input === undefined
+        ? plan.base
+        : { kind: 'file', path: loaded.input }
+    return { base, steps: plan.steps }
+  }
+
+  async #runDraw(
+    loaded: Loaded,
+    segment: DrawSegment,
+    item: JobItem,
+  ): Promise<JobReport> {
+    const { engine, results, jobs } = this.#deps
+    const { job, run, segments, source, index } = loaded
+    const { base, steps } = await this.#planDraw(loaded, segment)
     if (index < segments.length - 1) {
       await engine.render({
-        input: loaded.input,
+        input: base,
         steps,
         target: { kind: EngineTargetKind.Intermediate },
         output: loaded.output,
       })
       item.context.setProgress(1)
-      const next = jobs.build(actor, [
+      const next = jobs.build(actorForOwner(job.ownerId), [
         segmentJobSpec({
           runId: run.id,
           segments,
@@ -186,7 +213,12 @@ export class RunItemHandler implements JobHandler {
         next,
       }
     }
-    const resultIds = await this.#writeOutputs(loaded, steps, item, results)
+    const resultIds = await this.#writeOutputs(
+      loaded,
+      { base, steps },
+      item,
+      results,
+    )
     return {
       outcome: {
         state: JobState.Done,
@@ -197,13 +229,13 @@ export class RunItemHandler implements JobHandler {
 
   async #writeOutputs(
     loaded: Loaded,
-    steps: ReadonlyArray<ReturnType<typeof toSharpStep>>,
+    drawn: { base: EngineBase; steps: ReadonlyArray<EngineStep> },
     item: JobItem,
     results: ResultService,
   ): Promise<string[]> {
-    const { engine } = this.#deps
+    const { engine, sourceStore } = this.#deps
     const { job, run, source } = loaded
-    const settings = outputSettingsOf(run)
+    const settings = run.definition.output
     const names = outputFileNames(source.fileName, settings)
     const widths: Array<number | undefined> =
       settings.widths.length > 0 ? [...settings.widths] : [undefined]
@@ -214,8 +246,9 @@ export class RunItemHandler implements JobHandler {
         `${source.id}-out-${index}`,
       )
       const info = await engine.render({
-        input: loaded.input,
-        steps,
+        input: drawn.base,
+        originalFrom: sourceStore.pathOf(source.contentHash),
+        steps: drawn.steps,
         target: {
           kind: EngineTargetKind.Export,
           settings: {
@@ -267,16 +300,16 @@ export class RunItemHandler implements JobHandler {
     const first = group[0]
     if (first === undefined || first.loaded.segment.kind !== 'ai') return
     const segment: AiSegment = first.loaded.segment
-    const batch: AiBatchEntry[] = group.map(({ loaded, item }) => ({
-      item,
-      input: loaded.input,
-      output: loaded.output,
-    }))
+    const batch: AiBatchEntry[] = []
+    for (const { loaded, item } of group) {
+      if (loaded.input === undefined) throw new ValidationError(NO_WORK_IMAGE)
+      batch.push({ item, input: loaded.input, output: loaded.output })
+    }
     try {
       await runAiBatch(
         this.#deps.registry,
-        segment.node.tool,
-        segment.node.settings,
+        segment.step.tool,
+        segment.step.settings,
         batch,
       )
     } catch (error) {

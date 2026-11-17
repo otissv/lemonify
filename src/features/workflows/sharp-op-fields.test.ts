@@ -107,7 +107,6 @@ describe('sharpOpFields', () => {
 
     expect(kind('boolean', 'operand')).toBe(OpFieldKind.Image)
     expect(kind('joinChannel', 'images')).toBe(OpFieldKind.Images)
-    expect(kind('composite', 'images')).toBe(OpFieldKind.Layers)
   })
 
   it('marks required options', () => {

@@ -4,9 +4,9 @@ import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import {
   MAX_GROUP_STEPS,
   createGroupStep,
-  createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import { MemoryDocumentDao } from '../dao/memory/document-dao'
 import { MemorySourceDao } from '../dao/memory/source-dao'
 import { MemoryStore } from '../dao/memory/store'
@@ -90,7 +90,7 @@ describe('groups through the document service', () => {
 
   it('links the images of layers inside a group, and refuses one the User does not own', async () => {
     const created = await service.create(ANN, 'src-1')
-    const own = createGroupStep([createLayerStep('src-2')])
+    const own = createGroupStep([createImageLayerStep('src-2')])
     const changed = await service.change(ANN, created.id, 0, {
       type: 'add-step',
       step: own,
@@ -98,7 +98,7 @@ describe('groups through the document service', () => {
     })
     expect(await sourceDao.isReferenced('src-2')).toBe(true)
 
-    const stolen = createGroupStep([createLayerStep('src-bea')])
+    const stolen = createGroupStep([createImageLayerStep('src-bea')])
     await expect(
       service.change(ANN, created.id, changed.revision, {
         type: 'add-step',
@@ -109,7 +109,7 @@ describe('groups through the document service', () => {
   })
 
   it('refuses another image set into a layer inside a group that is not the User’s', async () => {
-    const layer = createLayerStep('src-2')
+    const layer = createImageLayerStep('src-2')
     const created = await service.create(ANN, 'src-1')
     const first = await service.change(ANN, created.id, 0, {
       type: 'add-step',
@@ -119,7 +119,7 @@ describe('groups through the document service', () => {
 
     await expect(
       service.change(ANN, created.id, first.revision, {
-        type: 'set-source',
+        type: 'set-image',
         stepId: layer.id,
         sourceId: 'src-bea',
       }),

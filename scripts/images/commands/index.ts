@@ -31,6 +31,7 @@ import {
   documentStepRunCommand,
   documentStepSetCommand,
 } from './document-step.ts'
+import { documentCanvasCommand } from './document-canvas.ts'
 import { exportCommand } from './export.ts'
 import { jobCancelCommand, jobListCommand, jobShowCommand } from './job.ts'
 import {
@@ -97,6 +98,7 @@ export const COMMANDS: readonly ImageCommand[] = [
   documentImportCommand,
   documentUndoCommand,
   documentRedoCommand,
+  documentCanvasCommand,
   documentStepAddCommand,
   documentStepRemoveCommand,
   documentStepMoveCommand,

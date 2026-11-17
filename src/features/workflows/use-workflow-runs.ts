@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import type { RunCanvasMode } from '@/features/workflows/workflow'
 import type { ResultView } from '@/features/results/result'
 import { listResults } from '@/features/results/result-functions'
 import {
@@ -20,8 +21,8 @@ const ACTION_FAILED = 'That could not be done.'
 export interface WorkflowRuns {
   runs: ReadonlyArray<RunView>
   error: string | null
-  /** Starts a run; the caller saves the workflow first. */
-  start: () => Promise<void>
+  /** Starts a run on the chosen canvas; the caller saves the workflow first. */
+  start: (canvas: RunCanvasMode) => Promise<void>
   cancel: (runId: string) => Promise<void>
   remove: (runId: string) => Promise<void>
   /** The images a run made, for download. */
@@ -66,7 +67,8 @@ export function useWorkflowRuns(workflowId: string): WorkflowRuns {
   )
 
   const start = useCallback(
-    () => act(() => runWorkflow({ data: { id: workflowId } }), RUN_FAILED),
+    (canvas: RunCanvasMode) =>
+      act(() => runWorkflow({ data: { id: workflowId, canvas } }), RUN_FAILED),
     [act, workflowId],
   )
   const cancel = useCallback(

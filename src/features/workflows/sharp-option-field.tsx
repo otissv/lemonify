@@ -21,7 +21,6 @@ import {
   ImageControl,
   ImagesControl,
 } from '@/features/workflows/fields/image-field'
-import { LayersControl } from '@/features/workflows/fields/layers-field'
 import { MatrixControl } from '@/features/workflows/fields/matrix-field'
 import { z } from 'zod'
 
@@ -229,8 +228,6 @@ function Control(props: ControlProps & { labelId: string }): React.JSX.Element {
       return <ImageControl {...props} />
     case OpFieldKind.Images:
       return <ImagesControl {...props} />
-    case OpFieldKind.Layers:
-      return <LayersControl {...props} />
     case OpFieldKind.Boolean:
       return <BooleanControl {...props} />
   }

@@ -31,7 +31,8 @@ export async function ensureRender(
   const target = await deps.renders.reserve(kind, key)
   try {
     await deps.engine.render({
-      input: plan.basePath,
+      input: plan.base,
+      originalFrom: plan.originalFrom,
       steps: plan.steps,
       target: {
         kind:

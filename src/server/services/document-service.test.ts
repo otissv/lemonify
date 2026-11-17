@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { DocumentView } from '@/features/documents/document'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import { MAX_HISTORY_ENTRIES } from '@/features/pipeline/document-change'
-import { createLayerStep, createSharpStep } from '@/features/pipeline/pipeline'
+import { createSharpStep } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import { MemoryDocumentDao } from '../dao/memory/document-dao'
 import { MemorySourceDao } from '../dao/memory/source-dao'
 import { MemoryStore } from '../dao/memory/store'
@@ -11,6 +12,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../errors'
 import { FixedClock, RecordingPublisher, SequenceIds } from '../testing/fakes'
 import { DocumentService } from './document-service'
 import type { DocumentCleanup } from './document-service'
+import { pipelineOf } from '@/test/pipelines'
 
 const ANN = { userId: 'ann', name: 'Ann' }
 const BEA = { userId: 'bea', name: 'Bea' }
@@ -86,7 +88,7 @@ describe('create, list and get', () => {
     const view = await service.create(ANN, 'src-1')
     expect(view.pipeline.steps).toEqual([
       expect.objectContaining({
-        kind: 'layer',
+        kind: 'image-layer',
         sourceId: 'src-1',
         enabled: true,
       }),
@@ -100,6 +102,81 @@ describe('create, list and get', () => {
       source: { id: 'src-1', fileName: 'cat.png', width: 4, height: 3 },
       sources: [{ id: 'src-1' }],
     })
+  })
+
+  it('opens an image onto a canvas of its size, once: the canvas does not follow the image afterwards', async () => {
+    const created = await service.create(ANN, 'src-1')
+    expect(created.pipeline.canvas).toEqual({
+      width: 4,
+      height: 3,
+      background: 'transparent',
+    })
+
+    const resized = await service.change(ANN, created.id, 0, {
+      type: 'set-canvas',
+      canvas: { width: 40, height: 30, background: '#112233' },
+    })
+    const replaced = await service.change(ANN, created.id, 1, {
+      type: 'set-canvas',
+      canvas: { width: 40, height: 30, background: '#112233' },
+    })
+
+    expect(resized.pipeline.canvas.width).toBe(40)
+    expect(replaced.revision).toBe(1)
+  })
+
+  it('makes a blank Document on the canvas given, with no layers', async () => {
+    const view = await service.createBlank(
+      ANN,
+      { width: 20, height: 10, background: '#FF8800' },
+      '  Banner ',
+    )
+
+    expect(view).toMatchObject({
+      name: 'Banner',
+      revision: 0,
+      source: null,
+      sources: [],
+      pipeline: {
+        canvas: { width: 20, height: 10, background: '#ff8800' },
+        steps: [],
+      },
+    })
+    expect(await service.get(ANN, view.id)).toEqual(view)
+  })
+
+  it('refuses a blank Document with a bad canvas or name, and keeps it from other Users', async () => {
+    const good = { width: 20, height: 10, background: 'transparent' }
+    await expect(
+      service.createBlank(ANN, { ...good, width: 0 }, 'A'),
+    ).rejects.toThrow(ValidationError)
+    await expect(
+      service.createBlank(ANN, { ...good, background: 'red' }, 'A'),
+    ).rejects.toThrow(ValidationError)
+    await expect(
+      service.createBlank(ANN, { ...good, width: 65535, height: 65535 }, 'A'),
+    ).rejects.toThrow(ValidationError)
+    await expect(service.createBlank(ANN, good, '  ')).rejects.toThrow(
+      ValidationError,
+    )
+    const view = await service.createBlank(ANN, good, 'Mine')
+    await expect(service.get(BEA, view.id)).rejects.toThrow(NotFoundError)
+  })
+
+  it('undoes a canvas change', async () => {
+    const created = await service.createBlank(
+      ANN,
+      { width: 20, height: 10, background: 'transparent' },
+      'Banner',
+    )
+    await service.change(ANN, created.id, 0, {
+      type: 'set-canvas',
+      canvas: { width: 5, height: 5, background: 'transparent' },
+    })
+
+    const undone = await service.undo(ANN, created.id, 1)
+
+    expect(undone.pipeline.canvas.width).toBe(20)
   })
 
   it('takes a name, trimmed, and refuses an empty or very long one', async () => {
@@ -382,7 +459,7 @@ describe('layers', () => {
     const created = await service.create(ANN, 'src-1')
     const layered = await service.change(ANN, created.id, 0, {
       type: 'add-step',
-      step: createLayerStep('src-2'),
+      step: createImageLayerStep('src-2'),
       index: 1,
     })
 
@@ -394,7 +471,7 @@ describe('layers', () => {
   it('links the image of a layer, and unlinks it when the layer goes', async () => {
     await addSource('src-2')
     const created = await service.create(ANN, 'src-1')
-    const layer = createLayerStep('src-2')
+    const layer = createImageLayerStep('src-2')
     await service.change(ANN, created.id, 0, {
       type: 'add-step',
       step: layer,
@@ -416,7 +493,7 @@ describe('layers', () => {
     await expect(
       service.change(ANN, created.id, 0, {
         type: 'add-step',
-        step: createLayerStep('src-b'),
+        step: createImageLayerStep('src-b'),
         index: 1,
       }),
     ).rejects.toThrow(NotFoundError)
@@ -430,14 +507,14 @@ describe('layers', () => {
     if (open === undefined) throw new Error('no step')
 
     const changed = await service.change(ANN, created.id, 0, {
-      type: 'set-source',
+      type: 'set-image',
       stepId: open.id,
       sourceId: 'src-2',
     })
     expect(changed.source?.id).toBe('src-2')
     await expect(
       service.change(ANN, created.id, 1, {
-        type: 'set-source',
+        type: 'set-image',
         stepId: open.id,
         sourceId: 'src-b',
       }),
@@ -451,7 +528,7 @@ describe('layers', () => {
     if (first === undefined) throw new Error('no step')
     const layered = await service.change(ANN, created.id, 0, {
       type: 'add-step',
-      step: createLayerStep('src-2'),
+      step: createImageLayerStep('src-2'),
       index: 1,
     })
 
@@ -470,6 +547,92 @@ describe('layers', () => {
     expect(removed.source?.id).toBe('src-2')
     expect((await service.list(ANN))[0]?.source?.id).toBe('src-2')
     expect(await sourceDao.isReferenced('src-1')).toBe(false)
+  })
+
+  it('holds an empty image layer, which is not the document image and uses no image', async () => {
+    const created = await service.create(ANN, 'src-1')
+    const empty = createImageLayerStep()
+
+    const added = await service.change(ANN, created.id, 0, {
+      type: 'add-step',
+      step: empty,
+      index: 0,
+    })
+
+    expect(added.pipeline.steps[0]).toMatchObject({ id: empty.id })
+    expect(added.source?.id).toBe('src-1')
+    expect(added.sources.map(({ id }) => id)).toEqual(['src-1'])
+  })
+
+  it('has no document image while its only layer is empty, and has one once it is filled', async () => {
+    const created = await service.createBlank(
+      ANN,
+      { width: 4, height: 3, background: 'transparent' },
+      'Blank',
+    )
+    const empty = createImageLayerStep()
+    await service.change(ANN, created.id, 0, {
+      type: 'add-step',
+      step: empty,
+      index: 0,
+    })
+
+    const filled = await service.change(ANN, created.id, 1, {
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: 'src-1',
+    })
+    const cleared = await service.change(ANN, created.id, 2, {
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: null,
+    })
+
+    expect(filled.source?.id).toBe('src-1')
+    expect(cleared.source).toBeNull()
+    expect(cleared.pipeline.steps[0]).not.toHaveProperty('sourceId')
+    expect(await sourceDao.isReferenced('src-1')).toBe(false)
+  })
+
+  it('refuses to fill a layer with another User’s image', async () => {
+    await addSource('src-b', 'bea')
+    const created = await service.createBlank(
+      ANN,
+      { width: 4, height: 3, background: 'transparent' },
+      'Blank',
+    )
+    const empty = createImageLayerStep()
+    await service.change(ANN, created.id, 0, {
+      type: 'add-step',
+      step: empty,
+      index: 0,
+    })
+
+    await expect(
+      service.change(ANN, created.id, 1, {
+        type: 'set-image',
+        stepId: empty.id,
+        sourceId: 'src-b',
+      }),
+    ).rejects.toThrow(NotFoundError)
+  })
+
+  it('refuses to give an image to a step that is not a layer', async () => {
+    const created = await service.create(ANN, 'src-1')
+    const blur = createSharpStep('blur')
+    await service.change(ANN, created.id, 0, {
+      type: 'add-step',
+      step: blur,
+      index: 1,
+    })
+
+    await expect(
+      service.change(ANN, created.id, 1, {
+        type: 'set-image',
+        stepId: blur.id,
+        sourceId: 'src-1',
+      }),
+    ).rejects.toThrow(ValidationError)
   })
 
   it('has no document image when no layer is left', async () => {
@@ -496,9 +659,11 @@ describe('telling the person’s tabs', () => {
   })
 
   it('says the list changed when a document is made from a pipeline', async () => {
-    await service.createFromPipeline(ANN, 'Made', {
-      steps: [createLayerStep('src-1')],
-    })
+    await service.createFromPipeline(
+      ANN,
+      'Made',
+      pipelineOf(createImageLayerStep('src-1')),
+    )
 
     expect(publisher.eventsFor('ann')).toEqual([{ type: 'documents.changed' }])
   })
@@ -567,7 +732,7 @@ describe('telling the person’s tabs', () => {
     publisher.clear()
 
     await service.change(ANN, view.id, 0, {
-      type: 'set-source',
+      type: 'set-image',
       stepId: view.pipeline.steps[0]?.id ?? '',
       sourceId: 'src-2',
     })

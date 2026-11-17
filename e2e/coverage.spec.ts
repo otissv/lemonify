@@ -22,7 +22,7 @@ function layerSettingValues(key: string): Set<unknown> {
   const values = new Set<unknown>()
   for (const { steps } of CASES) {
     for (const step of steps) {
-      if (step.kind === 'layer') values.add(step.settings[key])
+      if (step.kind === 'image-layer') values.add(step.settings[key])
     }
   }
   return values

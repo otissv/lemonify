@@ -5,17 +5,10 @@ import { catalogueFor } from '@/features/ai/ai-defaults'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiCatalogue } from '@/features/ai/ai-tools'
-import {
-  PipelineStepKind,
-  canvasLayer,
-  findStep,
-} from '@/features/pipeline/pipeline'
-import type {
-  AiStep,
-  GroupStep,
-  LayerStep,
-  SharpStep,
-} from '@/features/pipeline/pipeline'
+import { isLayerStep } from '@/features/pipeline/layer-kinds'
+import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
+import type { AiStep, GroupStep, SharpStep } from '@/features/pipeline/pipeline'
+import { layerSettingsOf } from '@/features/pipeline/layer'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import {
   setAiSettings,
@@ -23,7 +16,6 @@ import {
   setLayerSettings,
   setSharpOptions,
   setStepBlend,
-  setStepSource,
   setSubDocument,
   ungroupSteps,
 } from '@/features/pipeline/pipeline-actions'
@@ -35,16 +27,13 @@ import type { StepBlend } from '@/features/pipeline/step-blend'
 import { StepBlendForm } from '@/features/tools/step-blend-form'
 import { StepNameField } from '@/features/tools/step-name-field'
 import { LayerSettingsForm } from '@/features/tools/layer-settings-form'
-import { formatSize } from '@/lib/format-size'
+import { LayerStepOptions } from '@/features/tools/layer-step-options'
 import { pipelineStepLabel } from '@/features/pipeline/step-problems'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { useStepDraft } from '@/features/pipeline/use-step-draft'
 import { UpscaleSettingsForm } from '@/features/upscale/upscale-settings-form'
 import type { UpscaleSettings } from '@/features/upscale/upscale-settings'
-import { ImagePicker } from '@/features/workflows/fields/image-picker'
 import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
-import { sourceImageUrl } from '@/features/documents/image-urls'
-import type { SourceSummary } from '@/features/documents/document'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -60,12 +49,6 @@ interface SharpStepOptionsProps {
   step: SharpStep
 }
 
-interface ImageStepOptionsProps {
-  documentId: string
-  step: LayerStep
-  source: SourceSummary | undefined
-}
-
 interface UpscaleStepOptionsProps {
   documentId: string
   step: Extract<AiStep, { tool: AiToolId.Upscale }>
@@ -73,61 +56,6 @@ interface UpscaleStepOptionsProps {
 }
 
 type SharpOptions = SharpStep['options']
-
-/** "1267 × 704 px · PNG · 749.4 KB". */
-function imageMeta(source: SourceSummary): string {
-  const type =
-    source.mediaType.split('/').at(1)?.toUpperCase() ?? source.mediaType
-  return `${source.width} × ${source.height} px · ${type} · ${formatSize(source.bytes)}`
-}
-
-function sourceOf(
-  sources: ReadonlyArray<SourceSummary>,
-  sourceId: string,
-): SourceSummary | undefined {
-  return sources.find(({ id }) => id === sourceId)
-}
-
-function ImageStepOptions({
-  documentId,
-  step,
-  source,
-}: ImageStepOptionsProps): React.JSX.Element {
-  const stepId = step.id
-
-  function handlePick(sourceId: string): void {
-    setStepSource(documentId, stepId, sourceId)
-  }
-
-  return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-center gap-3">
-        <img
-          src={sourceImageUrl(step.sourceId)}
-          alt=""
-          width={48}
-          height={48}
-          className="size-12 shrink-0 rounded-sm bg-muted object-cover"
-        />
-        <div className="flex min-w-0 flex-col">
-          <span className="truncate text-body-md">
-            {source?.fileName ?? 'Image not available'}
-          </span>
-          {source && (
-            <span className="text-caption text-muted-foreground">
-              {imageMeta(source)}
-            </span>
-          )}
-        </div>
-      </div>
-      <ImagePicker
-        label="image"
-        uploadLabel="Replace image…"
-        onPick={handlePick}
-      />
-    </div>
-  )
-}
 
 function SharpStepOptions({
   documentId,
@@ -174,45 +102,6 @@ function SharpBlendOptions({
   )
 }
 
-function LayerStepOptions({
-  documentId,
-  step,
-  source,
-  canvas,
-}: ImageStepOptionsProps & { canvas: boolean }): React.JSX.Element {
-  const stepId = step.id
-  const {
-    sourceId: _sourceId,
-    id: _id,
-    enabled: _enabled,
-    kind: _kind,
-    ...current
-  } = step
-  const { draft, change, flush } = useStepDraft<LayerSettings>(
-    current,
-    (settings) => {
-      setLayerSettings(documentId, stepId, settings)
-    },
-  )
-
-  return (
-    <>
-      <ImageStepOptions documentId={documentId} step={step} source={source} />
-      {canvas ? (
-        <p className="px-4 pb-4 text-caption text-muted-foreground">
-          This layer sets the size of the picture, so its other settings are not
-          used. They apply when another layer is below it.
-        </p>
-      ) : (
-        // biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them
-        <div onBlur={flush}>
-          <LayerSettingsForm settings={draft} onChange={change} />
-        </div>
-      )}
-    </>
-  )
-}
-
 function UpscaleStepOptions({
   documentId,
   step,
@@ -253,17 +142,8 @@ function GroupStepOptions({
 }: GroupOptionsProps): React.JSX.Element {
   const switchId = useId()
   const groupId = group.id
-  const {
-    id: _id,
-    kind: _kind,
-    enabled: _enabled,
-    name: _name,
-    subDocument: _subDocument,
-    steps: _steps,
-    ...current
-  } = group
   const { draft, change, flush } = useStepDraft<LayerSettings>(
-    current,
+    layerSettingsOf(group),
     (settings) => {
       setLayerSettings(documentId, groupId, settings)
     },
@@ -293,8 +173,9 @@ function GroupStepOptions({
         <div className="flex flex-col gap-1">
           <Label htmlFor={switchId}>Own picture</Label>
           <p className="text-caption text-muted-foreground">
-            Its first layer that is on sets its size, its steps act on that
-            picture only, and the result is placed on the canvas like a layer.
+            It is drawn on a blank canvas of the document’s size, its steps act
+            on that picture only, and the result is placed on the canvas like a
+            layer.
           </p>
         </div>
       </div>
@@ -363,13 +244,12 @@ export function StepOptions({
       {step.kind === PipelineStepKind.Group && (
         <GroupStepOptions documentId={documentId} group={step} />
       )}
-      {step.kind === PipelineStepKind.Layer && (
+      {isLayerStep(step) && (
         <LayerStepOptions
           key={step.id}
           documentId={documentId}
           step={step}
-          canvas={canvasLayer(preview.pipeline)?.id === step.id}
-          source={sourceOf(preview.document.sources, step.sourceId)}
+          sources={preview.document.sources}
         />
       )}
       {step.kind === PipelineStepKind.Sharp && (

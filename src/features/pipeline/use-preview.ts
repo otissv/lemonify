@@ -8,7 +8,7 @@ import {
   previewImageUrl,
   sourceImageUrl,
 } from '@/features/documents/image-urls'
-import { canvasLayer, hasEdits } from '@/features/pipeline/pipeline'
+import { originalSourceId } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { PreviewStatus, useAppStore } from '@/store/app-store'
 
@@ -18,11 +18,11 @@ export const PREVIEW_DELAY_MS = 120
 export interface PipelinePreview {
   document: DocumentView
   pipeline: Pipeline
-  /** The image of the layer that sets the canvas. Undefined when there is none. */
+  /** The image of the first image layer that is on: the document's original. Undefined when there is none. */
   source: SourceSummary | undefined
-  /** The picture to show: the rendered result, or the image itself while there are no edits. Undefined without an image. */
+  /** The rendered picture. Undefined until the first render is ready. */
   imageUrl: string | undefined
-  /** The image as opened, before any edit. */
+  /** The original image, as opened, before any edit. */
   originalUrl: string | undefined
   status: PreviewStatus
   error: string | undefined
@@ -32,33 +32,28 @@ export interface PipelinePreview {
   problems: ReadonlyArray<StepProblem>
 }
 
-/** The image of the layer that sets the canvas, as far as the document's images are known. */
+/** The image of the first image layer that is on, as far as the document's images are known. */
 export function activeSource(
   pipeline: Pipeline,
   sources: ReadonlyArray<SourceSummary>,
 ): SourceSummary | undefined {
-  const canvas = canvasLayer(pipeline)
-  return sources.find(({ id }) => id === canvas?.sourceId)
+  const id = originalSourceId(pipeline)
+  return sources.find((source) => source.id === id)
 }
 
 /**
  * Keeps the document's preview up to date: asks the server for it shortly
- * after the server has confirmed the latest change, as long as the pipeline has
- * edits and an image (without edits, the image itself is what is shown).
+ * after the server has confirmed the latest change. Every document has a
+ * canvas, so every document has a picture to render.
  */
 export function usePreviewLoading(documentId: string, enabled: boolean): void {
   const session = useAppStore((state) => state.documents[documentId])
   const settled = session !== undefined && session.pending.length === 0
   const revision = session?.confirmed.revision
-  const pipeline = session?.confirmed.pipeline
-  const hasSteps =
-    pipeline !== undefined &&
-    hasEdits(pipeline) &&
-    activeSource(pipeline, session?.confirmed.sources ?? []) !== undefined
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the revision is what makes the preview ask again
   useEffect(() => {
-    if (!enabled || !settled || !hasSteps) return
+    if (!enabled || !settled) return
     const controller = new AbortController()
     const timer = setTimeout(() => {
       void refreshPreview(documentId, controller.signal)
@@ -67,7 +62,7 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [documentId, enabled, settled, hasSteps, revision])
+  }, [documentId, enabled, settled, revision])
 }
 
 /** What a document looks like after its pipeline. Undefined until the document has loaded. */
@@ -79,23 +74,22 @@ export function usePreview(documentId: string): PipelinePreview | undefined {
     if (!session) return undefined
     const pipeline = shownPipeline(session)
     const source = activeSource(pipeline, session.confirmed.sources)
-    const edited = hasEdits(pipeline) && source !== undefined
     const rendered =
-      edited && current?.key !== undefined
-        ? previewImageUrl(documentId, current.key)
-        : undefined
+      current?.key === undefined
+        ? undefined
+        : previewImageUrl(documentId, current.key)
     const original =
       source === undefined ? undefined : sourceImageUrl(source.id)
     return {
       document: session.confirmed,
       pipeline,
       source,
-      imageUrl: rendered ?? original,
+      imageUrl: rendered,
       originalUrl: original,
       status: current?.status ?? PreviewStatus.Rendering,
       error: current?.error,
-      pending: edited ? (current?.pendingStepIds ?? []) : [],
-      problems: edited ? (current?.problems ?? []) : [],
+      pending: current?.pendingStepIds ?? [],
+      problems: current?.problems ?? [],
     }
   }, [session, current, documentId])
 }

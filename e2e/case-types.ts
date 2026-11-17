@@ -17,14 +17,14 @@ export interface ToolStep {
   enabled: boolean
 }
 
-export interface LayerStep {
-  kind: 'layer'
+export interface ImageLayerStep {
+  kind: 'image-layer'
   image: SecondImage
   settings: JsonRecord
   enabled: boolean
 }
 
-export type StepSpec = ToolStep | LayerStep
+export type StepSpec = ToolStep | ImageLayerStep
 
 /** One document to build and compare: its id is the name of its snapshot. */
 export interface ToolCase {
@@ -53,12 +53,12 @@ export function tool(
   }
 }
 
-export function layer(
+export function imageLayer(
   image: SecondImage,
   settings: JsonRecord = {},
   enabled = true,
-): LayerStep {
-  return { kind: 'layer', image, settings, enabled }
+): ImageLayerStep {
+  return { kind: 'image-layer', image, settings, enabled }
 }
 
 export function testCase(

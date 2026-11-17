@@ -16,8 +16,6 @@ export enum OpFieldKind {
   Image = 'image',
   /** One or several other images. */
   Images = 'images',
-  /** Layers laid over the image, each an image with a place and a blend mode. */
-  Layers = 'layers',
 }
 
 /** How a matrix field is laid out. */
@@ -137,7 +135,6 @@ const WIDGETS: Readonly<Record<string, Widget>> = {
   'convolve.kernel': { kind: OpFieldKind.Matrix, matrix: { kind: 'kernel' } },
   'boolean.operand': { kind: OpFieldKind.Image },
   'joinChannel.images': { kind: OpFieldKind.Images },
-  'composite.images': { kind: OpFieldKind.Layers },
   'tint.colour': { kind: OpFieldKind.Colour },
 }
 

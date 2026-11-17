@@ -1,23 +1,32 @@
-import { AiToolId } from '@/features/ai/ai-tools'
-import { ExportFormat } from '@/features/export/export-settings'
 import { describe, expect, it } from 'vitest'
 
-import { planSegments, workflowProblem } from './segments'
-import { workflowGraphFromSteps } from './workflow-from-steps'
-import { WorkflowGraphSchema } from './workflow'
+import { AiToolId } from '@/features/ai/ai-tools'
+import { ExportFormat } from '@/features/export/export-settings'
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import { IMAGE_LAYER_KIND } from '@/features/pipeline/layer-kinds'
 
-describe('workflowGraphFromSteps', () => {
-  it('joins Input to Output when there are no steps', () => {
-    const graph = workflowGraphFromSteps('Plain', {
-      sourceIds: ['a'],
+import { planSegments, workflowProblem } from './segments'
+import { WorkflowDefinitionSchema } from './workflow'
+import { workflowDefinitionFromSteps } from './workflow-from-steps'
+
+describe('workflowDefinitionFromSteps', () => {
+  it('is an empty image layer, the slot for the input, when there are no steps', () => {
+    const definition = workflowDefinitionFromSteps({
+      inputs: ['a'],
       steps: [],
     })
-    expect(workflowProblem(graph)).toBeUndefined()
+
+    expect(definition.pipeline.steps).toEqual([
+      expect.objectContaining({ kind: IMAGE_LAYER_KIND }),
+    ])
+    expect(workflowProblem(definition)).toBeUndefined()
   })
 
-  it('keeps the order of the steps and fills Input and Output', () => {
-    const graph = workflowGraphFromSteps('Mixed', {
-      sourceIds: ['a', 'b', 'a'],
+  it('puts the steps after the slot, in order, and fills inputs, canvas and output', () => {
+    const canvas = { ...canvasOfSize(800, 600), background: '#ffffff' }
+    const definition = workflowDefinitionFromSteps({
+      inputs: ['a', 'b', 'a'],
+      canvas,
       steps: [
         { op: 'blur', options: { sigma: 2 } },
         {
@@ -34,11 +43,21 @@ describe('workflowGraphFromSteps', () => {
         suffix: '',
       },
     })
-    expect(WorkflowGraphSchema.safeParse(graph).success).toBe(true)
-    expect(workflowProblem(graph)).toBeUndefined()
-    const kinds = planSegments(graph).map(({ kind }) => kind)
-    expect(kinds).toEqual(['sharp', 'ai', 'sharp'])
-    const input = graph.nodes.find(({ kind }) => kind === 'input')
-    expect(input).toMatchObject({ sourceIds: ['a', 'b'] })
+
+    expect(WorkflowDefinitionSchema.safeParse(definition).success).toBe(true)
+    expect(workflowProblem(definition)).toBeUndefined()
+    expect(definition.pipeline.canvas).toEqual(canvas)
+    expect(definition.inputs).toEqual(['a', 'b'])
+    expect(definition.output.widths).toEqual([100])
+    expect(
+      definition.pipeline.steps.map((step) =>
+        step.kind === 'sharp' ? step.op : step.kind,
+      ),
+    ).toEqual([IMAGE_LAYER_KIND, 'blur', 'ai', 'rotate'])
+    expect(planSegments(definition.pipeline).map(({ kind }) => kind)).toEqual([
+      'draw',
+      'ai',
+      'draw',
+    ])
   })
 })

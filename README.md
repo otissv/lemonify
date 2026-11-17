@@ -24,14 +24,14 @@ Services depend on interfaces for tools and DAOs, never on a specific database o
 
 These terms are used the same way in code and docs; the full list is in [docs/glossary.md](docs/glossary.md).
 
-| Term         | Means                                                                                             |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| **Source**   | An image a user uploaded, stored as a plain file by its content hash and never modified.          |
-| **Document** | The editable thing: an owner, a Source, a pipeline of steps and an undo history, kept in SQLite.  |
-| **Render**   | A cheap image computed from a Document (a preview or thumbnail). A disposable cache.              |
-| **Result**   | An image that cost real work or was asked for (an AI Step, an export, a run). Kept until deleted. |
-| **Job**      | One piece of queued server work, with progress, that can be cancelled.                            |
-| **Workflow** | A reusable chain of steps that runs over many Sources, started and followed from the CLI.         |
+| Term         | Means                                                                                                                 |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **Source**   | An image a user uploaded, stored as a plain file by its content hash and never modified.                              |
+| **Document** | The editable thing: an owner, a Source, a pipeline of steps and an undo history, kept in SQLite.                      |
+| **Render**   | A cheap image computed from a Document (a preview or thumbnail). A disposable cache.                                  |
+| **Result**   | An image that cost real work or was asked for (an AI Step, an export, a run). Kept until deleted.                     |
+| **Job**      | One piece of queued server work, with progress, that can be cancelled.                                                |
+| **Workflow** | A reusable pipeline, with a canvas like a document's, that runs over many Sources, started and followed from the CLI. |
 
 ## Requirements
 
@@ -66,20 +66,20 @@ The full CLI guide, including every command, is in [doc/cli.md](doc/cli.md). An 
 
 The stateless commands work on any image with no database or sign-in. The stateful ones act as a user (`--user <name>`, or `LEMONIFY_USER`, or the only user) on the data in `.data/`.
 
-| Commands                                                                                                                                                                                | Does                                                                                           |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `sharp`, `info`, `upscale`, `models`, `formats`, `schema`                                                                                                                               | Process, inspect and upscale images; list models and formats; print a command's JSON Schema    |
-| `user list`                                                                                                                                                                             | List the users                                                                                 |
-| `keys list`, `set`, `unset`, `reset`, `export`, `import`                                                                                                                                | Show and change your key bindings                                                              |
-| `source add`, `list`, `delete`                                                                                                                                                          | Upload images as sources, list or delete them                                                  |
-| `document create`, `list`, `show`, `preview`, `rename`, `move`, `delete`, `undo`, `redo`, `step add`, `remove`, `move`, `set`, `rename`, `enable`, `disable`, `group`, `ungroup`, `run` | Create and edit documents: a pipeline of steps, in groups and sub-documents, with undo history |
-| `export <documentId> --out <path>`                                                                                                                                                      | Render a document at full size and write it                                                    |
-| `document export <id> --out <path>`                                                                                                                                                     | Write the document itself (pipeline, images, AI results) to a `.lemon` file                    |
-| `document import <file>`                                                                                                                                                                | Make a new document from a `.lemon` file                                                       |
-| `workflow create`, `show`, `list`, `update`, `delete`, `run`, `results`, `runs`, `cancel`, `run delete`                                                                                 | Save a workflow and run it over its sources                                                    |
-| `result list`, `show`, `delete`, `save`, `clear-unused`                                                                                                                                 | Manage the images that cost work or were asked for                                             |
-| `job list`, `show`, `cancel`                                                                                                                                                            | Follow and cancel queued work                                                                  |
-| `worker`                                                                                                                                                                                | Take jobs from the queue until stopped                                                         |
+| Commands                                                                                                                                                                                          | Does                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `sharp`, `info`, `upscale`, `models`, `formats`, `schema`                                                                                                                                         | Process, inspect and upscale images; list models and formats; print a command's JSON Schema    |
+| `user list`                                                                                                                                                                                       | List the users                                                                                 |
+| `keys list`, `set`, `unset`, `reset`, `export`, `import`                                                                                                                                          | Show and change your key bindings                                                              |
+| `source add`, `list`, `delete`                                                                                                                                                                    | Upload images as sources, list or delete them                                                  |
+| `document create`, `canvas`, `list`, `show`, `preview`, `rename`, `move`, `delete`, `undo`, `redo`, `step add`, `remove`, `move`, `set`, `rename`, `enable`, `disable`, `group`, `ungroup`, `run` | Create and edit documents: a pipeline of steps, in groups and sub-documents, with undo history |
+| `export <documentId> --out <path>`                                                                                                                                                                | Render a document at full size and write it                                                    |
+| `document export <id> --out <path>`                                                                                                                                                               | Write the document itself (pipeline, images, AI results) to a `.lemon` file                    |
+| `document import <file>`                                                                                                                                                                          | Make a new document from a `.lemon` file                                                       |
+| `workflow create`, `show`, `list`, `update`, `delete`, `run`, `results`, `runs`, `cancel`, `run delete`                                                                                           | Save a workflow and run it over its sources                                                    |
+| `result list`, `show`, `delete`, `save`, `clear-unused`                                                                                                                                           | Manage the images that cost work or were asked for                                             |
+| `job list`, `show`, `cancel`                                                                                                                                                                      | Follow and cancel queued work                                                                  |
+| `worker`                                                                                                                                                                                          | Take jobs from the queue until stopped                                                         |
 
 `document preview <id> --out <path>` writes the picture the editor's canvas shows (`--original` for the image as opened, `--region x,y,w,h` for part of it as fractions from 0 to 1, `--width` to shrink it), and every command that edits a document takes `--preview <path>` to write that picture after the change, so the CLI can see what it did. The file type follows the extension (`.webp`, `.png`, `.jpg`), and the result lists AI steps still waiting and steps left out of the picture.
 

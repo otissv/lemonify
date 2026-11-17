@@ -12,8 +12,9 @@ import {
 } from '@/features/render/render-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
-import { DOCUMENT_ID, documentView } from '@/test/document-fixtures'
+import { DOCUMENT_ID, documentView, previewJob } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { pipelineOf } from '@/test/pipelines'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -50,7 +51,7 @@ beforeEach(() => {
   vi.mocked(getDocument).mockResolvedValue(view)
   vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
   vi.mocked(requestThumbnails).mockResolvedValue({ id: 't' } as never)
-  vi.mocked(followJob).mockReturnValue(new Promise(() => undefined))
+  vi.mocked(followJob).mockResolvedValue(previewJob())
 })
 
 afterEach(() => {
@@ -58,18 +59,24 @@ afterEach(() => {
 })
 
 describe('DocumentView', () => {
-  it('says how to add an image when the document has none', async () => {
+  it('shows a blank canvas of its own size when the document has no image', async () => {
     vi.mocked(getDocument).mockResolvedValue({
       ...documentView(),
       source: null,
       sources: [],
-      pipeline: { steps: [] },
+      pipeline: pipelineOf(),
     })
     await renderApp(`/documents/${DOCUMENT_ID}`)
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'This document has no image. Add one from Edit › Insert image.',
-    )
+    const picture = await screen.findByRole('img', { name: 'one.png' })
+    expect(picture).toHaveAttribute('src', expect.stringContaining('preview'))
+  })
+
+  it('says it is rendering until the first picture is ready', async () => {
+    vi.mocked(followJob).mockReturnValue(new Promise(() => undefined))
+    await renderApp(`/documents/${DOCUMENT_ID}`)
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Rendering…')
   })
 
   it('shows the picture on a checkerboard, so transparency can be seen', async () => {

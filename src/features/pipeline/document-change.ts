@@ -13,9 +13,10 @@ import {
   replaceStep,
   setStepEnabled,
 } from '@/features/pipeline/pipeline'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type {
   GroupStep,
-  LeafStep,
   Pipeline,
   PipelineStep,
   StepLocation,
@@ -26,8 +27,8 @@ import {
   stepBlendSchema,
   supportsBlend,
 } from '@/features/pipeline/step-blend'
-import { layerSettingsSchema } from '@/features/pipeline/layer'
-import type { LayerSettings } from '@/features/pipeline/layer'
+import { canvasSchema } from '@/features/pipeline/canvas'
+import { layerSettingsOf, layerSettingsSchema } from '@/features/pipeline/layer'
 
 /** The most changes History keeps for undo; older ones are dropped. */
 export const MAX_HISTORY_ENTRIES = 100
@@ -78,10 +79,11 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     stepId: z.string().min(1),
     subDocument: z.boolean(),
   }),
+  /** Gives a layer an image, or, with null, takes it away and leaves the layer empty. */
   z.strictObject({
-    type: z.literal('set-source'),
+    type: z.literal('set-image'),
     stepId: z.string().min(1),
-    sourceId: z.string().min(1),
+    sourceId: z.string().min(1).nullable(),
   }),
   z.strictObject({
     type: z.literal('set-enabled'),
@@ -94,6 +96,8 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     /** Null takes the blend away. */
     blend: stepBlendSchema.nullable(),
   }),
+  /** Gives the pipeline a different canvas: its size and background. The steps are left as they are. */
+  z.strictObject({ type: z.literal('set-canvas'), canvas: canvasSchema }),
   z.strictObject({
     type: z.literal('rename-step'),
     stepId: z.string().min(1),
@@ -202,13 +206,13 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         subDocument: group.subDocument,
       }
     }
-    case 'set-source': {
+    case 'set-image': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
+      if (!isLayerStep(step)) throw wrongKind()
       return {
-        type: 'set-source',
+        type: 'set-image',
         stepId: change.stepId,
-        sourceId: step.sourceId,
+        sourceId: layerKind(step).sourceIds(step)[0] ?? null,
       }
     }
     case 'set-enabled': {
@@ -228,6 +232,8 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         blend: step.blend ?? null,
       }
     }
+    case 'set-canvas':
+      return { type: 'set-canvas', canvas: pipeline.canvas }
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)
       return {
@@ -243,20 +249,11 @@ function wrongKind(): InvalidChangeError {
   return new InvalidChangeError('That step does not have those settings.')
 }
 
-type Placed =
-  | GroupStep
-  | Extract<LeafStep, { kind: typeof PipelineStepKind.Layer }>
+type Placed = GroupStep | ImageLayerStep
 
 /** Layers, and groups that are sub-documents, are placed on the picture with the layer settings. */
 function hasPlacement(step: PipelineStep): step is Placed {
-  return (
-    step.kind === PipelineStepKind.Layer || step.kind === PipelineStepKind.Group
-  )
-}
-
-function layerSettingsOf(step: Placed): LayerSettings {
-  const { opacity, blend, fit, scale, rotation, anchor, x, y } = step
-  return { opacity, blend, fit, scale, rotation, anchor, x, y }
+  return isLayerStep(step) || step.kind === PipelineStepKind.Group
 }
 
 /**
@@ -292,7 +289,7 @@ function groupSteps(pipeline: Pipeline, group: GroupStep): Pipeline {
   }
   const steps = [...pipeline.steps]
   steps.splice(first, places.length, group)
-  return { steps }
+  return { ...pipeline, steps }
 }
 
 function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
@@ -317,7 +314,7 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       const { group, index } = requireGroup(pipeline, change.groupId)
       const steps = [...pipeline.steps]
       steps.splice(index, 1, ...group.steps)
-      return { steps }
+      return { ...pipeline, steps }
     }
     case 'set-options': {
       const { step } = requireStep(pipeline, change.stepId)
@@ -350,10 +347,11 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
         subDocument: change.subDocument,
       })
     }
-    case 'set-source': {
+    case 'set-image': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
-      return replaceStep(pipeline, { ...step, sourceId: change.sourceId })
+      if (!isLayerStep(step)) throw wrongKind()
+      const image = change.sourceId ?? undefined
+      return replaceStep(pipeline, layerKind(step).withImage(step, image))
     }
     case 'set-enabled':
       requireStep(pipeline, change.stepId)
@@ -372,6 +370,8 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       }
       return replaceStep(pipeline, { ...unblended, blend })
     }
+    case 'set-canvas':
+      return { ...pipeline, canvas: change.canvas }
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)
       const name = change.name.trim()

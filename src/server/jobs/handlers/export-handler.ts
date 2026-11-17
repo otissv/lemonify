@@ -76,7 +76,8 @@ export class ExportHandler implements JobHandler {
           async (directory) => {
             const output = path.join(directory, 'export')
             const info = await engine.render({
-              input: plan.basePath,
+              input: plan.base,
+              originalFrom: plan.originalFrom,
               steps: plan.steps,
               target: {
                 kind: EngineTargetKind.Export,

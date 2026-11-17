@@ -5,9 +5,9 @@ import { ExportFormat } from '@/features/export/export-settings'
 import {
   createAiStep,
   createGroupStep,
-  createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { LeafStep } from '@/features/pipeline/pipeline'
 
 import { ValidationError } from '../errors.ts'
@@ -44,7 +44,7 @@ async function addAll(documentId: string, steps: ReadonlyArray<LeafStep>) {
   }
 }
 
-/** Wraps the steps after the first layer, which is the canvas, in a group. */
+/** Wraps the steps after the first layer in a group. */
 async function groupAll(
   documentId: string,
   members: ReadonlyArray<LeafStep>,
@@ -245,40 +245,40 @@ describe('sub-documents', () => {
     const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
     const document = await newDocument()
     const flip = createSharpStep('flip')
-    await subDocument(document.id, [createLayerStep(logo.id), flip])
+    await subDocument(document.id, [createImageLayerStep(logo.id), flip])
 
     await previewOf(document.id)
 
     const [request] = t.imageEngine.requests
-    expect(request?.steps).toMatchObject([
-      { kind: 'sub-document', steps: [{ op: 'flip' }] },
-    ])
+    expect(request?.steps.at(-1)).toMatchObject({
+      kind: 'sub-document',
+      input: { kind: 'canvas', canvas: { width: 8, height: 6 } },
+      steps: [{ kind: 'layer' }, { op: 'flip' }],
+    })
   })
 
-  it('say why they show nothing when none of their layers is on, and are left out', async () => {
+  it('are still drawn when none of their layers is on, as a picture with nothing in it', async () => {
     const document = await newDocument()
     const bare = await newDocument()
-    const group = await subDocument(document.id, [createSharpStep('flip')])
+    await subDocument(document.id, [createSharpStep('flip')])
 
     const result = await previewOf(document.id)
 
-    expect(result.problems).toEqual([
-      { stepId: group.id, message: expect.stringMatching(/no layer/i) },
-    ])
-    expect(result.key).toBe((await previewOf(bare.id)).key)
+    expect(result.problems).toEqual([])
+    expect(result.key).not.toBe((await previewOf(bare.id)).key)
   })
 
-  it('make a document that cannot be exported until they have a picture', async () => {
+  it('can be exported without a layer, since the canvas is the picture', async () => {
     const document = await newDocument()
     await subDocument(document.id, [createSharpStep('flip')])
 
-    await expect(
-      t.app.renders.requestExport(t.ann, document.id, {
-        format: ExportFormat.Png,
-        options: {},
-        keepMetadata: false,
-      }),
-    ).rejects.toThrow(/Logo: No layer/)
+    const job = await t.app.renders.requestExport(t.ann, document.id, {
+      format: ExportFormat.Png,
+      options: {},
+      keepMetadata: false,
+    })
+
+    expect(job.kind).toBe(JobKind.Export)
   })
 
   it('run an AI step on the sub-document’s picture and not on the canvas', async () => {
@@ -286,7 +286,7 @@ describe('sub-documents', () => {
     const document = await newDocument()
     const flip = createSharpStep('flip')
     const ai = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
-    await subDocument(document.id, [createLayerStep(logo.id), flip, ai])
+    await subDocument(document.id, [createImageLayerStep(logo.id), flip, ai])
 
     const waiting = await previewOf(document.id)
     expect(waiting.pendingStepIds).toEqual([ai.id])
@@ -298,7 +298,7 @@ describe('sub-documents', () => {
     const aiInput = t.imageEngine.requests.find(
       ({ target }) => target.kind === 'intermediate',
     )
-    expect(aiInput?.steps).toMatchObject([{ op: 'flip' }])
+    expect(aiInput?.steps).toMatchObject([{ kind: 'layer' }, { op: 'flip' }])
     const after = await previewOf(document.id)
     expect(after.pendingStepIds).toEqual([])
     expect(after.key).not.toBe(waiting.key)
@@ -310,7 +310,7 @@ describe('sub-documents', () => {
     const first = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     const inner = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     await addAll(document.id, [first])
-    await subDocument(document.id, [createLayerStep(logo.id), inner])
+    await subDocument(document.id, [createImageLayerStep(logo.id), inner])
 
     await expect(
       t.app.renders.requestAiStep(t.ann, document.id, inner.id),
@@ -325,7 +325,7 @@ describe('sub-documents', () => {
     const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
     const document = await newDocument()
     const flip = createSharpStep('flip')
-    const layer = createLayerStep(logo.id)
+    const layer = createImageLayerStep(logo.id)
     const group = await subDocument(document.id, [layer, flip])
 
     const done = await run(
@@ -345,7 +345,7 @@ describe('sub-documents', () => {
     const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
     const document = await newDocument()
     const flip = createSharpStep('flip')
-    await subDocument(document.id, [createLayerStep(logo.id), flip], false)
+    await subDocument(document.id, [createImageLayerStep(logo.id), flip], false)
 
     const done = await run(
       await t.app.renders.requestThumbnails(t.ann, document.id, [flip.id]),

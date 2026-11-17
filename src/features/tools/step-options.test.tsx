@@ -6,11 +6,8 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { PreviewStatus } from '@/features/documents/document-render'
 import { changeDocument } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
-import {
-  createAiStep,
-  createLayerStep,
-  createSharpStep,
-} from '@/features/pipeline/pipeline'
+import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { addStepAfter } from '@/features/pipeline/pipeline-actions'
 import { listSources } from '@/features/sources/source-functions'
@@ -86,7 +83,7 @@ describe('StepOptions', () => {
     ).toBeVisible()
   })
 
-  describe('the layer that sets the canvas', () => {
+  describe('the first layer', () => {
     function showOpenImage(extra: ReadonlyArray<PipelineStep> = []): void {
       const view = documentView(extra)
       echoChanges(vi.mocked(changeDocument), view)
@@ -104,38 +101,17 @@ describe('StepOptions', () => {
       vi.mocked(listSources).mockResolvedValue([])
     })
 
-    it('shows its image under the heading Layer', () => {
+    it('shows its image under the heading Image layer', () => {
       showOpenImage()
 
-      expect(screen.getByRole('heading', { name: 'Layer' })).toBeVisible()
+      expect(screen.getByRole('heading', { name: 'Image layer' })).toBeVisible()
       expect(screen.getByText('one.png')).toBeVisible()
     })
 
-    it('says it sets the size of the picture, and offers no settings that would not be used', () => {
+    it('offers its settings, since it is placed on the canvas like any layer', () => {
       showOpenImage()
 
-      expect(screen.getByText(/sets the size of the picture/)).toBeVisible()
-      expect(
-        screen.queryByRole('slider', { name: 'Opacity' }),
-      ).not.toBeInTheDocument()
-    })
-
-    it('offers its settings once another layer is below it', () => {
-      const lower = createLayerStep('src-lower')
-      const view = documentView([])
-      const steps = [lower, ...view.pipeline.steps]
-      loadDocumentIntoEditor({ ...view, pipeline: { steps } })
-      useAppStore
-        .getState()
-        .selectStep(DOCUMENT_ID, baseLayer(view.source.id).id)
-      render(
-        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
-      )
-
       expect(screen.getByRole('slider', { name: 'Opacity' })).toBeVisible()
-      expect(
-        screen.queryByText(/sets the size of the picture/),
-      ).not.toBeInTheDocument()
     })
 
     it('lists the image’s size, type and weight, and no explanation', () => {
@@ -170,7 +146,7 @@ describe('StepOptions', () => {
         expect(changeDocument).toHaveBeenCalledWith({
           data: expect.objectContaining({
             change: {
-              type: 'set-source',
+              type: 'set-image',
               stepId: baseLayer(documentView().source.id).id,
               sourceId: 'src-other',
             },
@@ -315,7 +291,7 @@ describe('StepOptions', () => {
     })
 
     it('shows its image and its settings under its name', () => {
-      const layer = createLayerStep('src-mask')
+      const layer = createImageLayerStep('src-mask')
       const view = documentView([layer])
       loadDocumentIntoEditor({
         ...view,
@@ -329,14 +305,84 @@ describe('StepOptions', () => {
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
       )
 
-      expect(screen.getByRole('heading', { name: 'Layer' })).toBeVisible()
+      expect(screen.getByRole('heading', { name: 'Image layer' })).toBeVisible()
       expect(screen.getByText('mask.png')).toBeVisible()
       expect(screen.getByRole('slider', { name: 'Opacity' })).toBeVisible()
       expect(screen.getByRole('combobox', { name: 'Blend mode' })).toBeVisible()
     })
 
+    it('says an empty layer has no image, and fills it from the menu without removing anything', async () => {
+      const empty = createImageLayerStep()
+      const other = {
+        ...documentView().source,
+        id: 'src-other',
+        fileName: 'other.png',
+      }
+      vi.mocked(listSources).mockResolvedValue([other])
+      const view = documentView([empty])
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      useAppStore.getState().selectStep(DOCUMENT_ID, empty.id)
+      const user = userEvent.setup()
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      expect(screen.getByText(/has no image yet/)).toBeVisible()
+      expect(
+        screen.queryByRole('button', { name: 'Remove image' }),
+      ).not.toBeInTheDocument()
+      expect(screen.getByRole('slider', { name: 'Opacity' })).toBeVisible()
+      expect(
+        screen.getByRole('button', { name: 'Choose image…' }),
+      ).toBeVisible()
+
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Choose an image for image',
+        }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: 'other.png' }),
+      )
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: {
+              type: 'set-image',
+              stepId: empty.id,
+              sourceId: 'src-other',
+            },
+          }),
+        })
+      })
+    })
+
+    it('takes the image away from a layer and keeps its settings', async () => {
+      const layer = { ...createImageLayerStep('src-mask'), opacity: 40 }
+      const view = documentView([layer])
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
+      const user = userEvent.setup()
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Remove image' }))
+
+      await waitFor(() => {
+        expect(changeDocument).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            change: { type: 'set-image', stepId: layer.id, sourceId: null },
+          }),
+        })
+      })
+    })
+
     it('saves a changed setting on the layer as one change', async () => {
-      const layer = createLayerStep('src-mask')
+      const layer = createImageLayerStep('src-mask')
       const view = documentView([layer])
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)

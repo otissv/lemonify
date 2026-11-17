@@ -43,7 +43,7 @@ export function describeLibraryRequest(
       return {
         title: 'Replace image',
         description:
-          'Replace the selected layer, or the one that sets the canvas, with one from your library, or upload one.',
+          'Replace the image of the selected layer, or of the first image layer, with one from your library, or upload one.',
         uploadLabel: UPLOAD_LABEL,
       }
   }

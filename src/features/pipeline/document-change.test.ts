@@ -11,6 +11,7 @@ import {
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import { createSharpStep, createAiStep } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
+import { pipelineOf } from '@/test/pipelines'
 
 const UPSCALE_SETTINGS = {
   model: 'siax',
@@ -19,8 +20,8 @@ const UPSCALE_SETTINGS = {
   tta: false,
 }
 
-function pipelineOf(...ops: string[]): Pipeline {
-  return { steps: ops.map((op) => createSharpStep(op)) }
+function sharpPipeline(...ops: string[]): Pipeline {
+  return pipelineOf(...ops.map((op) => createSharpStep(op)))
 }
 
 /** Applies a change, then its inverse, and expects the original back. */
@@ -34,7 +35,7 @@ function roundTrip(pipeline: Pipeline, change: DocumentChange): Pipeline {
 
 describe('planChange', () => {
   it('adds a step at an index, and its inverse removes it', () => {
-    const pipeline = pipelineOf('blur', 'negate')
+    const pipeline = sharpPipeline('blur', 'negate')
     const step = createSharpStep('flip')
     const next = roundTrip(pipeline, { type: 'add-step', step, index: 1 })
     expect(next.steps.map((s) => s.id)).toEqual([
@@ -45,14 +46,14 @@ describe('planChange', () => {
   })
 
   it('clamps an index past the end to the end', () => {
-    const pipeline = pipelineOf('blur')
+    const pipeline = sharpPipeline('blur')
     const step = createSharpStep('flip')
     const next = roundTrip(pipeline, { type: 'add-step', step, index: 99 })
     expect(next.steps.at(-1)?.id).toBe(step.id)
   })
 
   it('removes a step, and its inverse puts it back where it was', () => {
-    const pipeline = pipelineOf('blur', 'negate', 'flip')
+    const pipeline = sharpPipeline('blur', 'negate', 'flip')
     const target = pipeline.steps[1]
     if (!target) throw new Error('missing step')
     const next = roundTrip(pipeline, { type: 'remove-step', stepId: target.id })
@@ -60,7 +61,7 @@ describe('planChange', () => {
   })
 
   it('moves a step, and its inverse moves it back', () => {
-    const pipeline = pipelineOf('blur', 'negate', 'flip')
+    const pipeline = sharpPipeline('blur', 'negate', 'flip')
     const first = pipeline.steps[0]
     if (!first) throw new Error('missing step')
     const next = roundTrip(pipeline, {
@@ -73,10 +74,11 @@ describe('planChange', () => {
 
   it('sets the options of a Sharp step and restores the old ones', () => {
     const step = createSharpStep('blur', { sigma: 1 })
-    const next = roundTrip(
-      { steps: [step] },
-      { type: 'set-options', stepId: step.id, options: { sigma: 5 } },
-    )
+    const next = roundTrip(pipelineOf(step), {
+      type: 'set-options',
+      stepId: step.id,
+      options: { sigma: 5 },
+    })
     expect(next.steps[0]).toMatchObject({ options: { sigma: 5 } })
   })
 
@@ -85,30 +87,28 @@ describe('planChange', () => {
       tool: AiToolId.Upscale,
       settings: UPSCALE_SETTINGS,
     })
-    const next = roundTrip(
-      { steps: [step] },
-      {
-        type: 'set-settings',
-        stepId: step.id,
-        tool: AiToolId.Upscale,
-        settings: { ...UPSCALE_SETTINGS, scale: 2 },
-      },
-    )
+    const next = roundTrip(pipelineOf(step), {
+      type: 'set-settings',
+      stepId: step.id,
+      tool: AiToolId.Upscale,
+      settings: { ...UPSCALE_SETTINGS, scale: 2 },
+    })
     expect(next.steps[0]).toMatchObject({ settings: { scale: 2 } })
   })
 
   it('switches a step off and back on', () => {
     const step = createSharpStep('blur')
-    const next = roundTrip(
-      { steps: [step] },
-      { type: 'set-enabled', stepId: step.id, enabled: false },
-    )
+    const next = roundTrip(pipelineOf(step), {
+      type: 'set-enabled',
+      stepId: step.id,
+      enabled: false,
+    })
     expect(next.steps[0]?.enabled).toBe(false)
   })
 
   it('records nothing when the change leaves the Pipeline as it was', () => {
     const step = createSharpStep('blur', { sigma: 1 })
-    const pipeline = { steps: [step] }
+    const pipeline = pipelineOf(step)
     expect(
       planChange(pipeline, {
         type: 'set-options',
@@ -130,10 +130,13 @@ describe('planChange', () => {
 
   it('refuses a change to a step that is not there', () => {
     expect(() =>
-      planChange(pipelineOf('blur'), { type: 'remove-step', stepId: 'gone' }),
+      planChange(sharpPipeline('blur'), {
+        type: 'remove-step',
+        stepId: 'gone',
+      }),
     ).toThrow(InvalidChangeError)
     expect(() =>
-      planChange(pipelineOf('blur'), {
+      planChange(sharpPipeline('blur'), {
         type: 'set-enabled',
         stepId: 'gone',
         enabled: false,
@@ -142,7 +145,7 @@ describe('planChange', () => {
   })
 
   it('refuses a step that is already in the Pipeline', () => {
-    const pipeline = pipelineOf('blur')
+    const pipeline = sharpPipeline('blur')
     const step = pipeline.steps[0]
     if (!step) throw new Error('missing step')
     expect(() =>
@@ -157,21 +160,19 @@ describe('planChange', () => {
     })
     const sharpStep = createSharpStep('blur')
     expect(() =>
-      planChange(
-        { steps: [upscale] },
-        { type: 'set-options', stepId: upscale.id, options: {} },
-      ),
+      planChange(pipelineOf(upscale), {
+        type: 'set-options',
+        stepId: upscale.id,
+        options: {},
+      }),
     ).toThrow(/settings/)
     expect(() =>
-      planChange(
-        { steps: [sharpStep] },
-        {
-          type: 'set-settings',
-          stepId: sharpStep.id,
-          tool: AiToolId.Upscale,
-          settings: UPSCALE_SETTINGS,
-        },
-      ),
+      planChange(pipelineOf(sharpStep), {
+        type: 'set-settings',
+        stepId: sharpStep.id,
+        tool: AiToolId.Upscale,
+        settings: UPSCALE_SETTINGS,
+      }),
     ).toThrow(/settings/)
   })
 })
@@ -179,10 +180,11 @@ describe('planChange', () => {
 describe('schemas', () => {
   it('accept a patch built from a change', () => {
     const step = createSharpStep('blur')
-    const planned = planChange(
-      { steps: [] },
-      { type: 'add-step', step, index: 0 },
-    )
+    const planned = planChange(pipelineOf(), {
+      type: 'add-step',
+      step,
+      index: 0,
+    })
     expect(HistoryPatchSchema.parse(planned?.patch)).toEqual(planned?.patch)
   })
 

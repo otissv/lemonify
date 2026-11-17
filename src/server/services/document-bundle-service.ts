@@ -197,16 +197,11 @@ export class DocumentBundleService {
     }
   }
 
-  /** The key each AI step's result is stored under; none when the pipeline has no image to start from. */
+  /** The key each AI step's result is stored under. */
   async #aiKeys(
     document: DocumentRecord,
   ): Promise<ReadonlyMap<string, string>> {
-    try {
-      return (await this.#deps.planner.plan(document)).aiKeys
-    } catch (error) {
-      if (error instanceof ValidationError) return new Map()
-      throw error
-    }
+    return (await this.#deps.planner.plan(document)).aiKeys
   }
 
   /** The document as a file to send: a stream that removes its temporary file when it ends, however it ends. */

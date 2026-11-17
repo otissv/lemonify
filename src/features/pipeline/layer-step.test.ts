@@ -13,59 +13,73 @@ import {
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import {
   PipelineSchema,
-  PipelineStepKind,
-  createLayerStep,
   createSharpStep,
-  canvasLayer,
+  firstImageLayer,
   hasEdits,
+  originalSourceId,
 } from '@/features/pipeline/pipeline'
+import {
+  IMAGE_LAYER_KIND,
+  createImageLayerStep,
+} from '@/features/pipeline/layer-kinds'
 import {
   pipelineStepLabel,
   stepProblem,
 } from '@/features/pipeline/step-problems'
+import { pipelineOf } from '@/test/pipelines'
 
-describe('the canvas layer', () => {
-  it('is the first layer that is switched on', () => {
-    const off = { ...createLayerStep('a'), enabled: false }
-    const first = createLayerStep('b')
+describe('the first image layer', () => {
+  it('is the first image layer that is switched on', () => {
+    const off = { ...createImageLayerStep('a'), enabled: false }
+    const first = createImageLayerStep('b')
     const blur = createSharpStep('blur')
 
     expect(
-      canvasLayer({ steps: [blur, off, first, createLayerStep('c')] }),
+      firstImageLayer(pipelineOf(blur, off, first, createImageLayerStep('c'))),
     ).toBe(first)
-    expect(canvasLayer({ steps: [blur, off] })).toBeUndefined()
-    expect(canvasLayer({ steps: [] })).toBeUndefined()
+    expect(firstImageLayer(pipelineOf(blur, off))).toBeUndefined()
+    expect(firstImageLayer(pipelineOf())).toBeUndefined()
+  })
+
+  it('passes over a layer that is empty, which has no image to show', () => {
+    const empty = createImageLayerStep()
+    const filled = createImageLayerStep('b')
+
+    expect(firstImageLayer(pipelineOf(empty, filled))).toBe(filled)
+    expect(firstImageLayer(pipelineOf(empty))).toBeUndefined()
+    expect(originalSourceId(pipelineOf(empty, filled))).toBe('b')
+    expect(originalSourceId(pipelineOf(empty))).toBeUndefined()
   })
 
   it('does not count as an edit, but any other step does', () => {
-    const base = createLayerStep('a')
+    const base = createImageLayerStep('a')
 
-    expect(hasEdits({ steps: [base] })).toBe(false)
-    expect(hasEdits({ steps: [base, createLayerStep('b')] })).toBe(true)
-    expect(hasEdits({ steps: [base, createSharpStep('blur')] })).toBe(true)
-    expect(hasEdits({ steps: [createSharpStep('blur')] })).toBe(true)
-    expect(hasEdits({ steps: [] })).toBe(false)
+    expect(hasEdits(pipelineOf(base))).toBe(false)
+    expect(hasEdits(pipelineOf(base, createImageLayerStep('b')))).toBe(false)
+    expect(hasEdits(pipelineOf(base, createSharpStep('blur')))).toBe(true)
+    expect(hasEdits(pipelineOf(createSharpStep('blur')))).toBe(true)
+    expect(hasEdits(pipelineOf())).toBe(false)
   })
 
   it('puts no limit on the order of steps or the number of layers', () => {
     const steps = [
       createSharpStep('blur'),
-      createLayerStep('a'),
-      createLayerStep('b'),
+      createImageLayerStep('a'),
+      createImageLayerStep('b'),
     ]
 
-    expect(PipelineSchema.safeParse({ steps }).success).toBe(true)
-    expect(PipelineSchema.safeParse({ steps: [] }).success).toBe(true)
+    expect(PipelineSchema.safeParse(pipelineOf(...steps)).success).toBe(true)
+    expect(PipelineSchema.safeParse(pipelineOf()).success).toBe(true)
   })
 })
 
 describe('a layer step', () => {
   it('holds the id of its image and starts with the defaults', () => {
-    const step = createLayerStep('src-2')
+    const step = createImageLayerStep('src-2')
 
     expect(step).toEqual({
       id: expect.any(String),
-      kind: PipelineStepKind.Layer,
+      kind: IMAGE_LAYER_KIND,
       sourceId: 'src-2',
       enabled: true,
       ...DEFAULT_LAYER_SETTINGS,
@@ -82,18 +96,19 @@ describe('a layer step', () => {
     })
   })
 
-  it('is called Layer and is always set up', () => {
-    const step = createLayerStep('src-2')
+  it('is called an image layer and is always set up', () => {
+    const step = createImageLayerStep('src-2')
 
-    expect(pipelineStepLabel(step)).toBe('Layer')
+    expect(pipelineStepLabel(step)).toBe('Image layer')
     expect(stepProblem(step)).toBeUndefined()
   })
 
   it('fills in settings that a saved layer leaves out', () => {
-    const { id } = createLayerStep('src-2')
+    const { id } = createImageLayerStep('src-2')
 
     const parsed = PipelineSchema.parse({
-      steps: [{ id, kind: 'layer', sourceId: 'src-2', opacity: 40 }],
+      ...pipelineOf(),
+      steps: [{ id, kind: 'image-layer', sourceId: 'src-2', opacity: 40 }],
     })
 
     expect(parsed.steps[0]).toMatchObject({
@@ -116,28 +131,30 @@ describe('a layer step', () => {
     ['a movement that is not whole pixels', { x: 1.5 }],
     ['a setting that is not one of its own', { colour: 'red' }],
   ])('refuses %s', (_name, change) => {
-    const step = { ...createLayerStep('src-2'), ...change }
+    const step = { ...createImageLayerStep('src-2'), ...change }
 
-    expect(PipelineSchema.safeParse({ steps: [step] }).success).toBe(false)
+    expect(
+      PipelineSchema.safeParse({ ...pipelineOf(), steps: [step] }).success,
+    ).toBe(false)
   })
 
   it('counts as an image the pipeline uses', () => {
-    const image = createLayerStep('src-1')
-    const layer = createLayerStep('src-2')
+    const image = createImageLayerStep('src-1')
+    const layer = createImageLayerStep('src-2')
     const boolean = createSharpStep('boolean', { operand: 'src-3' })
 
     expect(stepOperandSourceIds(layer)).toEqual(['src-2'])
     expect(
-      pipelineOperandSourceIds({ steps: [image, layer, boolean, layer] }),
+      pipelineOperandSourceIds(pipelineOf(image, layer, boolean, layer)),
     ).toEqual(['src-1', 'src-2', 'src-3'])
   })
 
   it('has its image renamed when a pipeline moves to another place', () => {
-    const image = createLayerStep('a')
-    const layer = createLayerStep('b')
+    const image = createImageLayerStep('a')
+    const layer = createImageLayerStep('b')
 
     const moved = remapPipelineSources(
-      { steps: [image, layer] },
+      pipelineOf(image, layer),
       new Map([
         ['a', 'x'],
         ['b', 'y'],
@@ -154,20 +171,21 @@ describe('Composite is not an editing tool in a document', () => {
   it('is refused, since a layer does the same', () => {
     const composite = createSharpStep('composite', { images: [{ input: 'a' }] })
 
-    expect(PipelineSchema.safeParse({ steps: [composite] }).success).toBe(false)
+    expect(PipelineSchema.safeParse(pipelineOf(composite)).success).toBe(false)
   })
 })
 
 describe('changing layers', () => {
-  const image = createLayerStep('a')
-  const layer = createLayerStep('b')
-  const pipeline = { steps: [image, layer] }
+  const image = createImageLayerStep('a')
+  const layer = createImageLayerStep('b')
+  const pipeline = pipelineOf(image, layer)
 
   it('adds, moves and removes a layer like any other step, and undoes each', () => {
-    const added = planChange(
-      { steps: [image] },
-      { type: 'add-step', step: layer, index: 1 },
-    )
+    const added = planChange(pipelineOf(image), {
+      type: 'add-step',
+      step: layer,
+      index: 1,
+    })
 
     expect(added?.pipeline.steps).toEqual([image, layer])
     expect(added?.patch.inverse).toEqual({
@@ -215,33 +233,76 @@ describe('changing layers', () => {
       }),
     ).toThrow(InvalidChangeError)
     expect(() =>
-      applyChange(
-        { steps: [image, blur] },
-        {
-          type: 'set-layer',
-          stepId: blur.id,
-          settings: DEFAULT_LAYER_SETTINGS,
-        },
-      ),
+      applyChange(pipelineOf(image, blur), {
+        type: 'set-layer',
+        stepId: blur.id,
+        settings: DEFAULT_LAYER_SETTINGS,
+      }),
     ).toThrow(InvalidChangeError)
     expect(() =>
-      applyChange(
-        { steps: [image, blur] },
-        { type: 'set-source', stepId: blur.id, sourceId: 'c' },
-      ),
+      applyChange(pipelineOf(image, blur), {
+        type: 'set-image',
+        stepId: blur.id,
+        sourceId: 'c',
+      }),
     ).toThrow(InvalidChangeError)
   })
 
   it('swaps the image of a layer, keeping everything else', () => {
-    const changed = applyChange(
-      { steps: [image, { ...layer, opacity: 20 }] },
-      { type: 'set-source', stepId: layer.id, sourceId: 'c' },
-    )
+    const changed = applyChange(pipelineOf(image, { ...layer, opacity: 20 }), {
+      type: 'set-image',
+      stepId: layer.id,
+      sourceId: 'c',
+    })
 
     expect(changed.steps[1]).toMatchObject({ sourceId: 'c', opacity: 20 })
   })
 
-  it('lets any layer, the one that sets the canvas too, be hidden, moved and removed', () => {
+  it('fills an empty layer with an image, and empties it again, as changes that undo each other', () => {
+    const empty = createImageLayerStep()
+    const start = pipelineOf(empty)
+
+    const planned = planChange(start, {
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: 'c',
+    })
+    if (planned === null) throw new Error('expected a change')
+    expect(planned.pipeline.steps[0]).toMatchObject({ sourceId: 'c' })
+    expect(planned.patch.inverse).toEqual({
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: null,
+    })
+    expect(applyChange(planned.pipeline, planned.patch.inverse)).toEqual(start)
+
+    const emptied = planChange(planned.pipeline, {
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: null,
+    })
+    if (emptied === null) throw new Error('expected a change')
+    expect(emptied.pipeline.steps[0]).not.toHaveProperty('sourceId')
+    expect(emptied.patch.inverse).toEqual({
+      type: 'set-image',
+      stepId: empty.id,
+      sourceId: 'c',
+    })
+  })
+
+  it('keeps the settings of a layer that is emptied', () => {
+    const layer = { ...createImageLayerStep('a'), opacity: 30, rotation: 45 }
+
+    const emptied = applyChange(pipelineOf(layer), {
+      type: 'set-image',
+      stepId: layer.id,
+      sourceId: null,
+    })
+
+    expect(emptied.steps[0]).toMatchObject({ opacity: 30, rotation: 45 })
+  })
+
+  it('lets any layer, the first too, be hidden, moved and removed', () => {
     const hidden = applyChange(pipeline, {
       type: 'set-enabled',
       stepId: image.id,
@@ -268,7 +329,7 @@ describe('changing layers', () => {
   it('adds a layer anywhere, even before the others', () => {
     const added = applyChange(pipeline, {
       type: 'add-step',
-      step: createLayerStep('c'),
+      step: createImageLayerStep('c'),
       index: 0,
     })
 

@@ -1,92 +1,232 @@
 import { describe, expect, it } from 'vitest'
 
 import { AiToolId } from '@/features/ai/ai-tools'
-import { planSegments, workflowProblem } from '@/features/workflows/segments'
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
-  WorkflowNodeKind,
-  addInputSources,
-  appendStep,
-  createAiNode,
-  createSharpNode,
-} from '@/features/workflows/workflow-graph'
-import type { WorkflowNode } from '@/features/workflows/workflow-graph'
-import { createWorkflow } from '@/features/workflows/workflow'
+  createAiStep,
+  createGroupStep,
+  createPipeline,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
+import type { PipelineStep } from '@/features/pipeline/pipeline'
+import {
+  fillFirstSlot,
+  inputSlots,
+  itemPipeline,
+  planSegments,
+  workflowProblem,
+} from '@/features/workflows/segments'
+import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
-const AT = { x: 0, y: 0 }
 const UPSCALE = {
   tool: AiToolId.Upscale,
   settings: { model: 'm', scale: 4, iterations: 1, tta: false },
 } as const
 
-function build(...steps: WorkflowNode[]) {
-  let graph = addInputSources(createWorkflow('Test'), ['src-1'])
-  for (const step of steps) graph = appendStep(graph, step)
-  return graph
+function definition(
+  steps: ReadonlyArray<PipelineStep>,
+  inputs: string[] = ['src-1'],
+): WorkflowDefinition {
+  const { id: _id, name: _name, ...rest } = createWorkflow('Test')
+  return {
+    ...rest,
+    pipeline: createPipeline(canvasOfSize(100, 50), steps),
+    inputs,
+  }
 }
 
-describe('planSegments', () => {
-  it('makes one empty Sharp segment for a workflow with no steps', () => {
-    expect(planSegments(build())).toEqual([{ kind: 'sharp', nodes: [] }])
+describe('inputSlots', () => {
+  it('are the image layers that are on and have no image, in pipeline order', () => {
+    const first = createImageLayerStep()
+    const second = createImageLayerStep()
+    const steps = [
+      createSharpStep('blur'),
+      first,
+      createImageLayerStep('fixed'),
+      { ...createImageLayerStep(), enabled: false },
+      second,
+    ]
+
+    expect(inputSlots(createPipeline(canvasOfSize(1, 1), steps))).toEqual([
+      first,
+      second,
+    ])
   })
 
-  it('groups consecutive Sharp steps into one segment', () => {
-    const a = createSharpNode('blur', AT)
-    const b = createSharpNode('flip', AT)
-    const segments = planSegments(build(a, b))
-    expect(segments).toHaveLength(1)
-    expect(segments[0]).toMatchObject({ kind: 'sharp' })
+  it('are found in groups and sub-documents, and not in a group that is off', () => {
+    const inside = createImageLayerStep()
+    const hidden = createImageLayerStep()
+    const group = { ...createGroupStep([inside]), subDocument: true }
+    const off = { ...createGroupStep([hidden]), enabled: false }
+
     expect(
-      segments[0]?.kind === 'sharp' && segments[0].nodes.map(({ id }) => id),
-    ).toEqual([a.id, b.id])
+      inputSlots(createPipeline(canvasOfSize(1, 1), [group, off])),
+    ).toEqual([inside])
+  })
+})
+
+describe('fillFirstSlot', () => {
+  it('puts the image in the first slot and leaves the others empty', () => {
+    const first = createImageLayerStep()
+    const second = createImageLayerStep()
+    const pipeline = createPipeline(canvasOfSize(1, 1), [first, second])
+
+    const filled = fillFirstSlot(pipeline, 'src-9')
+
+    expect(filled.steps[0]).toMatchObject({ id: first.id, sourceId: 'src-9' })
+    expect(filled.steps[1]).not.toHaveProperty('sourceId')
   })
 
-  it('puts an AI step in its own segment and ends on a Sharp one', () => {
-    const before = createSharpNode('blur', AT)
-    const ai = createAiNode(UPSCALE, AT)
-    const after = createSharpNode('flip', AT)
-    const kinds = planSegments(build(before, ai, after)).map(({ kind }) => kind)
-    expect(kinds).toEqual(['sharp', 'ai', 'sharp'])
+  it('refuses a pipeline with no slot', () => {
+    expect(() =>
+      fillFirstSlot(createPipeline(canvasOfSize(1, 1), []), 'a'),
+    ).toThrow(/no place for an input image/)
+  })
+})
+
+describe('itemPipeline', () => {
+  const image = { id: 'src-9', width: 640, height: 480 }
+  const layer = createImageLayerStep()
+  const base = definition([layer])
+
+  it('keeps the workflow canvas by default', () => {
+    const pipeline = itemPipeline(base, RunCanvasMode.Workflow, image)
+
+    expect(pipeline.canvas).toEqual(base.pipeline.canvas)
+    expect(pipeline.steps[0]).toMatchObject({ sourceId: 'src-9' })
   })
 
-  it('adds an empty closing Sharp segment after a last AI step', () => {
-    const segments = planSegments(build(createAiNode(UPSCALE, AT)))
-    expect(segments.map(({ kind }) => kind)).toEqual(['ai', 'sharp'])
-    expect(segments[1]).toEqual({ kind: 'sharp', nodes: [] })
+  it('takes the size of the image, and keeps the background, for first-image', () => {
+    const coloured = {
+      ...base,
+      pipeline: {
+        ...base.pipeline,
+        canvas: { width: 10, height: 10, background: '#ff0000' },
+      },
+    }
+
+    expect(
+      itemPipeline(coloured, RunCanvasMode.FirstImage, image).canvas,
+    ).toEqual({ width: 640, height: 480, background: '#ff0000' })
+  })
+})
+
+describe('planSegments', () => {
+  it('is one empty draw segment for a pipeline with no steps', () => {
+    expect(planSegments(createPipeline(canvasOfSize(1, 1)))).toEqual([
+      { kind: 'draw', steps: [] },
+    ])
   })
 
-  it('keeps two AI steps apart', () => {
-    const kinds = planSegments(
-      build(createAiNode(UPSCALE, AT), createAiNode(UPSCALE, AT)),
-    ).map(({ kind }) => kind)
-    expect(kinds).toEqual(['ai', 'ai', 'sharp'])
+  it('keeps layers and Sharp steps together in one draw segment', () => {
+    const layer = createImageLayerStep('a')
+    const blur = createSharpStep('blur')
+
+    expect(
+      planSegments(createPipeline(canvasOfSize(1, 1), [layer, blur])),
+    ).toEqual([{ kind: 'draw', steps: [layer, blur] }])
+  })
+
+  it('puts an AI step in its own segment, between draw segments', () => {
+    const layer = createImageLayerStep('a')
+    const ai = createAiStep(UPSCALE)
+    const flip = createSharpStep('flip')
+
+    const segments = planSegments(
+      createPipeline(canvasOfSize(1, 1), [layer, ai, flip]),
+    )
+
+    expect(segments).toEqual([
+      { kind: 'draw', steps: [layer] },
+      { kind: 'ai', step: ai },
+      { kind: 'draw', steps: [flip] },
+    ])
+  })
+
+  it('starts and ends with a draw segment, and keeps two AI steps apart', () => {
+    const one = createAiStep(UPSCALE)
+    const two = createAiStep(UPSCALE)
+
+    expect(
+      planSegments(createPipeline(canvasOfSize(1, 1), [one, two])).map(
+        ({ kind }) => kind,
+      ),
+    ).toEqual(['draw', 'ai', 'draw', 'ai', 'draw'])
+  })
+
+  it('drops an AI step that is off, and one in a group that is off', () => {
+    const off = { ...createAiStep(UPSCALE), enabled: false }
+    const inOff = {
+      ...createGroupStep([createAiStep(UPSCALE)]),
+      enabled: false,
+    }
+
+    expect(
+      planSegments(createPipeline(canvasOfSize(1, 1), [off, inOff])).map(
+        ({ kind }) => kind,
+      ),
+    ).toEqual(['draw'])
+  })
+
+  it('opens a group that is not a sub-document, and keeps a sub-document whole', () => {
+    const ai = createAiStep(UPSCALE)
+    const open = createGroupStep([ai])
+    const sub = {
+      ...createGroupStep([createSharpStep('blur')]),
+      subDocument: true,
+    }
+
+    const segments = planSegments(
+      createPipeline(canvasOfSize(1, 1), [open, sub]),
+    )
+
+    expect(segments.map(({ kind }) => kind)).toEqual(['draw', 'ai', 'draw'])
+    expect(segments[2]).toEqual({ kind: 'draw', steps: [sub] })
   })
 })
 
 describe('workflowProblem', () => {
-  it('accepts a connected workflow with an image', () => {
-    expect(workflowProblem(build(createSharpNode('flip', AT)))).toBeUndefined()
+  const slot = createImageLayerStep()
+
+  it('is undefined for a workflow with an input and a slot', () => {
+    expect(workflowProblem(definition([slot]))).toBeUndefined()
   })
 
-  it('asks for an image when Input is empty', () => {
-    const empty = createWorkflow('Empty')
-    expect(workflowProblem({ ...empty, edges: [] })).toMatch(
-      /Connect|Add at least/,
+  it('asks for an input image', () => {
+    expect(workflowProblem(definition([slot], []))).toBe(
+      'Add at least one image to run the workflow on.',
     )
-    const connected = appendStep(empty, createSharpNode('flip', AT))
-    expect(workflowProblem(connected)).toBe('Add at least one image to Input.')
   })
 
-  it('asks for a connection when the line does not reach Output', () => {
-    const graph = build(createSharpNode('flip', AT))
-    const output = graph.nodes.find(
-      ({ kind }) => kind === WorkflowNodeKind.Output,
+  it('asks for a slot when no image layer is waiting for an image', () => {
+    expect(workflowProblem(definition([createSharpStep('blur')]))).toBe(
+      'Add an image layer with no image: each input image goes in it.',
     )
-    const cut = {
-      ...graph,
-      edges: graph.edges.filter((edge) => edge.target !== output?.id),
+    expect(workflowProblem(definition([createImageLayerStep('a')]))).toMatch(
+      /image layer with no image/,
+    )
+  })
+
+  it('refuses an AI step inside a sub-document', () => {
+    const sub = {
+      ...createGroupStep([slot, createAiStep(UPSCALE)]),
+      subDocument: true,
     }
-    expect(workflowProblem(cut)).toBe(
-      'Connect every step from Input to Output.',
+
+    expect(workflowProblem(definition([sub]))).toBe(
+      'AI steps inside a sub-document cannot run in a workflow yet.',
     )
+  })
+
+  it('ignores an AI step in a sub-document that is off', () => {
+    const sub = {
+      ...createGroupStep([createAiStep(UPSCALE)]),
+      subDocument: true,
+      enabled: false,
+    }
+
+    expect(workflowProblem(definition([slot, sub]))).toBeUndefined()
   })
 })

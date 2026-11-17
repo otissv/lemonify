@@ -5,18 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
-import { createWorkflow } from '@/features/workflows/workflow'
-import type { WorkflowGraph } from '@/features/workflows/workflow'
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
-  WorkflowNodeKind,
-  addInputSources,
-  appendStep,
-  createAiNode,
-  createSharpNode,
-  updateOutputSettings,
-} from '@/features/workflows/workflow-graph'
-import type { WorkflowNode } from '@/features/workflows/workflow-graph'
+  createAiStep,
+  createGroupStep,
+  createPipeline,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
+import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { defaultOutputSettings } from '@/features/workflows/output-settings'
+import type { OutputSettings } from '@/features/workflows/output-settings'
+import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 import { ResultKind } from '../dao/result-dao.ts'
 import { RunState } from '../dao/workflow-dao.ts'
@@ -26,8 +27,8 @@ import type { TestApp } from '../testing/test-app.ts'
 import { EngineTargetKind } from '../tools/image-engine.ts'
 import type { RunView } from './workflow-service.ts'
 
-const AT = { x: 0, y: 0 }
 const SETTINGS = { model: 'm', scale: 4, iterations: 1, tta: false } as const
+const CANVAS = canvasOfSize(20, 10)
 
 let t: TestApp
 
@@ -39,24 +40,32 @@ afterEach(async () => {
   await t.close()
 })
 
-/** A workflow on `sourceIds` with `steps` in order, Input connected through them to Output. */
-function graphOf(sourceIds: string[], ...steps: WorkflowNode[]): WorkflowGraph {
-  let graph = addInputSources(createWorkflow('x'), sourceIds)
-  for (const step of steps) graph = appendStep(graph, step)
-  const input = graph.nodes.find(({ kind }) => kind === WorkflowNodeKind.Input)
-  const output = graph.nodes.find(
-    ({ kind }) => kind === WorkflowNodeKind.Output,
-  )
-  if (steps.length === 0 && input && output) {
-    graph = {
-      ...graph,
-      edges: [
-        ...graph.edges,
-        { id: crypto.randomUUID(), source: input.id, target: output.id },
-      ],
-    }
+/** A workflow on `inputs`: one empty image layer for each input image, then `steps` in order. */
+function definitionOf(
+  inputs: string[],
+  ...steps: PipelineStep[]
+): WorkflowDefinition {
+  const { pipeline, output } = createWorkflow('x')
+  return {
+    pipeline: createPipeline(CANVAS, [...pipeline.steps, ...steps]),
+    inputs,
+    output,
   }
-  return { nodes: graph.nodes, edges: graph.edges }
+}
+
+function withOutput(
+  definition: WorkflowDefinition,
+  output: OutputSettings,
+): WorkflowDefinition {
+  return { ...definition, output }
+}
+
+function stepNames(
+  request: { steps: ReadonlyArray<{ kind: string }> } | undefined,
+): string[] {
+  return (request?.steps ?? []).map((step) =>
+    'op' in step && typeof step.op === 'string' ? step.op : step.kind,
+  )
 }
 
 async function runFinished(runId: string, actor = t.ann): Promise<RunView> {
@@ -69,22 +78,26 @@ async function runFinished(runId: string, actor = t.ann): Promise<RunView> {
   throw new Error('The run did not finish in time.')
 }
 
-async function startRun(graph: WorkflowGraph, name = 'Flow') {
-  const workflow = await t.app.workflows.create(t.ann, name, graph)
-  const run = await t.app.workflows.run(t.ann, workflow.id)
+async function startRun(
+  definition: WorkflowDefinition,
+  canvas?: RunCanvasMode,
+  name = 'Flow',
+) {
+  const workflow = await t.app.workflows.create(t.ann, name, definition)
+  const run = await t.app.workflows.run(t.ann, workflow.id, { canvas })
   await t.app.scheduler.start()
   return { workflow, run }
 }
 
 describe('create, update and list', () => {
-  it('creates an empty workflow with an Input and an Output', async () => {
+  it('creates a workflow with a canvas, an empty image layer, no inputs and the default output', async () => {
     const view = await t.app.workflows.create(t.ann, ' Resize ')
     expect(view.name).toBe('Resize')
     expect(view.revision).toBe(0)
-    expect(view.nodes.map(({ kind }) => kind).sort()).toEqual([
-      WorkflowNodeKind.Input,
-      WorkflowNodeKind.Output,
-    ])
+    expect(view.pipeline.canvas).toEqual(createWorkflow('x').pipeline.canvas)
+    expect(view.pipeline.steps).toHaveLength(1)
+    expect(view.inputs).toEqual([])
+    expect(view.output).toEqual(defaultOutputSettings())
     expect(await t.app.workflows.list(t.ann)).toHaveLength(1)
   })
 
@@ -109,7 +122,11 @@ describe('create, update and list', () => {
     const created = await t.app.workflows.create(t.ann, 'Resize')
     const changes = {
       name: 'Resize 2',
-      graph: { nodes: created.nodes, edges: created.edges },
+      definition: {
+        pipeline: created.pipeline,
+        inputs: created.inputs,
+        output: created.output,
+      },
     }
     const updated = await t.app.workflows.update(t.ann, created.id, 0, changes)
     expect(updated).toMatchObject({ name: 'Resize 2', revision: 1 })
@@ -118,26 +135,26 @@ describe('create, update and list', () => {
     ).rejects.toBeInstanceOf(ConflictError)
   })
 
-  it('refuses a graph that names another User’s image', async () => {
+  it('refuses a workflow that names another User’s image', async () => {
     const foreign = await t.uploadImage(t.bob)
     await expect(
-      t.app.workflows.create(t.ann, 'Mine', graphOf([foreign.id])),
+      t.app.workflows.create(t.ann, 'Mine', definitionOf([foreign.id])),
     ).rejects.toThrow('no longer exists')
     const mine = await t.uploadImage(t.ann)
     await expect(
-      t.app.workflows.create(t.ann, 'Mine', graphOf([mine.id])),
+      t.app.workflows.create(t.ann, 'Mine', definitionOf([mine.id])),
     ).resolves.toBeDefined()
   })
 
   it('refuses a second image in a step that is not the User’s', async () => {
     const foreign = await t.uploadImage(t.bob)
-    const step = createSharpNode('boolean', AT)
-    const graph = graphOf([], {
+    const step = createSharpStep('boolean')
+    const definition = definitionOf([], {
       ...step,
       options: { operand: foreign.id, operator: 'and' },
     })
     await expect(
-      t.app.workflows.create(t.ann, 'Mask', graph),
+      t.app.workflows.create(t.ann, 'Mask', definition),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
@@ -160,13 +177,13 @@ describe('running a workflow', () => {
   it('refuses to run what cannot run, before queueing anything', async () => {
     const empty = await t.app.workflows.create(t.ann, 'Empty')
     await expect(t.app.workflows.run(t.ann, empty.id)).rejects.toThrow(
-      /Connect every step|Add at least one image/,
+      /Add at least one image/,
     )
     const source = await t.uploadImage(t.ann)
     const incomplete = await t.app.workflows.create(
       t.ann,
       'Incomplete',
-      graphOf([source.id], createSharpNode('extract', AT)),
+      definitionOf([source.id], createSharpStep('extract')),
     )
     await expect(t.app.workflows.run(t.ann, incomplete.id)).rejects.toThrow(
       /Needs/,
@@ -178,8 +195,8 @@ describe('running a workflow', () => {
   it('runs Sharp steps over every image and keeps each output as a Result', async () => {
     const a = await t.uploadImage(t.ann, '#111111', 'a.png')
     const b = await t.uploadImage(t.ann, '#222222', 'b.png')
-    const graph = graphOf([a.id, b.id], createSharpNode('flip', AT))
-    const { run } = await startRun(graph)
+    const definition = definitionOf([a.id, b.id], createSharpStep('flip'))
+    const { run } = await startRun(definition)
     expect(run.jobs.total).toBe(2)
     const done = await runFinished(run.id)
     expect(done.state).toBe(RunState.Done)
@@ -204,8 +221,8 @@ describe('running a workflow', () => {
       format: ExportFormat.Webp,
       widths: [480, 1024],
     }
-    const graph = updateOutputSettings(graphOf([source.id]), settings)
-    const { run } = await startRun(graph)
+    const definition = withOutput(definitionOf([source.id]), settings)
+    const { run } = await startRun(definition)
     expect((await runFinished(run.id)).state).toBe(RunState.Done)
     const results = await t.app.results.list(t.ann, { workflowRunId: run.id })
     expect(results.map(({ fileName }) => fileName).sort()).toEqual([
@@ -227,13 +244,13 @@ describe('running a workflow', () => {
   it('runs an AI step between Sharp steps, batching the images that share a model', async () => {
     const a = await t.uploadImage(t.ann, '#111111', 'a.png')
     const b = await t.uploadImage(t.ann, '#222222', 'b.png')
-    const graph = graphOf(
+    const definition = definitionOf(
       [a.id, b.id],
-      createSharpNode('flip', AT),
-      createAiNode({ tool: AiToolId.Upscale, settings: SETTINGS }, AT),
-      createSharpNode('flop', AT),
+      createSharpStep('flip'),
+      createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
+      createSharpStep('flop'),
     )
-    const { run } = await startRun(graph)
+    const { run } = await startRun(definition)
     const done = await runFinished(run.id)
     expect(done.state).toBe(RunState.Done)
     expect(done.jobs).toMatchObject({ total: 6, done: 6 })
@@ -253,11 +270,11 @@ describe('running a workflow', () => {
 
   it('ends on an empty closing segment after a last AI step', async () => {
     const source = await t.uploadImage(t.ann)
-    const graph = graphOf(
+    const definition = definitionOf(
       [source.id],
-      createAiNode({ tool: AiToolId.Upscale, settings: SETTINGS }, AT),
+      createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
     )
-    const { run } = await startRun(graph)
+    const { run } = await startRun(definition)
     expect((await runFinished(run.id)).state).toBe(RunState.Done)
     const request = t.imageEngine.requests.at(-1)
     expect(request?.target.kind).toBe(EngineTargetKind.Export)
@@ -266,11 +283,11 @@ describe('running a workflow', () => {
 
   it('removes the run’s work images when it ends', async () => {
     const source = await t.uploadImage(t.ann)
-    const graph = graphOf(
+    const definition = definitionOf(
       [source.id],
-      createAiNode({ tool: AiToolId.Upscale, settings: SETTINGS }, AT),
+      createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
     )
-    const { run } = await startRun(graph)
+    const { run } = await startRun(definition)
     await runFinished(run.id)
     const work = path.join(t.directory, 'work')
     await vi.waitFor(async () => {
@@ -284,8 +301,8 @@ describe('running a workflow', () => {
     const a = await t.uploadImage(t.ann, '#111111', 'a.png')
     const b = await t.uploadImage(t.ann, '#222222', 'b.png')
     const settings = { ...defaultOutputSettings(), widths: [480, 1024] }
-    const graph = updateOutputSettings(graphOf([a.id, b.id]), settings)
-    const { run } = await startRun(graph)
+    const definition = withOutput(definitionOf([a.id, b.id]), settings)
+    const { run } = await startRun(definition)
     await runFinished(run.id)
     const outputs = await t.app.workflows.runOutputs(t.ann, run.id)
     expect(outputs.map(({ source }) => source.fileName)).toEqual([
@@ -305,7 +322,7 @@ describe('running a workflow', () => {
     const workflow = await t.app.workflows.create(
       t.ann,
       'Idle',
-      graphOf([source.id]),
+      definitionOf([source.id]),
     )
     const run = await t.app.workflows.run(t.ann, workflow.id)
     expect(await t.app.workflows.runOutputs(t.ann, run.id)).toEqual([])
@@ -314,22 +331,25 @@ describe('running a workflow', () => {
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 
-  it('treats the same image twice in Input as one', async () => {
+  it('refuses the same image twice as an input, so a run has one item per image', async () => {
     const source = await t.uploadImage(t.ann)
-    const graph = graphOf([source.id, source.id])
-    const workflow = await t.app.workflows.create(t.ann, 'Twice', graph)
-    const run = await t.app.workflows.run(t.ann, workflow.id)
-    expect(run.jobs.total).toBe(1)
+    await expect(
+      t.app.workflows.create(
+        t.ann,
+        'Twice',
+        definitionOf([source.id, source.id]),
+      ),
+    ).rejects.toThrow('Each input image can be used once')
   })
 
   it('marks the run failed and says why when an engine fails', async () => {
     const source = await t.uploadImage(t.ann)
     t.aiEngine.failWith = new Error('The GPU ran out of memory')
-    const graph = graphOf(
+    const definition = definitionOf(
       [source.id],
-      createAiNode({ tool: AiToolId.Upscale, settings: SETTINGS }, AT),
+      createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
     )
-    const { run } = await startRun(graph)
+    const { run } = await startRun(definition)
     const done = await runFinished(run.id)
     expect(done.state).toBe(RunState.Failed)
     expect(done.errors).toEqual(['The GPU ran out of memory'])
@@ -344,7 +364,7 @@ describe('running a workflow', () => {
     const workflow = await t.app.workflows.create(
       t.ann,
       'Mixed',
-      graphOf([keep.id, gone.id]),
+      definitionOf([keep.id, gone.id]),
     )
     const run = await t.app.workflows.run(t.ann, workflow.id)
     await t.app.sources.delete(t.ann, gone.id)
@@ -355,39 +375,35 @@ describe('running a workflow', () => {
     expect(done.errors).toEqual(['An image in this workflow no longer exists.'])
   })
 
-  it('uses the graph the run started with, not later edits', async () => {
+  it('uses the definition the run started with, not later edits', async () => {
     const source = await t.uploadImage(t.ann, '#111111', 'cat.png')
     const workflow = await t.app.workflows.create(
       t.ann,
       'Edited',
-      graphOf([source.id], createSharpNode('flip', AT)),
+      definitionOf([source.id], createSharpStep('flip')),
     )
     const run = await t.app.workflows.run(t.ann, workflow.id)
     await t.app.workflows.update(t.ann, workflow.id, 0, {
       name: 'Edited',
-      graph: graphOf([source.id], createSharpNode('flop', AT)),
+      definition: definitionOf([source.id], createSharpStep('flop')),
     })
     await t.app.scheduler.start()
     await runFinished(run.id)
-    expect(
-      t.imageEngine.requests[0]?.steps.map((step) =>
-        step.kind === 'sharp' ? step.op : step.kind,
-      ),
-    ).toEqual(['flip'])
+    expect(stepNames(t.imageEngine.requests[0])).toEqual(['layer', 'flip'])
   })
 
   it('cancels a run: waiting items are dropped and a running one queues no next segment', async () => {
     const a = await t.uploadImage(t.ann, '#111111', 'a.png')
-    const graph = graphOf(
+    const definition = definitionOf(
       [a.id],
-      createSharpNode('flip', AT),
-      createAiNode({ tool: AiToolId.Upscale, settings: SETTINGS }, AT),
+      createSharpStep('flip'),
+      createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
     )
     let release: () => void = () => {}
     t.imageEngine.gate = new Promise<void>((resolve) => {
       release = resolve
     })
-    const { run } = await startRun(graph)
+    const { run } = await startRun(definition)
     const limit = Date.now() + 2000
     while (t.imageEngine.requests.length === 0 && Date.now() < limit) {
       await new Promise((resolve) => setTimeout(resolve, 5))
@@ -404,7 +420,7 @@ describe('running a workflow', () => {
 
   it('hides another User’s run', async () => {
     const source = await t.uploadImage(t.ann)
-    const { run } = await startRun(graphOf([source.id]))
+    const { run } = await startRun(definitionOf([source.id]))
     await expect(t.app.workflows.getRun(t.bob, run.id)).rejects.toBeInstanceOf(
       NotFoundError,
     )
@@ -419,7 +435,7 @@ describe('running a workflow', () => {
     const workflow = await t.app.workflows.create(
       t.ann,
       'Flow',
-      graphOf([source.id]),
+      definitionOf([source.id]),
     )
     const run = await t.app.workflows.run(t.ann, workflow.id)
     await expect(
@@ -439,7 +455,7 @@ describe('running a workflow', () => {
 
   it('keeps a run and its Results after the Workflow is deleted', async () => {
     const source = await t.uploadImage(t.ann)
-    const { workflow, run } = await startRun(graphOf([source.id]))
+    const { workflow, run } = await startRun(definitionOf([source.id]))
     await runFinished(run.id)
     await t.app.workflows.delete(t.ann, workflow.id)
     const kept = await t.app.workflows.getRun(t.ann, run.id)
@@ -450,12 +466,130 @@ describe('running a workflow', () => {
   })
 })
 
+describe('image layers and canvases in a workflow', () => {
+  it('refuses a workflow with no empty image layer to put an input image in', async () => {
+    const source = await t.uploadImage(t.ann)
+    const workflow = await t.app.workflows.create(t.ann, 'No slot', {
+      ...definitionOf([source.id]),
+      pipeline: createPipeline(CANVAS, [createSharpStep('flip')]),
+    })
+    await expect(t.app.workflows.run(t.ann, workflow.id)).rejects.toThrow(
+      /image layer with no image/,
+    )
+    expect(await t.app.workflows.listRuns(t.ann)).toEqual([])
+  })
+
+  it('refuses an AI step inside a sub-document, before queueing anything', async () => {
+    const source = await t.uploadImage(t.ann)
+    const sub = {
+      ...createGroupStep([
+        createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
+      ]),
+      subDocument: true,
+    }
+    const workflow = await t.app.workflows.create(
+      t.ann,
+      'Sub',
+      definitionOf([source.id], sub),
+    )
+    await expect(t.app.workflows.run(t.ann, workflow.id)).rejects.toThrow(
+      /sub-document/,
+    )
+    expect(await t.app.jobs.list(t.ann)).toEqual([])
+  })
+
+  it('refuses an image layer whose image is another User’s', async () => {
+    const foreign = await t.uploadImage(t.bob)
+    await expect(
+      t.app.workflows.create(
+        t.ann,
+        'Mine',
+        definitionOf([], createImageLayerStep(foreign.id)),
+      ),
+    ).rejects.toThrow('no longer exists')
+  })
+
+  it('refuses a definition that is not valid, such as a Composite step', async () => {
+    const created = definitionOf([], createSharpStep('composite'))
+    await expect(
+      t.app.workflows.create(t.ann, 'Bad', created),
+    ).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  it('refuses an AI tool the server does not have', async () => {
+    const unknown = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
+    const definition = definitionOf([], { ...unknown, tool: 'nope' as never })
+    await expect(
+      t.app.workflows.create(t.ann, 'Bad', definition),
+    ).rejects.toThrow()
+  })
+
+  it('draws each input image on the workflow canvas by default', async () => {
+    const source = await t.uploadImage(t.ann, '#111111', 'cat.png')
+    const { run } = await startRun(definitionOf([source.id]))
+    expect(run.canvasMode).toBe(RunCanvasMode.Workflow)
+    await runFinished(run.id)
+    const [request] = t.imageEngine.requests
+    expect(request?.input).toEqual({ kind: 'canvas', canvas: CANVAS })
+    expect(stepNames(request)).toEqual(['layer'])
+  })
+
+  it('takes the size of the input image when the run asks for it, and keeps the background', async () => {
+    const source = await t.uploadImage(t.ann, '#111111', 'cat.png')
+    const definition = definitionOf([source.id])
+    const coloured = {
+      ...definition,
+      pipeline: {
+        ...definition.pipeline,
+        canvas: { ...CANVAS, background: '#00ff00' },
+      },
+    }
+    const { run } = await startRun(coloured, RunCanvasMode.FirstImage)
+    expect(run.canvasMode).toBe(RunCanvasMode.FirstImage)
+    await runFinished(run.id)
+    const input = t.imageEngine.requests[0]?.input
+    expect(input).toMatchObject({
+      kind: 'canvas',
+      canvas: {
+        width: source.width,
+        height: source.height,
+        background: '#00ff00',
+      },
+    })
+  })
+
+  it('puts the image in the first slot only, and a fixed layer keeps its own image', async () => {
+    const input = await t.uploadImage(t.ann, '#111111', 'in.png')
+    const fixed = await t.uploadImage(t.ann, '#222222', 'logo.png')
+    const definition = definitionOf(
+      [input.id],
+      createImageLayerStep(fixed.id),
+      createImageLayerStep(),
+    )
+    const { run } = await startRun(definition)
+    expect((await runFinished(run.id)).state).toBe(RunState.Done)
+    expect(stepNames(t.imageEngine.requests[0])).toEqual(['layer', 'layer'])
+  })
+
+  it('exports in the format of the input image when the output keeps the original', async () => {
+    const source = await t.uploadImage(t.ann, '#111111', 'cat.png')
+    const { run } = await startRun(definitionOf([source.id]))
+    await runFinished(run.id)
+    const request = t.imageEngine.requests.at(-1)
+    expect(request?.originalFrom).toBeDefined()
+  })
+})
+
 describe('telling the person’s tabs', () => {
   it('says the workflows changed when one is made, saved or deleted', async () => {
     const workflow = await t.app.workflows.create(t.ann, 'Flow')
     await t.app.workflows.update(t.ann, workflow.id, workflow.revision, {
       name: 'Renamed',
-      graph: { nodes: workflow.nodes, edges: workflow.edges },
+      definition: {
+        pipeline: workflow.pipeline,
+        inputs: workflow.inputs,
+        output: workflow.output,
+      },
     })
     await t.app.workflows.delete(t.ann, workflow.id)
 
@@ -468,7 +602,7 @@ describe('telling the person’s tabs', () => {
 
   it('says so when a run starts and when it finishes', async () => {
     const source = await t.uploadImage(t.ann)
-    const { run } = await startRun(graphOf([source.id]))
+    const { run } = await startRun(definitionOf([source.id]))
     t.changes.clear()
 
     await runFinished(run.id)
@@ -485,7 +619,7 @@ describe('telling the person’s tabs', () => {
     const workflow = await t.app.workflows.create(
       t.ann,
       'Flow',
-      graphOf([source.id]),
+      definitionOf([source.id]),
     )
     const run = await t.app.workflows.run(t.ann, workflow.id)
     t.changes.clear()
@@ -506,7 +640,11 @@ describe('telling the person’s tabs', () => {
     await expect(
       t.app.workflows.update(t.bob, workflow.id, workflow.revision, {
         name: 'Stolen',
-        graph: { nodes: workflow.nodes, edges: workflow.edges },
+        definition: {
+          pipeline: workflow.pipeline,
+          inputs: workflow.inputs,
+          output: workflow.output,
+        },
       }),
     ).rejects.toThrow(NotFoundError)
     await expect(t.app.workflows.delete(t.bob, workflow.id)).rejects.toThrow(

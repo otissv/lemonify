@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
+import { canvasSchema } from '@/features/pipeline/canvas'
 import { DocumentChangeSchema } from '@/features/pipeline/document-change'
 import { PROTECTED_CHAIN } from '@/server/http/chains'
 import { appFor } from '@/server/http/server-fn-context'
@@ -38,6 +39,15 @@ export const createDocument = createServerFn({ method: 'POST' })
   .handler(async ({ context, data }): Promise<DocumentView> => {
     const { app, actor } = await appFor(context)
     return app.documents.create(actor, data.sourceId, data.name)
+  })
+
+/** Makes a document with nothing in it, on the canvas given. */
+export const createBlankDocument = createServerFn({ method: 'POST' })
+  .middleware(PROTECTED_CHAIN)
+  .validator(z.object({ name: z.string(), canvas: canvasSchema }))
+  .handler(async ({ context, data }): Promise<DocumentView> => {
+    const { app, actor } = await appFor(context)
+    return app.documents.createBlank(actor, data.canvas, data.name)
   })
 
 export const renameDocument = createServerFn({ method: 'POST' })

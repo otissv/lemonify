@@ -3,21 +3,28 @@ import { z } from 'zod'
 import { AI_STEP_KIND, aiStepSchema } from '@/features/ai/ai-tools'
 import type { AiContent } from '@/features/ai/ai-tools'
 import {
-  SharpNodeSchema,
-  WorkflowNodeKind,
-} from '@/features/workflows/workflow-graph'
-import {
   DEFAULT_LAYER_SETTINGS,
   layerSettingsSchema,
 } from '@/features/pipeline/layer'
+import { canvasSchema } from '@/features/pipeline/canvas'
+import {
+  LAYER_KIND_SCHEMAS,
+  isLayerStep,
+  layerKind,
+} from '@/features/pipeline/layer-kinds'
+import type { LayerStep } from '@/features/pipeline/layer-kinds'
+import {
+  MAX_STEP_NAME_LENGTH,
+  stepEnabledSchema,
+  stepNameSchema,
+} from '@/features/pipeline/step-common'
+import type { Canvas } from '@/features/pipeline/canvas'
 import { SHARP_OP_CATEGORIES } from '@/lib/images/sharp/ops'
 import { stepBlendSchema, supportsBlend } from '@/features/pipeline/step-blend'
-/** The kinds of step a file's pipeline can hold; the same values as the workflow's steps. */
+/** The kinds of step a pipeline can hold, in a document and in a workflow alike. */
 export const PipelineStepKind = {
-  Sharp: WorkflowNodeKind.Sharp,
+  Sharp: 'sharp',
   Ai: AI_STEP_KIND,
-  /** An image placed over the picture as it stands. The first one that is switched on is the canvas the other steps work on. */
-  Layer: 'layer',
   /** A named run of steps that is switched, moved and removed as one. The picture is made as if its steps were not grouped. */
   Group: 'group',
 } as const
@@ -32,24 +39,24 @@ export const EDITING_OP_NAMES: ReadonlyArray<string> = [
   ...SHARP_OP_CATEGORIES.colour,
 ].filter((op) => op !== 'composite')
 
-const enabled = z.boolean().default(true)
+const enabled = stepEnabledSchema
+const name = stepNameSchema
 
-/** The longest name a step can be given. */
-export const MAX_STEP_NAME_LENGTH = 60
-
-/** What a person calls the step; the tool's own name is used when there is none. */
-const name = z.string().trim().min(1).max(MAX_STEP_NAME_LENGTH).optional()
+export { MAX_STEP_NAME_LENGTH }
 
 /** The most steps one group holds. */
 export const MAX_GROUP_STEPS = 200
 /** The most steps a pipeline holds in all, counting those inside groups. */
 export const MAX_PIPELINE_STEPS = 1000
 
-const sharpStepSchema = SharpNodeSchema.omit({ position: true })
-  .extend({
+const sharpStepSchema = z
+  .object({
+    id: z.uuid(),
+    kind: z.literal(PipelineStepKind.Sharp),
     op: z
       .string()
       .refine((op) => EDITING_OP_NAMES.includes(op), 'Not an editing tool'),
+    options: z.record(z.string(), z.json()),
     enabled,
     name,
     blend: stepBlendSchema.optional(),
@@ -58,15 +65,6 @@ const sharpStepSchema = SharpNodeSchema.omit({ position: true })
     message: 'Only filters and colour tools can have a blend.',
     path: ['blend'],
   })
-
-const layerStepSchema = z.strictObject({
-  id: z.uuid(),
-  kind: z.literal(PipelineStepKind.Layer),
-  sourceId: z.string().min(1),
-  enabled,
-  name,
-  ...layerSettingsSchema.shape,
-})
 
 const aiStepOptions = aiStepSchema({ id: z.uuid(), enabled, name })
 
@@ -78,14 +76,14 @@ const aiStepOptions = aiStepSchema({ id: z.uuid(), enabled, name })
 export const LeafStepSchema = z.discriminatedUnion('kind', [
   sharpStepSchema,
   aiStepOptions,
-  layerStepSchema,
+  ...LAYER_KIND_SCHEMAS,
 ])
 
 /**
  * A group holds steps that do work, never another group. By default its steps
  * are part of the picture as if they were not grouped. As a sub-document it
- * is a picture of its own: its first layer that is on sets its size, its steps
- * act on that picture only, and the result is placed on the canvas like a
+ * is a picture of its own: a blank canvas the size of the document's, which its
+ * steps draw on and act on, and the result is placed on the canvas like a
  * layer, with the layer settings the group carries.
  */
 export const GroupStepSchema = z.strictObject({
@@ -102,7 +100,7 @@ export const GroupStepSchema = z.strictObject({
 export const PipelineStepSchema = z.discriminatedUnion('kind', [
   sharpStepSchema,
   aiStepOptions,
-  layerStepSchema,
+  ...LAYER_KIND_SCHEMAS,
   GroupStepSchema,
 ])
 
@@ -117,6 +115,7 @@ function everyId(steps: Steps): string[] {
 }
 
 export const PipelineSchema = z.object({
+  canvas: canvasSchema,
   steps: z
     .array(PipelineStepSchema)
     .refine((steps) => new Set(everyId(steps)).size === everyId(steps).length, {
@@ -132,10 +131,10 @@ export type Pipeline = z.output<typeof PipelineSchema>
 export type LeafStep = z.output<typeof LeafStepSchema>
 export type GroupStep = z.output<typeof GroupStepSchema>
 export type SharpStep = Extract<LeafStep, { kind: 'sharp' }>
-export type LayerStep = Extract<
-  LeafStep,
-  { kind: typeof PipelineStepKind.Layer }
->
+export type {
+  ImageLayerStep,
+  LayerStep,
+} from '@/features/pipeline/layer-kinds'
 export type AiStep = Extract<LeafStep, { kind: typeof AI_STEP_KIND }>
 
 export function createSharpStep(
@@ -151,14 +150,12 @@ export function createSharpStep(
   }
 }
 
-export function createLayerStep(sourceId: string): LayerStep {
-  return {
-    id: crypto.randomUUID(),
-    kind: PipelineStepKind.Layer,
-    sourceId,
-    enabled: true,
-    ...DEFAULT_LAYER_SETTINGS,
-  }
+/** A pipeline on this canvas, with the steps given (none by default). */
+export function createPipeline(
+  canvas: Canvas,
+  steps: ReadonlyArray<PipelineStep> = [],
+): Pipeline {
+  return { canvas, steps: [...steps] }
 }
 
 export function createGroupStep(
@@ -258,24 +255,31 @@ export function planSteps(pipeline: { steps: Steps }): PlanStep[] {
 }
 
 /**
- * The layer that sets the canvas: the first one that is switched on, inside a
- * group that is switched on or not in one. Its image is the picture the steps
- * after it work on, at its own size; later layers are drawn on it and cut off
- * at its edges. Hiding, moving or removing it makes the next layer the canvas.
- * A layer inside a sub-document sets the size of that group's picture, not
- * the canvas.
+ * The first layer that is switched on and has an image, inside a group that
+ * is switched on or not in one: the layer of the image the document shows as
+ * its original. Layers do not set the canvas; the pipeline's own canvas does.
  */
-export function canvasLayer(pipeline: { steps: Steps }): LayerStep | undefined {
+export function firstImageLayer(pipeline: {
+  steps: Steps
+}): LayerStep | undefined {
   for (const step of planSteps(pipeline)) {
-    if (step.kind === PipelineStepKind.Layer && step.enabled) return step
+    if (!isLayerStep(step) || !step.enabled) continue
+    if (layerKind(step).sourceIds(step).length > 0) return step
   }
   return undefined
 }
 
-/** Whether a pipeline has a step that changes the picture: any step but the layer that sets the canvas. */
+/** The image of the first layer that is switched on and has one: the document's original. */
+export function originalSourceId(pipeline: {
+  steps: Steps
+}): string | undefined {
+  const layer = firstImageLayer(pipeline)
+  return layer === undefined ? undefined : layerKind(layer).sourceIds(layer)[0]
+}
+
+/** Whether a pipeline has a step that changes the picture beyond drawing layers: a Sharp tool or an AI tool. */
 export function hasEdits(pipeline: Pipeline): boolean {
-  const canvas = canvasLayer(pipeline)
-  return leafSteps(pipeline).some((step) => step.id !== canvas?.id)
+  return leafSteps(pipeline).some((step) => !isLayerStep(step))
 }
 
 /** Where a step is: at the top, or inside the group `groupId`, and its place in that list. */
@@ -311,6 +315,7 @@ function withGroup(
   change: (group: GroupStep) => GroupStep,
 ): Pipeline {
   return {
+    ...pipeline,
     steps: pipeline.steps.map((step) =>
       step.kind === PipelineStepKind.Group && step.id === groupId
         ? change(step)
@@ -333,7 +338,7 @@ export function insertStep(
   if (groupId === undefined) {
     const steps = [...pipeline.steps]
     steps.splice(clamp(index ?? steps.length, steps.length), 0, step)
-    return { steps }
+    return { ...pipeline, steps }
   }
   if (step.kind === PipelineStepKind.Group) return pipeline
   return withGroup(pipeline, groupId, (group) => {
@@ -346,6 +351,7 @@ export function insertStep(
 /** Takes a step out of the pipeline, wherever it is; a group goes with the steps it holds. */
 export function removeStep(pipeline: Pipeline, id: string): Pipeline {
   return {
+    ...pipeline,
     steps: pipeline.steps
       .filter((step) => step.id !== id)
       .map((step) =>
@@ -374,6 +380,7 @@ export function moveStep(
 /** Replaces the step with the same id, wherever it is. */
 export function replaceStep(pipeline: Pipeline, next: PipelineStep): Pipeline {
   return {
+    ...pipeline,
     steps: pipeline.steps.map((step) => {
       if (step.id === next.id) return next
       if (step.kind !== PipelineStepKind.Group) return step

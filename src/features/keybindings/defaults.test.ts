@@ -31,6 +31,10 @@ describe('the default key bindings', () => {
     expect(JSON.parse(raw)).toEqual(DEFAULT_KEYBINDINGS)
   })
 
+  it('bind New document to a key', () => {
+    expect(DEFAULT_KEYBINDINGS.bindings['file.newDocument']).toEqual(['alt+n'])
+  })
+
   it('bind undo, redo and the tools the app had keys for before', () => {
     expect(DEFAULT_KEYBINDINGS.bindings['edit.undo']).toEqual(['mod+z'])
     expect(DEFAULT_KEYBINDINGS.bindings['edit.redo']).toContain('mod+shift+z')

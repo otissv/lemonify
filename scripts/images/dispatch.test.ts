@@ -107,6 +107,7 @@ describe('COMMANDS', () => {
       'document import',
       'document undo',
       'document redo',
+      'document canvas',
       'document step add',
       'document step remove',
       'document step move',

@@ -2,10 +2,18 @@ import { RiPlayLine } from '@remixicon/react'
 import { useCallback, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import type { AiContent } from '@/features/ai/ai-tools'
+import type { DocumentChange } from '@/features/pipeline/document-change'
+import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
+import {
+  createAiStep,
+  createGroupStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
+import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { defaultAiContent } from '@/features/workflows/ai-tool-entries'
 import type { AiToolEntry } from '@/features/workflows/ai-tool-entries'
 import type { OutputSettings } from '@/features/workflows/output-settings'
+import { RunCanvasSelect } from '@/features/workflows/run-canvas-select'
 import { RunsPanel } from '@/features/workflows/runs-panel'
 import {
   sourceFileName,
@@ -20,50 +28,29 @@ import {
   useWorkflowEditor,
 } from '@/features/workflows/use-workflow-editor'
 import { useWorkflowRuns } from '@/features/workflows/use-workflow-runs'
-import type { Workflow } from '@/features/workflows/workflow'
-import { WorkflowCanvas } from '@/features/workflows/workflow-canvas'
+import { RunCanvasMode } from '@/features/workflows/workflow'
 import {
-  WorkflowNodeKind,
-  addInputSources,
-  appendStep,
-  createAiNode,
-  createSharpNode,
-  insertStepAfter,
-  removeInputSource,
-  removeStep,
-  updateOutputSettings,
-} from '@/features/workflows/workflow-graph'
-import type {
-  AiNode,
-  SharpNode,
-  WorkflowNode,
-} from '@/features/workflows/workflow-graph'
+  addInputs,
+  addStepAfter,
+  changePipeline,
+  moveStepBy,
+  removeInput,
+  withOutput,
+} from '@/features/workflows/workflow-edit'
+import {
+  NO_SELECTION,
+  selectedStepId,
+  stepSelection,
+} from '@/features/workflows/workflow-selection'
+import type { Selection } from '@/features/workflows/workflow-selection'
+import { WorkflowStepList } from '@/features/workflows/workflow-step-list'
 
 interface WorkflowPageProps {
   id: string
   aiTools: ReadonlyArray<AiToolEntry>
 }
 
-const ORIGIN = { x: 0, y: 0 }
 const SAMPLE_NAME = 'photo.jpg'
-
-function patchNode(
-  workflow: Workflow,
-  id: string,
-  patch: (node: WorkflowNode) => WorkflowNode,
-): Workflow {
-  return {
-    ...workflow,
-    nodes: workflow.nodes.map((node) => (node.id === id ? patch(node) : node)),
-  }
-}
-
-function withContent(
-  node: WorkflowNode,
-  content: AiContent<AiNode>,
-): WorkflowNode {
-  return node.kind === 'ai' ? { ...node, ...content } : node
-}
 
 function saveMessage(save: SaveStatus, error: string | null): string {
   switch (save) {
@@ -79,13 +66,22 @@ function saveMessage(save: SaveStatus, error: string | null): string {
 function newStep(
   choice: PaletteChoice,
   aiTools: ReadonlyArray<AiToolEntry>,
-): WorkflowNode | undefined {
-  if (choice.kind === 'sharp') return createSharpNode(choice.op, ORIGIN)
-  const entry = aiTools.find(({ tool }) => tool.id === choice.tool)
-  return entry && createAiNode(defaultAiContent(entry), ORIGIN)
+): PipelineStep | undefined {
+  switch (choice.kind) {
+    case 'sharp':
+      return createSharpStep(choice.op)
+    case 'image-layer':
+      return createImageLayerStep()
+    case 'group':
+      return createGroupStep([])
+    case 'ai': {
+      const entry = aiTools.find(({ tool }) => tool.id === choice.tool)
+      return entry && createAiStep(defaultAiContent(entry))
+    }
+  }
 }
 
-/** Builds a pipeline from the image CLI's steps and AI tools, runs it on the chosen images, and offers the results. Every change is saved automatically. */
+/** Builds a workflow like a document: a canvas, image layers and steps in order, where an image layer with no image is where each input image goes. Runs it on the chosen images and offers the results. Every change is saved automatically. */
 export function WorkflowPage({
   id,
   aiTools,
@@ -93,76 +89,82 @@ export function WorkflowPage({
   const editor = useWorkflowEditor(id)
   const runs = useWorkflowRuns(id)
   const sources = useSourcesStore((state) => state.sources)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selection, setSelection] = useState<Selection>(NO_SELECTION)
+  const [canvasMode, setCanvasMode] = useState<RunCanvasMode>(
+    RunCanvasMode.Workflow,
+  )
   const { update, settle, reload, workflow } = editor
+  const selectedId = selectedStepId(selection)
+
+  const imageName = useCallback(
+    (sourceId: string): string => sourceFileName(sources, sourceId),
+    [sources],
+  )
 
   const handleAdd = useCallback(
     (choice: PaletteChoice): void => {
-      const node = newStep(choice, aiTools)
-      if (node === undefined) return
-      update((current) =>
-        selectedId === null
-          ? appendStep(current, node)
-          : insertStepAfter(current, selectedId, node),
-      )
-      setSelectedId(node.id)
+      const step = newStep(choice, aiTools)
+      if (step === undefined) return
+      update((current) => addStepAfter(current, step, selectedId))
+      setSelection(stepSelection(step.id))
     },
     [aiTools, selectedId, update],
   )
 
-  const handleOptionsChange = useCallback(
-    (stepId: string, options: SharpNode['options']): void => {
-      update((current) =>
-        patchNode(current, stepId, (node) =>
-          node.kind === WorkflowNodeKind.Sharp ? { ...node, options } : node,
-        ),
-      )
+  const handleChange = useCallback(
+    (change: DocumentChange): void => {
+      update((current) => changePipeline(current, change))
     },
     [update],
   )
 
-  const handleSettingsChange = useCallback(
-    (stepId: string, content: AiContent<AiNode>): void => {
-      update((current) =>
-        patchNode(current, stepId, (node) => withContent(node, content)),
-      )
+  const handleEnabledChange = useCallback(
+    (stepId: string, enabled: boolean): void => {
+      handleChange({ type: 'set-enabled', stepId, enabled })
+    },
+    [handleChange],
+  )
+
+  const handleMove = useCallback(
+    (stepId: string, delta: -1 | 1): void => {
+      update((current) => moveStepBy(current, stepId, delta))
     },
     [update],
   )
 
   const handleAddSources = useCallback(
     (sourceIds: ReadonlyArray<string>): void => {
-      update((current) => addInputSources(current, sourceIds))
+      update((current) => addInputs(current, sourceIds))
     },
     [update],
   )
 
   const handleRemoveSource = useCallback(
     (sourceId: string): void => {
-      update((current) => removeInputSource(current, sourceId))
+      update((current) => removeInput(current, sourceId))
     },
     [update],
   )
 
   const handleOutputChange = useCallback(
     (settings: OutputSettings): void => {
-      update((current) => updateOutputSettings(current, settings))
+      update((current) => withOutput(current, settings))
     },
     [update],
   )
 
   const handleRemove = useCallback(
     (stepId: string): void => {
-      update((current) => removeStep(current, stepId))
-      setSelectedId(null)
+      handleChange({ type: 'remove-step', stepId })
+      setSelection(NO_SELECTION)
     },
-    [update],
+    [handleChange],
   )
 
   const handleRun = useCallback(async (): Promise<void> => {
     await settle()
-    await runs.start()
-  }, [settle, runs.start])
+    await runs.start(canvasMode)
+  }, [settle, runs.start, canvasMode])
 
   const handleReload = useCallback((): void => {
     void reload()
@@ -183,16 +185,9 @@ export function WorkflowPage({
     )
   }
 
-  const selected = workflow.nodes.find((node) => node.id === selectedId)
-  const input = workflow.nodes.find(
-    (node) => node.kind === WorkflowNodeKind.Input,
-  )
-  const firstSource =
-    input?.kind === WorkflowNodeKind.Input ? input.sourceIds.at(0) : undefined
+  const [firstSource] = workflow.inputs
   const sampleName =
-    firstSource === undefined
-      ? SAMPLE_NAME
-      : sourceFileName(sources, firstSource)
+    firstSource === undefined ? SAMPLE_NAME : imageName(firstSource)
   const failed = editor.save === SaveStatus.Failed
 
   return (
@@ -215,6 +210,7 @@ export function WorkflowPage({
               Reload
             </Button>
           )}
+          <RunCanvasSelect value={canvasMode} onChange={setCanvasMode} />
           <Button size="sm" disabled={failed} onClick={() => void handleRun()}>
             <RiPlayLine aria-hidden="true" />
             Run
@@ -227,23 +223,27 @@ export function WorkflowPage({
           onAdd={handleAdd}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <WorkflowCanvas
+          <WorkflowStepList
             workflow={workflow}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onUpdate={update}
+            selection={selection}
+            onSelect={setSelection}
+            onEnabledChange={handleEnabledChange}
+            onMove={handleMove}
+            onRemove={handleRemove}
+            imageName={imageName}
           />
           <RunsPanel runs={runs} />
         </div>
         <StepInspector
-          step={selected}
+          workflow={workflow}
+          selection={selection}
           aiTools={aiTools}
-          onOptionsChange={handleOptionsChange}
-          onSettingsChange={handleSettingsChange}
+          onChange={handleChange}
           onRemove={handleRemove}
           onAddSources={handleAddSources}
           onRemoveSource={handleRemoveSource}
           onOutputChange={handleOutputChange}
+          imageName={imageName}
           sampleName={sampleName}
         />
       </div>

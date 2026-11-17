@@ -48,9 +48,11 @@ function toolAction(
 const STATIC_ACTIONS: ReadonlyArray<ActionDefinition> = [
   action('edit.undo', 'Undo', EDIT),
   action('edit.redo', 'Redo', EDIT),
+  action('edit.addImageLayer', 'Add image layer', EDIT),
   action('edit.insertImage', 'Insert image', EDIT),
   action('edit.replaceImage', 'Replace image', EDIT),
   action('edit.showOriginal', 'Show original', EDIT),
+  action('file.newDocument', 'New document', FILE),
   action('file.openImage', 'Open image', FILE),
   action('file.openLibrary', 'Open library image', FILE),
   action('file.importDocument', 'Import document', FILE),

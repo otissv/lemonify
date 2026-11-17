@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 import type { HistoryPatch } from '@/features/pipeline/document-change'
 import type { Pipeline } from '@/features/pipeline/pipeline'
+import { pipelineOf } from '@/test/pipelines'
 import { ConflictError, NotFoundError } from '../../errors.ts'
 import type { DocumentDao, DocumentRecord } from '../document-dao.ts'
 import type { SourceDao, SourceRecord } from '../source-dao.ts'
@@ -49,7 +50,7 @@ export function documentRecord(
     id: 'doc-1',
     ownerId: 'ann',
     name: 'One',
-    pipeline: { steps: [] },
+    pipeline: pipelineOf(),
     revision: 0,
     historyCursor: 0,
     createdAt: T0,
@@ -67,7 +68,7 @@ function addPatch(stepId: string): HistoryPatch {
 }
 
 function pipelineWith(stepId: string): Pipeline {
-  return { steps: [{ ...createSharpStep('blur'), id: stepUuid(stepId) }] }
+  return pipelineOf({ ...createSharpStep('blur'), id: stepUuid(stepId) })
 }
 
 async function setup(create: () => Promise<LibraryFixture>) {
@@ -416,19 +417,19 @@ export function libraryDaoContract(
       const undone = await documents.moveCursor({
         id: 'doc-1',
         expectedRevision: 1,
-        pipeline: { steps: [] },
+        pipeline: pipelineOf(),
         operandSourceIds: [],
         cursor: 0,
         now: T2,
       })
       expect(undone).toMatchObject({ revision: 2, historyCursor: 0 })
-      expect(undone.pipeline).toEqual({ steps: [] })
+      expect(undone.pipeline).toEqual(pipelineOf())
       expect(await documents.findEntry('doc-1', 0)).not.toBeNull()
       await expect(
         documents.moveCursor({
           id: 'doc-1',
           expectedRevision: 1,
-          pipeline: { steps: [] },
+          pipeline: pipelineOf(),
           operandSourceIds: [],
           cursor: 0,
           now: T2,

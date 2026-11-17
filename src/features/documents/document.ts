@@ -16,7 +16,7 @@ export type SourceSummary = {
 export type DocumentView = {
   id: string
   name: string
-  /** The image of the layer that sets the canvas: the first layer that is switched on. Null when there is none. */
+  /** The image of the first image layer that is switched on, the document's original. Null when there is none. */
   source: SourceSummary | null
   /** Every image the layers use, in pipeline order. */
   sources: ReadonlyArray<SourceSummary>

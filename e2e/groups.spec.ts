@@ -52,7 +52,8 @@ test('groups a step from the toolbar, folds, switches and places it, and takes i
 
   await steps.getByRole('button', { name: 'Group Group' }).click()
   await page.getByRole('switch', { name: 'Own picture' }).click()
-  await expect(steps.getByText(/No layer in this group is on/)).toBeVisible()
+  await expect(page.getByRole('switch', { name: 'Own picture' })).toBeChecked()
+  await expect(page.getByRole('slider', { name: 'Opacity' })).toBeVisible()
   await page.getByRole('switch', { name: 'Own picture' }).click()
   await expect(steps.getByText('1 step', { exact: true })).toBeVisible()
 

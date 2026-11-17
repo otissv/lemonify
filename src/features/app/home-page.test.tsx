@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import { workflowDefinition } from '@/test/workflow-fixtures'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -52,8 +53,7 @@ function workflowView(index: number, updatedAt: string): WorkflowView {
   return {
     id: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
     name: `Flow ${index}`,
-    nodes: [],
-    edges: [],
+    ...workflowDefinition(),
     revision: 0,
     createdAt: updatedAt,
     updatedAt,

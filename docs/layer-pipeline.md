@@ -1,14 +1,16 @@
 # Layer pipeline
 
-A document is an image and an ordered list of steps. Steps run in order, each on the picture the steps before it made. This file records how images are layered in that picture and why, so the code and the screens can be checked against it.
+A document is a canvas and an ordered list of steps. Steps run in order, each on the picture the steps before it made, starting from the blank canvas. This file records how images are layered in that picture and why, so the code and the screens can be checked against it.
 
 ## The model
 
-Every image in a document is a **layer** step. There is no separate "document image": a document starts with one layer holding the image it was opened from, and any layer can be hidden, moved, replaced or deleted. A document may have no layer at all, and then there is nothing to show until one is added.
+A document has a **canvas**: a width and a height in pixels (1 to 65535, at most about 268 million pixels in all, which is Sharp's own limit) and a background, either `transparent` or a colour written `#rrggbb`. The canvas is stored in the pipeline, next to the steps, so it is part of every undo, every document file and every render key. Nothing derives the canvas from an image after the document is made: opening an image makes a document whose canvas is the size of that image, once, and from then on the canvas changes only when the person changes it (`set-canvas`, one undoable edit; File > New document and `document create --width --height` start from a canvas of their own).
 
-The first layer that is switched on, and whose image still exists, is the **canvas**. Its image, at its own size, is the picture the steps after it start from. Every later layer is drawn on the picture as it stands and carries on. The canvas layer's own settings are not used (it has nothing beneath it); they take effect when another layer is placed below it. The steps after a layer, including effects, act on the picture with the layer in it, so an effect placed after a layer affects the layer too, and an effect placed before it does not. Steps before the canvas layer have no picture to work on and are skipped, with a message.
+Every image in a document is an **image layer** step, drawn on the canvas like any other step. An image layer may be **empty**: it keeps its settings and draws nothing until it has an image (`set-image`, one undoable change that fills it or, with no image, empties it). There is no "canvas layer": the first layer is not special, it has the same settings as the rest, and any layer can be hidden, moved, replaced or deleted without the picture changing size. A new document opened from an image has one layer holding that image. A document may have no layer at all, and then its picture is the blank canvas.
 
-A layer is on top of everything before it in the pipeline. The sidebar lists the steps with the last on top, the way layer panels do, so the row at the top of the list is drawn on top and the canvas layer is the lowest layer row. Moving a row up moves it later in the pipeline and so closer to the viewer. The canvas layer's row says so ("Canvas · file name").
+Every step acts on the picture as it stands, starting from the blank canvas. A layer is drawn on it with its own settings, so an effect placed after a layer affects the layer too, and an effect placed before it does not. A step before the first layer works on the blank canvas.
+
+A layer is on top of everything before it in the pipeline. The sidebar lists the steps with the last on top, the way layer panels do, so the row at the top of the list is drawn on top. Moving a row up moves it later in the pipeline and so closer to the viewer.
 
 No step merely "opens" an image for another step to use. A step that needs a second image (boolean, join channel) names an image from the library directly, as a layer does.
 
@@ -18,7 +20,7 @@ A **group** is a step that holds other steps. It has a name, an on/off switch, a
 
 By default a group changes nothing about the picture. The planner opens it, so the render keys, AI results and thumbnails are exactly those of the same steps without the group. Grouping and ungrouping can therefore be undone and redone freely and never makes anything run again.
 
-A group can instead be a **sub-document**: a picture of its own. Its first layer that is on, and whose image exists, sets its size (so a sub-document has its own canvas), the steps in it act on that picture only, and the result is placed on the main canvas like a layer. A sub-document therefore carries the layer settings (`opacity`, `blend`, `fit`, `scale`, `rotation`, `anchor`, `x`, `y`), which say where and how it lands; they are stored on every group but only used while it is a sub-document. Resizing the logo inside a sub-document resizes the logo and nothing else on the canvas. A sub-document with no layer that is on has no picture: it is left out of the render with a message ("No layer in this group is on…"), and an export is refused until it has one. A layer inside a sub-document never becomes the main canvas, and a sub-document that comes before the main canvas layer is skipped like any step there.
+A group can instead be a **sub-document**: a picture of its own. It starts from a blank canvas of the same size and background as the document's (a sub-document always inherits its parent's canvas; it has none of its own to set), the steps in it draw on and act on that picture only, and the result is placed on the document's canvas like a layer. A group offsets and scales its content only; it never changes the canvas. A sub-document therefore carries the layer settings (`opacity`, `blend`, `fit`, `scale`, `rotation`, `anchor`, `x`, `y`), which say where and how it lands; they are stored on every group but only used while it is a sub-document. Resizing the logo inside a sub-document resizes the logo and nothing else on the canvas. A sub-document with no layer that is on is a picture with nothing in it: it is drawn, and adds nothing visible.
 
 The two modes share the stored step, the editing code, undo, the CLI and the sidebar; only the planner treats them differently, in one place (`planSteps`, which opens a group that is not a sub-document and keeps one that is). AI steps inside a sub-document run on the sub-document's own picture, one at a time like all AI steps, and their results are stored under keys made from that picture. Their order among the AI steps of the main canvas is the order of the pipeline: an AI step waits for every one that comes before it, in or out of a sub-document. A step in a sub-document gets a small picture of the sub-document at that step, and the sub-document itself one of its place on the canvas.
 
@@ -31,6 +33,22 @@ The two modes share the stored step, the editing code, undo, the CLI and the sid
 | Name, switch, delete a group   | The group's row and options                                        | `document step rename`, `enable`, `disable`, `remove`      |
 | Make it a sub-document         | "Own picture" in the group's options                               | `document step set <id> <groupId> --sub-document on\|off`  |
 | Place a sub-document           | The same settings as a layer, in the group's options               | `document step set <id> <groupId> --settings <json>`       |
+
+## Layer kinds
+
+A layer has a `kind`, and `image-layer` is the only one today. The registry in `src/features/pipeline/layer-kinds.ts` owns everything that depends on the kind: its schema, its title, which library images it uses and how they are renamed when a pipeline moves, why it is not set up, how the sidebar shows it, and how the planner turns it into a drawn image, an empty layer or a layer whose image is gone. Nothing else checks for `image-layer`; an unknown kind is refused by the schema. The settings that place a layer (`opacity`, `blend`, `fit`, `scale`, `rotation`, `anchor`, `x`, `y`) are defined once and shared by every kind and by groups.
+
+## Workflows
+
+A workflow is the same pipeline a document has (canvas and steps, groups and sub-documents included), plus the library images it runs on (`inputs`, each at most once) and its output settings. Its **input slots** are the image layers that are switched on and have no image, in pipeline order, wherever they are. A run makes one item per input image. The image fills the first slot (a `set-image` change on that item's copy of the pipeline), and the other slots stay empty and draw nothing. A workflow with no slot cannot run, and nothing runs without an input image. A layer that has an image is fixed: it draws the same image in every item, as a logo would.
+
+A run chooses its canvas: `workflow` (the default) draws on the workflow's own canvas, `first-image` draws on a canvas the size of the item's image and keeps the workflow's background. The choice is stored with the run.
+
+The pipeline is cut into segments at every enabled AI step: a draw segment (layers and Sharp steps, planned and drawn as a document is), then the AI step on the result, then the next draw segment, always starting and ending with a draw segment. The first draw segment starts from the canvas and each later one from the picture the AI step made. The last is exported with the workflow's output settings, naming the input image as the original whose format "same as original" keeps. A step that cannot be applied (a layer whose image is gone, a tool that is not set up) fails the item with a message. AI steps inside a sub-document are refused when a workflow runs.
+
+The Composite tool is not offered in workflows, as in documents: an image layer does what it did. Image layers do not cover generated inputs (`create`, `text`), the `tile` option and the Porter-Duff blend modes of Composite. The `sharp` command keeps Composite for one-off work on files.
+
+Workflows saved before this model stored a graph of nodes and edges. They are not converted: they fail to read and must be deleted.
 
 ## Layer settings
 
@@ -50,7 +68,7 @@ The defaults put an image in the middle of the canvas, shrunk if it is larger, f
 
 ### Decisions
 
-**The canvas never grows.** A layer larger than the canvas, or moved partly off it, is cut off at the canvas edge. The canvas is the canvas layer's image, as steps before the layer left it, so a resize step before a layer changes where the layer lands, and one after it scales the layer along with everything else. It keeps every render the size the person sees. Hiding, moving or deleting the canvas layer makes the next layer the canvas, and the picture takes that image's size.
+**The canvas never grows.** A layer larger than the canvas, or moved partly off it, is cut off at the canvas edge. The canvas changes size only when the person changes it, or when a geometry step (resize, extract, rotate) changes the picture, as steps before a layer left it. Hiding, moving or deleting a layer never changes the size of the picture. Changing the canvas does not change the steps: layers keep their settings and land where those settings put them on the new canvas.
 
 **Layers are drawn at full resolution.** The preview is made small only at the end, so placement, scale and rotation do not depend on how big the preview is.
 
@@ -64,25 +82,28 @@ Scale (Geometry) resizes the picture by a percentage, where Resize is in pixels.
 
 ## How it is rendered
 
-The planner turns the pipeline into a base image and an ordered list of engine steps: Sharp steps, layers with their image resolved to a file, and sub-documents, each with its own base image and engine steps, which the engine renders to pixels first and then places like a layer. The engine applies them in order. Sharp does not run its operations in the order they are listed within one pipeline (it resizes before it composites, for instance), so the engine renders the picture to pixels at every layer and builds the next stage from those pixels. The layer's image is oriented, sized by `fit` and `scale`, rotated, given its opacity, cut to the part that is over the canvas, and composited with its blend mode.
+The planner turns the pipeline into a base and an ordered list of engine steps. The base is the blank canvas, or, after an AI step that has a result, that result (the steps before it are baked into it). The steps are Sharp steps, layers with their image resolved to a file, and sub-documents, each with its own base (the same canvas) and engine steps, which the engine renders to pixels first and then places like a layer. A layer whose image is gone is skipped with a message. The engine applies them in order. Sharp does not run its operations in the order they are listed within one pipeline (it resizes before it composites, for instance), so the engine renders the picture to pixels at every layer and builds the next stage from those pixels. The layer's image is oriented, sized by `fit` and `scale`, rotated, given its opacity, cut to the part that is over the canvas, and composited with its blend mode.
 
-Render keys name an image by its content hash and a layer by its settings, and a sub-document by the key-form of everything it applies and its placement (a group that is not a sub-document has no key of its own), so the same document on another machine, with the same pictures under other ids, finds the same keys. That is what lets a document file bring its AI results with it.
+Render keys start from the canvas (`canvas:<width>x<height>:<background>`), so another size or background is another picture. They name an image by its content hash and a layer by its settings, and a sub-document by the key-form of everything it applies and its placement (a group that is not a sub-document has no key of its own), so the same document on another machine, with the same pictures under other ids, finds the same keys. That is what lets a document file bring its AI results with it.
 
 ## What changed from the earlier models
 
-The first model let a document hold several "Open image" steps, of which the first was the picture and the rest only made their image available to later steps. The second model made the extra ones layers and kept one locked "Image" step at the bottom. The current model removes that special step: every image is a layer. The Composite tool, which did the same job with a list of images in its options, is not offered in documents (the workflow editor and the `sharp` command keep it, since they have no layers).
+The first model let a document hold several "Open image" steps, of which the first was the picture and the rest only made their image available to later steps. The second model made the extra ones layers and kept one locked "Image" step at the bottom. The third model removed that special step: every image is a layer, and the first layer that was switched on set the canvas. The current model gives the document an explicit canvas, so no layer is special. The Composite tool, which did the same job with a list of images in its options, is not offered in documents or workflows; only the `sharp` command keeps it.
 
-Existing documents are migrated in two steps. `20260101000500-layers` made extra image steps layers (or dropped those that only supplied a second image to a boolean or join channel step) and each Composite step a layer per image, with its blend mode and placement. `20260101000600-layers-only` turns the remaining image step into a layer with the default settings, in the same place. Undo history of a migrated document is cleared because the steps change. Document files (`.lemon`) made before layers (bundle version 1) are refused with an explanation; there is no conversion for files.
+Existing documents are migrated in two steps. `20260101000500-layers` made extra image steps layers (or dropped those that only supplied a second image to a boolean or join channel step) and each Composite step a layer per image, with its blend mode and placement. `20260101000600-layers-only` turns the remaining image step into a layer with the default settings, in the same place. Undo history of a migrated document is cleared because the steps change. Document files (`.lemon`) made before layers (bundle version 1) are refused with an explanation, and so are documents and files made before the canvas was explicit: their pipeline has no `canvas`, so it fails validation. There is no conversion for either.
 
 ## Where it lives
 
-| Concern                                           | Place                                                                                                    |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Step schemas and constraints, groups, `planSteps` | `src/features/pipeline/pipeline.ts`                                                                      |
-| Changes and undo                                  | `src/features/pipeline/document-change.ts`                                                               |
-| Placement maths (pure)                            | `src/server/render/layer-geometry.ts`                                                                    |
-| Compositing, sub-document pictures                | `src/server/tools/layer-compositor.ts`, called by `image-engine.ts`                                      |
-| Planning and render keys                          | `src/server/render/plan-pipeline.ts`, `render-key.ts`                                                    |
-| Migrations                                        | `migrations/20260101000500-layers.ts`, `20260101000600-layers-only.ts`                                   |
-| Sidebar (rows, groups, toolbar), options, canvas  | `src/features/documents/`, `src/features/app/sidebar-toolbar.tsx`, `src/features/tools/step-options.tsx` |
-| CLI                                               | `scripts/images/commands/document-step.ts`                                                               |
+| Concern                                           | Place                                                                                                          |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Step schemas and constraints, groups, `planSteps` | `src/features/pipeline/pipeline.ts`                                                                            |
+| The canvas (schema, identity, limits)             | `src/features/pipeline/canvas.ts`                                                                              |
+| Changes and undo                                  | `src/features/pipeline/document-change.ts`                                                                     |
+| Placement maths (pure)                            | `src/server/render/layer-geometry.ts`                                                                          |
+| Compositing, sub-document pictures                | `src/server/tools/layer-compositor.ts`, called by `image-engine.ts`                                            |
+| Planning and render keys                          | `src/server/render/plan-pipeline.ts`, `render-key.ts`                                                          |
+| The layer-kind registry                           | `src/features/pipeline/layer-kinds.ts`                                                                         |
+| Workflows: slots, canvas mode, segments           | `src/features/workflows/segments.ts`, `workflow.ts`, `src/server/jobs/handlers/run-item-handler.ts`            |
+| Migrations                                        | `migrations/20260101000500-layers.ts`, `20260101000600-layers-only.ts`, `20260101000900-workflow-pipelines.ts` |
+| Sidebar (rows, groups, toolbar), options, canvas  | `src/features/documents/`, `src/features/app/sidebar-toolbar.tsx`, `src/features/tools/step-options.tsx`       |
+| CLI                                               | `scripts/images/commands/document-step.ts`                                                                     |

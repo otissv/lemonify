@@ -6,7 +6,7 @@ import type {
   AiToolSummary,
 } from '@/features/ai/ai-tools'
 import { defaultUpscaleSettings } from '@/features/upscale/upscale-settings'
-import type { AiNode } from '@/features/workflows/workflow-graph'
+import type { AiStep } from '@/features/pipeline/pipeline'
 
 /** An AI tool the server can run, with the models it offers. Plain data, so a route can load it. */
 export interface AiToolEntry {
@@ -26,7 +26,7 @@ export async function loadAiToolEntries(): Promise<Array<AiToolEntry>> {
 }
 
 /** The tool and settings a new step of this tool starts with. */
-export function defaultAiContent(entry: AiToolEntry): AiContent<AiNode> {
+export function defaultAiContent(entry: AiToolEntry): AiContent<AiStep> {
   switch (entry.tool.id) {
     case AiToolId.Upscale:
       return {
