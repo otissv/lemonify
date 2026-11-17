@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   closeInTrail,
+  lastVisitOfKind,
   previousVisit,
   visitInTrail,
 } from '@/features/documents/visit-trail'
@@ -28,6 +29,25 @@ describe('closeInTrail', () => {
 
   it('leaves the trail alone when the page is not in it', () => {
     expect(closeInTrail(['a'], 'z')).toEqual(['a'])
+  })
+})
+
+describe('lastVisitOfKind', () => {
+  const items = [
+    { id: 'd1', kind: 'document' as const },
+    { id: 'w1', kind: 'workflow' as const },
+    { id: 'd2', kind: 'document' as const },
+  ]
+
+  it('is the most recent trail entry of the requested kind', () => {
+    expect(lastVisitOfKind(['d1', 'w1', 'd2'], 'document', items)).toEqual({
+      id: 'd2',
+      kind: 'document',
+    })
+    expect(lastVisitOfKind(['d1', 'w1', 'd2'], 'workflow', items)).toEqual({
+      id: 'w1',
+      kind: 'workflow',
+    })
   })
 })
 

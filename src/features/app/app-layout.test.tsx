@@ -229,6 +229,28 @@ describe('AppLayout', () => {
       expect(useUiStore.getState().sidebarTab).toBe(SidebarTab.Workflow)
     })
 
+    it('opens the editor when you choose Editor and the workflow when you choose Workflow', async () => {
+      const workflow = workflowView('wf-1', 'Sizes')
+      vi.mocked(listDocuments).mockResolvedValue([FIRST])
+      vi.mocked(listWorkflows).mockResolvedValue([workflow])
+      const user = userEvent.setup()
+      const { router } = await renderApp(`/documents/${FIRST_ID}`)
+      useUiStore.getState().visitItem(FIRST_ID)
+      useUiStore.getState().visitItem(workflow.id)
+
+      await user.click(within(sidebar()).getByRole('tab', { name: 'Workflow' }))
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe(`/workflows/${workflow.id}`)
+      })
+
+      await user.click(within(sidebar()).getByRole('tab', { name: 'Editor' }))
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe(`/documents/${FIRST_ID}`)
+      })
+    })
+
     it('lists one link per document, at the address of its page', async () => {
       vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND])
       await renderApp()

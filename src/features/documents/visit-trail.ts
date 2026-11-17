@@ -19,6 +19,21 @@ export function closeInTrail(trail: VisitTrail, id: string): VisitTrail {
  * Where closing a page goes: the document or workflow opened most recently
  * before it that still exists, or undefined when there is none (the welcome page).
  */
+/** The document or workflow opened most recently that still exists and matches `kind`. */
+export function lastVisitOfKind(
+  trail: VisitTrail,
+  kind: VisitedKind,
+  existing: ReadonlyArray<VisitedItem>,
+): VisitedItem | undefined {
+  for (let index = trail.length - 1; index >= 0; index -= 1) {
+    const id = trail[index]
+    if (id === undefined) continue
+    const found = existing.find((item) => item.id === id && item.kind === kind)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
 export function previousVisit(
   trail: VisitTrail,
   closing: string,

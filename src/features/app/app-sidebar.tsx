@@ -13,6 +13,7 @@ import {
   useNavigate,
   useParams,
   useRouter,
+  useRouterState,
 } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
@@ -26,6 +27,7 @@ import { AddWorkflowDialog } from '@/features/workflows/add-workflow-dialog'
 import { WorkflowSidebarPreview } from '@/features/workflows/workflow-sidebar-preview'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { sidebarTabTarget } from '@/features/app/sidebar-tab-nav'
 import { filterByQuery } from '@/features/app/sidebar-search'
 import type { DocumentSummary } from '@/features/documents/document'
 import {
@@ -652,11 +654,36 @@ function SidebarEdgeToggle(): React.JSX.Element {
 }
 
 export function AppSidebar(): React.JSX.Element {
+  const { documents, workflows } = rootRoute.useLoaderData()
+  const navigate = useNavigate()
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  })
   const tab = useUiStore((state) => state.sidebarTab)
+  const visitTrail = useUiStore((state) => state.visitTrail)
   const setTab = useUiStore((state) => state.setSidebarTab)
 
+  useEffect(() => {
+    const fromRoute =
+      pathname.startsWith('/workflows/') ? SidebarTab.Workflow
+      : pathname.startsWith('/documents/') ? SidebarTab.Editor
+      : undefined
+    if (fromRoute !== undefined && fromRoute !== tab) setTab(fromRoute)
+  }, [pathname, tab, setTab])
+
   function handleTabChange(value: string): void {
-    if (isSidebarTab(value)) setTab(value)
+    if (!isSidebarTab(value) || value === tab) return
+    setTab(value)
+    const target = sidebarTabTarget(value, visitTrail, documents, workflows)
+    if (target.kind === 'home') {
+      void navigate({ to: '/' })
+      return
+    }
+    if (target.kind === 'document') {
+      void navigate({ to: '/documents/$id', params: { id: target.id } })
+      return
+    }
+    void navigate({ to: '/workflows/$id', params: { id: target.id } })
   }
 
   return (
