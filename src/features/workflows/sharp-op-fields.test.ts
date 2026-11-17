@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   OpFieldKind,
   SHARP_OP_GROUPS,
+  opFieldHasFixedRange,
+  opFieldSliderStep,
   opLabel,
   sharpOpFields,
   missingSharpOptions,
@@ -69,6 +71,20 @@ describe('sharpOpFields', () => {
     expect(
       sharpOpFields('jpeg').find(({ name }) => name === 'quality'),
     ).toMatchObject({ kind: OpFieldKind.Integer, min: 1, max: 100 })
+  })
+
+  it('marks bounded numbers for a slider and picks a step', () => {
+    const quality = sharpOpFields('jpeg').find(({ name }) => name === 'quality')!
+    const width = sharpOpFields('resize').find(({ name }) => name === 'width')!
+    const percent = sharpOpFields('opacity').find(
+      ({ name }) => name === 'percent',
+    )!
+
+    expect(opFieldHasFixedRange(quality)).toBe(true)
+    expect(opFieldSliderStep(quality)).toBe(1)
+    expect(opFieldHasFixedRange(width)).toBe(false)
+    expect(opFieldHasFixedRange(percent)).toBe(true)
+    expect(opFieldSliderStep(percent)).toBe(0.1)
   })
 
   it('edits colours with the colour picker, keeping their description', () => {

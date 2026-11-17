@@ -39,6 +39,25 @@ export interface OpField {
   matrix?: MatrixSpec
 }
 
+/** A number the schema pins between a minimum and a maximum (e.g. quality 1–100). */
+export function opFieldHasFixedRange(field: OpField): boolean {
+  return (
+    (field.kind === OpFieldKind.Integer || field.kind === OpFieldKind.Number) &&
+    field.min !== undefined &&
+    field.max !== undefined
+  )
+}
+
+/** Step size for a bounded number shown as a slider. */
+export function opFieldSliderStep(field: OpField): number {
+  if (field.kind === OpFieldKind.Integer) return 1
+  const span = field.max! - field.min!
+  if (span <= 1) return 0.001
+  if (span <= 10) return 0.01
+  if (span <= 100) return 0.1
+  return 1
+}
+
 export interface SharpOpGroup {
   label: string
   ops: ReadonlyArray<string>

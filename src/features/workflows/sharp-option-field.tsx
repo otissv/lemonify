@@ -9,9 +9,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { OpFieldKind } from '@/features/workflows/sharp-op-fields'
+import type { OpField } from '@/features/workflows/sharp-op-fields'
+import {
+  OpFieldKind,
+  opFieldHasFixedRange,
+  opFieldSliderStep,
+} from '@/features/workflows/sharp-op-fields'
 import { ColourControl } from '@/features/workflows/fields/colour-field'
 import type {
   ControlProps,
@@ -37,7 +43,58 @@ function textOf(value: JsonValue | undefined): string {
   return typeof value === 'string' ? value : JSON.stringify(value)
 }
 
-function NumberControl({
+function BoundedNumberSlider({
+  field,
+  value,
+  problem,
+  onChange,
+  describedBy,
+}: ControlProps): React.JSX.Element {
+  const unset = value === undefined
+  const min = field.min!
+  const max = field.max!
+  const position = unset ? min : (value as number)
+  const step = opFieldSliderStep(field)
+
+  function handleValueChange(values: Array<number>): void {
+    const next = values.at(0)
+    if (next === undefined) return
+    onChange(
+      field.name,
+      field.kind === OpFieldKind.Integer ? Math.round(next) : next,
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-body-md text-muted-foreground">
+          {unset ? 'Default' : formatBoundedNumber(field, position)}
+        </span>
+      </div>
+      <Slider
+        thumbLabel={field.label}
+        aria-required={field.required}
+        aria-invalid={problem ? true : undefined}
+        aria-describedby={describedBy}
+        min={min}
+        max={max}
+        step={step}
+        value={[position]}
+        onValueChange={handleValueChange}
+      />
+    </div>
+  )
+}
+
+function formatBoundedNumber(field: OpField, value: number): string {
+  if (field.kind === OpFieldKind.Integer) return String(Math.round(value))
+  const step = opFieldSliderStep(field)
+  const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3
+  return String(Number(value.toFixed(decimals)))
+}
+
+function NumberInput({
   field,
   value,
   problem,
@@ -80,6 +137,13 @@ function NumberControl({
       onChange={handleChange}
     />
   )
+}
+
+function NumberControl(props: ControlProps): React.JSX.Element {
+  if (opFieldHasFixedRange(props.field)) {
+    return <BoundedNumberSlider {...props} />
+  }
+  return <NumberInput {...props} />
 }
 
 function TextControl({

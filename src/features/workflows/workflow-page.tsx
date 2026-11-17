@@ -206,6 +206,7 @@ export function WorkflowPage({
         workflow={workflow}
         selection={selection}
         onSelect={handleSelect}
+        onRemoveStep={handleRemove}
         imageName={imageName}
       />
       <KeyBindings documentId={id} catalogues={catalogues} />

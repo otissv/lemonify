@@ -80,6 +80,36 @@ describe('option controls', () => {
     vi.resetAllMocks()
   })
 
+  describe('bounded numbers', () => {
+    it('sets quality with a slider', async () => {
+      const user = userEvent.setup()
+      show('jpeg')
+      const quality = screen.getByRole('slider', { name: 'Quality' })
+      expect(quality).toBeVisible()
+      expect(quality).toHaveAttribute('aria-valuenow', '1')
+
+      quality.focus()
+      await user.keyboard('{End}')
+
+      expect(latest).toEqual({ quality: 100 })
+    })
+
+    it('shows opacity percent on a slider', async () => {
+      const user = userEvent.setup()
+      show('opacity', { percent: 40 })
+
+      expect(screen.getByRole('slider', { name: 'Percent' })).toBeVisible()
+      expect(screen.getByText('40')).toBeVisible()
+
+      screen.getByRole('slider', { name: 'Percent' }).focus()
+      await user.keyboard('{ArrowRight}')
+      await user.keyboard('{ArrowRight}')
+      await user.keyboard('{ArrowRight}')
+
+      expect(latest.percent).toBeGreaterThan(40)
+    })
+  })
+
   describe('colour', () => {
     it('takes a colour typed as text', async () => {
       const user = userEvent.setup()

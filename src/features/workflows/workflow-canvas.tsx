@@ -41,6 +41,7 @@ interface WorkflowCanvasProps {
   workflow: Workflow
   selection: Selection
   onSelect: (selection: Selection) => void
+  onRemoveStep: (stepId: string) => void
   /** The file name of an image, for the layers that draw one. */
   imageName: (sourceId: string) => string
 }
@@ -122,6 +123,7 @@ function toFlowNodes(
   thumbnails:
     | ReadonlyArray<{ stepId: string; key: string | null }>
     | undefined,
+  onRemoveStep: (stepId: string) => void,
 ): StepFlowNode[] {
   const groupIds = new Set(
     workflow.pipeline.steps
@@ -148,6 +150,8 @@ function toFlowNodes(
             : 'middle',
       hasBranch: groupIds.has(node.id),
       inBranch: node.groupId !== undefined,
+      deletable: node.kind === 'step',
+      onDelete: node.kind === 'step' ? onRemoveStep : undefined,
     },
   }))
 }
@@ -195,6 +199,7 @@ export function WorkflowCanvas({
   workflow,
   selection,
   onSelect,
+  onRemoveStep,
   imageName,
 }: WorkflowCanvasProps): React.JSX.Element {
   const thumbnails = usePipelineStore((state) => state.thumbnails[workflow.id])
@@ -208,8 +213,9 @@ export function WorkflowCanvas({
         selection,
         imageName,
         thumbnails,
+        onRemoveStep,
       ),
-    [workflow, graph.nodes, selection, imageName, thumbnails],
+    [workflow, graph.nodes, selection, imageName, thumbnails, onRemoveStep],
   )
   const edges = useMemo(() => toFlowEdges(graph.nodes, graph.edges), [graph])
 

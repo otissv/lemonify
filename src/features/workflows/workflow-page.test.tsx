@@ -838,6 +838,25 @@ describe('WorkflowPage', () => {
       })
       expect(screen.getByRole('tab', { name: 'Options' })).toBeDisabled()
     })
+
+    it('removes a step from the diagram', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      await user.click(
+        within(palette()).getByRole('button', { name: 'Add Resize' }),
+      )
+
+      await waitFor(() => {
+        expect(stepKinds()).toEqual([IMAGE_LAYER_KIND, 'resize'])
+      })
+
+      await user.click(screen.getByTitle('Delete Resize'))
+
+      await waitFor(() => {
+        expect(savedWorkflow().pipeline.steps).toHaveLength(1)
+      })
+      expect(screen.getByRole('tab', { name: 'Options' })).toBeDisabled()
+    })
   })
 
   describe('layers and groups', () => {
