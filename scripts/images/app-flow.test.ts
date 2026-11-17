@@ -514,3 +514,140 @@ describe('naming and ordering documents through the CLI', () => {
     expect(moved.documents[to]?.id).toBe(a.id)
   })
 })
+
+describe('looking at a document through the CLI', () => {
+  async function newDoc(): Promise<string> {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('look.png'),
+    )
+    return (await cli<Doc>('document', 'create', source.id)).document.id
+  }
+
+  type Preview = {
+    path: string
+    bytes: number
+    format: string
+    original: boolean
+    pending: string[]
+    problems: unknown[]
+  }
+
+  it('writes the picture the canvas shows with `document preview`', async () => {
+    const id = await newDoc()
+    await cli<Doc>('document', 'step', 'add', id, '--op', 'flop')
+    const file = path.join(workDir, 'canvas.png')
+
+    const { preview } = await cli<{ preview: Preview }>(
+      'document',
+      'preview',
+      id,
+      '--out',
+      file,
+    )
+
+    expect(preview).toMatchObject({
+      path: file,
+      format: 'png',
+      original: false,
+      pending: [],
+      problems: [],
+    })
+    expect((await sharp(file).metadata()).format).toBe('png')
+  })
+
+  it('writes the image as opened, smaller, with --original and --width', async () => {
+    const id = await newDoc()
+    await cli<Doc>(
+      'document',
+      'step',
+      'add',
+      id,
+      '--op',
+      'rotate',
+      '--options',
+      '{"angle":90}',
+    )
+    const file = path.join(workDir, 'before.jpg')
+
+    await cli(
+      'document',
+      'preview',
+      id,
+      '--out',
+      file,
+      '--original',
+      '--width',
+      '32',
+    )
+
+    const meta = await sharp(file).metadata()
+    expect([meta.format, meta.width, meta.height]).toEqual(['jpeg', 32, 24])
+  })
+
+  it('shows the result of an edit in the same command with --preview', async () => {
+    const id = await newDoc()
+    const file = path.join(workDir, 'after.png')
+
+    const edited = await cli<Doc & { preview: Preview }>(
+      'document',
+      'step',
+      'add',
+      id,
+      '--op',
+      'rotate',
+      '--options',
+      '{"angle":90}',
+      '--preview',
+      file,
+    )
+
+    expect(edited.document.pipeline.steps).toHaveLength(2)
+    expect(edited.preview.path).toBe(file)
+    const meta = await sharp(file).metadata()
+    expect([meta.width, meta.height]).toEqual([48, 64])
+  })
+
+  it('does the same after undo, so the change can be seen being taken back', async () => {
+    const id = await newDoc()
+    await cli<Doc>(
+      'document',
+      'step',
+      'add',
+      id,
+      '--op',
+      'rotate',
+      '--options',
+      '{"angle":90}',
+    )
+    const file = path.join(workDir, 'undone.png')
+
+    const undone = await cli<Doc & { preview: Preview }>(
+      'document',
+      'undo',
+      id,
+      '--preview',
+      file,
+    )
+
+    expect(undone.document.pipeline.steps).toHaveLength(1)
+    const meta = await sharp(file).metadata()
+    expect([meta.width, meta.height]).toEqual([64, 48])
+  })
+
+  it('writes no picture unless asked', async () => {
+    const id = await newDoc()
+
+    const edited = await cli<Doc & { preview?: Preview }>(
+      'document',
+      'step',
+      'add',
+      id,
+      '--op',
+      'flop',
+    )
+
+    expect(edited.preview).toBeUndefined()
+  })
+})

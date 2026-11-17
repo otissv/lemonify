@@ -14,6 +14,7 @@ import {
   documentImportCommand,
   documentListCommand,
   documentMoveCommand,
+  documentPreviewCommand,
   documentRedoCommand,
   documentRenameCommand,
   documentShowCommand,
@@ -164,7 +165,7 @@ export const RENDER_COMMANDS = {
   requestExport: [exportCommand],
   requestAiStep: [documentStepRunCommand],
   clearUnusedResults: [resultClearUnusedCommand],
-  requestPreview: { screenOnly: 'the small picture the editor shows' },
+  requestPreview: [documentPreviewCommand],
   requestThumbnails: { screenOnly: 'the small pictures in the step list' },
   fetch: { screenOnly: 'serves a rendered picture to the page' },
 } as const satisfies Record<keyof RenderService, Coverage>

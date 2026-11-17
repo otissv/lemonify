@@ -71,7 +71,7 @@ The stateless commands work on any image with no database or sign-in. The statef
 | `sharp`, `info`, `upscale`, `models`, `formats`, `schema`                                                             | Process, inspect and upscale images; list models and formats; print a command's JSON Schema |
 | `user list`                                                                                                           | List the users                                                                              |
 | `source add`, `list`, `delete`                                                                                        | Upload images as sources, list or delete them                                               |
-| `document create`, `list`, `show`, `rename`, `move`, `delete`, `undo`, `redo`, `step add`, `remove`, `move`, `set`, `rename`, `enable`, `disable`, `run` | Create and edit documents: a pipeline of steps with undo history                            |
+| `document create`, `list`, `show`, `preview`, `rename`, `move`, `delete`, `undo`, `redo`, `step add`, `remove`, `move`, `set`, `rename`, `enable`, `disable`, `run` | Create and edit documents: a pipeline of steps with undo history                            |
 | `export <documentId> --out <path>`                                                                                    | Render a document at full size and write it                                                 |
 | `document export <id> --out <path>`                                                                                   | Write the document itself (pipeline, images, AI results) to a `.lemon` file                 |
 | `document import <file>`                                                                                              | Make a new document from a `.lemon` file                                                    |
@@ -79,6 +79,8 @@ The stateless commands work on any image with no database or sign-in. The statef
 | `result list`, `show`, `delete`, `save`, `clear-unused`                                                               | Manage the images that cost work or were asked for                                          |
 | `job list`, `show`, `cancel`                                                                                          | Follow and cancel queued work                                                               |
 | `worker`                                                                                                              | Take jobs from the queue until stopped                                                      |
+
+`document preview <id> --out <path>` writes the picture the editor's canvas shows (`--original` for the image as opened, `--width` to shrink it), and every command that edits a document takes `--preview <path>` to write that picture after the change, so the CLI can see what it did. The file type follows the extension (`.webp`, `.png`, `.jpg`), and the result lists AI steps still waiting and steps left out of the picture.
 
 A command that waits for its jobs (`export`, `workflow run --follow`) does the work in its own process, so no server or worker is needed. The web server also runs workers itself, so `worker` is only for doing queued work when no server is running.
 

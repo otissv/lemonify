@@ -15,6 +15,12 @@ import type { DocumentView } from '../../../src/features/documents/document.ts'
 import { ValidationError } from '../../../src/server/errors.ts'
 import { defineAppCommand } from '../app-command.ts'
 import { withWorkers } from '../in-process-workers.ts'
+import {
+  PREVIEW_FLAGS,
+  PREVIEW_HELP,
+  PREVIEW_SHAPE,
+  withPreview,
+} from '../preview-flag.ts'
 import { runAiSteps } from '../run-ai-steps.ts'
 import type { AppCommandContext } from '../app-command.ts'
 
@@ -25,18 +31,21 @@ const JSON_VALUE = 'JSON: inline, @file.json, or - for stdin'
 type StepContext<T> = AppCommandContext<T>
 
 /** Applies one change to the document as it is now and prints the result. */
-async function change<T extends { documentId: string }>(
-  { app, actor, options }: StepContext<T>,
+function change<T extends { documentId: string; preview?: string | undefined }>(
+  context: StepContext<T>,
   build: (current: DocumentView) => DocumentChange,
-): Promise<{ document: DocumentView }> {
-  const current = await app.documents.get(actor, options.documentId)
-  const document = await app.documents.change(
-    actor,
-    options.documentId,
-    current.revision,
-    build(current),
-  )
-  return { document }
+) {
+  return withPreview(context, async () => {
+    const { app, actor, options } = context
+    const current = await app.documents.get(actor, options.documentId)
+    const document = await app.documents.change(
+      actor,
+      options.documentId,
+      current.revision,
+      build(current),
+    )
+    return { document }
+  })
 }
 
 function requireStep(current: DocumentView, stepId: string) {
@@ -76,7 +85,7 @@ export const documentStepAddCommand = defineAppCommand({
   name: 'document step add',
   summary: 'Add a Sharp, AI or layer step to a document',
   synopsis:
-    '<documentId> (--op <name> [--options <json>] [--blend <json>] | --ai <tool> --settings <json> | --layer <sourceId> [--settings <json>]) [--index <n>]',
+    '<documentId> (--op <name> [--options <json>] [--blend <json>] | --ai <tool> --settings <json> | --layer <sourceId> [--settings <json>]) [--index <n>] [--preview <path>]',
   help: `Adds a step to the end of the pipeline, or at --index. A Sharp step is an operation by name
 (\`${'pnpm images sharp --help'}\` and \`pnpm images schema sharp\` list them) with its
 options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings; a layer
@@ -101,7 +110,8 @@ Options:
   --ai <tool>          An AI tool
   --layer <sourceId>   Add this source as a layer
   --settings <json>    The tool's settings, or the layer's (${JSON_VALUE})
-  --index <n>          Where to put the step (default: the end)`,
+  --index <n>          Where to put the step (default: the end)
+${PREVIEW_HELP}`,
   shape: {
     documentId: id,
     op: z.string().min(1).optional(),
@@ -111,6 +121,7 @@ Options:
     settings: json.optional(),
     layer: id.optional(),
     index: z.coerce.number().int().nonnegative().optional(),
+    ...PREVIEW_SHAPE,
   },
   positionals: ['documentId'],
   flags: {
@@ -121,6 +132,7 @@ Options:
     settings: { type: 'string', json: true },
     layer: { type: 'string' },
     index: { type: 'string' },
+    ...PREVIEW_FLAGS,
   },
   async run(context) {
     const { op, options, blend, ai, settings, layer, index } = context.options
@@ -143,10 +155,14 @@ Options:
 export const documentStepRemoveCommand = defineAppCommand({
   name: 'document step remove',
   summary: 'Remove a step from a document',
-  synopsis: '<documentId> <stepId>',
-  help: 'Removes the step from the pipeline; it can be undone.',
-  shape: { documentId: id, stepId: id },
+  synopsis: '<documentId> <stepId> [--preview <path>]',
+  help: `Removes the step from the pipeline; it can be undone.
+
+Options:
+${PREVIEW_HELP}`,
+  shape: { documentId: id, stepId: id, ...PREVIEW_SHAPE },
   positionals: ['documentId', 'stepId'],
+  flags: PREVIEW_FLAGS,
   run: (context) =>
     change(context, () => ({
       type: 'remove-step',
@@ -157,14 +173,19 @@ export const documentStepRemoveCommand = defineAppCommand({
 export const documentStepMoveCommand = defineAppCommand({
   name: 'document step move',
   summary: 'Move a step to another place in the pipeline',
-  synopsis: '<documentId> <stepId> <to>',
-  help: 'Moves the step so it sits at position <to> (counting from 0) among the other steps.',
+  synopsis: '<documentId> <stepId> <to> [--preview <path>]',
+  help: `Moves the step so it sits at position <to> (counting from 0) among the other steps.
+
+Options:
+${PREVIEW_HELP}`,
   shape: {
     documentId: id,
     stepId: id,
     to: z.coerce.number().int().nonnegative(),
+    ...PREVIEW_SHAPE,
   },
   positionals: ['documentId', 'stepId', 'to'],
+  flags: PREVIEW_FLAGS,
   run: (context) =>
     change(context, () => ({
       type: 'move-step',
@@ -177,7 +198,7 @@ export const documentStepSetCommand = defineAppCommand({
   name: 'document step set',
   summary: "Replace a step's options, blend, settings or image",
   synopsis:
-    '<documentId> <stepId> (--options <json> | --blend <json> | --settings <json> | --source <sourceId>)',
+    '<documentId> <stepId> (--options <json> | --blend <json> | --settings <json> | --source <sourceId>) [--preview <path>]',
   help: `Replaces the options of a Sharp step, the blend of a filter or colour step,
 the settings of an AI step or of a layer (every layer setting not given goes
 back to its default), or the image of a layer. A blend of {} takes the blend
@@ -187,7 +208,8 @@ Options:
   --options <json>     New options for a Sharp step (${JSON_VALUE})
   --blend <json>       New blend, mode and opacity, for a filter or colour step (${JSON_VALUE})
   --settings <json>    New settings for an AI step or a layer (${JSON_VALUE})
-  --source <sourceId>  The source a layer shows`,
+  --source <sourceId>  The source a layer shows
+${PREVIEW_HELP}`,
   shape: {
     documentId: id,
     stepId: id,
@@ -195,9 +217,11 @@ Options:
     blend: json.optional(),
     settings: json.optional(),
     source: id.optional(),
+    ...PREVIEW_SHAPE,
   },
   positionals: ['documentId', 'stepId'],
   flags: {
+    ...PREVIEW_FLAGS,
     options: { type: 'string', json: true },
     blend: { type: 'string', json: true },
     settings: { type: 'string', json: true },
@@ -267,10 +291,19 @@ function setChange(step: PipelineStep, given: Given): DocumentChange {
 export const documentStepRenameCommand = defineAppCommand({
   name: 'document step rename',
   summary: 'Give a step a name, or take its name away',
-  synopsis: '<documentId> <stepId> [<name>]',
-  help: "Names the step in the sidebar. Leave <name> out (or give an empty one) to go back to the tool's own name.",
-  shape: { documentId: id, stepId: id, name: z.string().optional() },
+  synopsis: '<documentId> <stepId> [<name>] [--preview <path>]',
+  help: `Names the step in the sidebar. Leave <name> out (or give an empty one) to go back to the tool's own name.
+
+Options:
+${PREVIEW_HELP}`,
+  shape: {
+    documentId: id,
+    stepId: id,
+    name: z.string().optional(),
+    ...PREVIEW_SHAPE,
+  },
   positionals: ['documentId', 'stepId', 'name'],
+  flags: PREVIEW_FLAGS,
   run: (context) =>
     change(context, () => ({
       type: 'rename-step',
@@ -284,10 +317,14 @@ function enabling(name: string, enabled: boolean) {
   return defineAppCommand({
     name,
     summary: `${verb} a step`,
-    synopsis: '<documentId> <stepId>',
-    help: `${verb} a step. A step that is off stays in the pipeline but is not applied.`,
-    shape: { documentId: id, stepId: id },
+    synopsis: '<documentId> <stepId> [--preview <path>]',
+    help: `${verb} a step. A step that is off stays in the pipeline but is not applied.
+
+Options:
+${PREVIEW_HELP}`,
+    shape: { documentId: id, stepId: id, ...PREVIEW_SHAPE },
     positionals: ['documentId', 'stepId'],
+    flags: PREVIEW_FLAGS,
     run: (context) =>
       change(context, () => ({
         type: 'set-enabled',
