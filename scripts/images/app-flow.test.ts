@@ -651,3 +651,55 @@ describe('looking at a document through the CLI', () => {
     expect(edited.preview).toBeUndefined()
   })
 })
+
+describe('looking at part of a document through the CLI', () => {
+  it('writes only the region asked for with --region', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('part.png'),
+    )
+    const { document } = await cli<Doc>('document', 'create', source.id)
+    const file = path.join(workDir, 'part.png')
+
+    const { preview } = await cli<{
+      preview: { region: { x: number; width: number } }
+    }>(
+      'document',
+      'preview',
+      document.id,
+      '--out',
+      file,
+      '--original',
+      '--region',
+      '0.5,0,0.5,1',
+    )
+
+    expect(preview.region).toEqual({ x: 0.5, y: 0, width: 0.5, height: 1 })
+    expect(await sharp(file).metadata()).toMatchObject({
+      width: 32,
+      height: 48,
+    })
+  })
+
+  it('refuses a region outside the picture', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('bad.png'),
+    )
+    const { document } = await cli<Doc>('document', 'create', source.id)
+
+    await expect(
+      cli(
+        'document',
+        'preview',
+        document.id,
+        '--out',
+        path.join(workDir, 'x.png'),
+        '--region',
+        '0.8,0,0.5,1',
+      ),
+    ).rejects.toThrow(/inside the picture/)
+  })
+})

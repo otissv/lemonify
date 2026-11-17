@@ -125,6 +125,39 @@ describe('writePreview', () => {
     expect((await sharp(big).metadata()).width).toBe(8)
   })
 
+  it('writes only the region asked for, taken before the picture is shrunk', async () => {
+    const document = await newDocument()
+    const half = path.join(out, 'half.png')
+    const small = path.join(out, 'small.png')
+
+    const written = await writePreview(t.app, t.ann, document.id, half, {
+      original: true,
+      region: { x: 0.5, y: 0, width: 0.5, height: 1 },
+    })
+    await writePreview(t.app, t.ann, document.id, small, {
+      original: true,
+      region: { x: 0, y: 0, width: 0.5, height: 0.5 },
+      width: 2,
+    })
+
+    expect(written.region).toEqual({ x: 0.5, y: 0, width: 0.5, height: 1 })
+    expect(await sharp(half).metadata()).toMatchObject({ width: 4, height: 6 })
+    expect(await sharp(small).metadata()).toMatchObject({ width: 2, height: 2 })
+  })
+
+  it('says it wrote the whole picture when no region is given', async () => {
+    const document = await newDocument()
+
+    const written = await writePreview(
+      t.app,
+      t.ann,
+      document.id,
+      path.join(out, 'all.webp'),
+    )
+
+    expect(written.region).toBeNull()
+  })
+
   it('refuses a file type it cannot write', async () => {
     const document = await newDocument()
 

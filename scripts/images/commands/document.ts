@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { defineAppCommand } from '../app-command.ts'
 import { withWorkers } from '../in-process-workers.ts'
 import { writePreview } from '../preview-document.ts'
+import { parseRegion } from '../region.ts'
 import {
   PREVIEW_FLAGS,
   PREVIEW_HELP,
@@ -146,7 +147,8 @@ ${PREVIEW_HELP}`,
 export const documentPreviewCommand = defineAppCommand({
   name: 'document preview',
   summary: 'Write the picture the canvas shows to a file',
-  synopsis: '<id> --out <path> [--original] [--width <px>]',
+  synopsis:
+    '<id> --out <path> [--original] [--region <x,y,w,h>] [--width <px>]',
   help: `Writes the picture the editor's canvas would show for the document, so it can
 be looked at without the website. It is made by the same preview the editor
 asks for. The file type follows the extension of --out (.webp, .png, .jpg); a
@@ -158,23 +160,29 @@ export.
 Options:
   --out <path>         Where to write the picture (required)
   --original           The image as opened, before any step
+  --region <x,y,w,h>   Only this part of the picture: x, y, width and height as
+                       fractions from 0 to 1, e.g. 0.25,0.25,0.5,0.5 for the
+                       middle quarter. Taken before --width shrinks it
   --width <px>         Shrink the picture to this width (never enlarged)`,
   shape: {
     id,
     out: z.string().min(1),
     original: z.boolean().default(false),
+    region: z.string().min(1).transform(parseRegion).optional(),
     width: z.coerce.number().int().positive().optional(),
   },
   positionals: ['id'],
   flags: {
     out: { type: 'string' },
     original: { type: 'boolean' },
+    region: { type: 'string' },
     width: { type: 'string' },
   },
   run: ({ app, actor, options }) =>
     withWorkers(app, async () => ({
       preview: await writePreview(app, actor, options.id, options.out, {
         original: options.original,
+        region: options.region,
         width: options.width,
       }),
     })),

@@ -9,11 +9,15 @@ import { RenderKind } from '../../src/server/tools/render-store.ts'
 import type { App } from '../../src/server/composition.ts'
 import type { Actor } from '../../src/server/domain/actor.ts'
 import { ValidationError } from '../../src/server/errors.ts'
+import { cropBox } from './region.ts'
+import type { Region } from './region.ts'
 import { writeAtomically } from './save-result.ts'
 
 export type PreviewOptions = {
   /** The image as opened, before any step, as the editor's "show original" does. */
   original?: boolean
+  /** Only this part of the picture, taken before it is shrunk. */
+  region?: Region
   /** Shrink the picture to this width; it is never made larger. */
   width?: number
 }
@@ -23,6 +27,8 @@ export type PreviewPicture = {
   bytes: number
   format: PictureFormat
   original: boolean
+  /** The part of the picture that was written, or null for all of it. */
+  region: Region | null
   /** AI steps still waiting for a result; the picture shows the pipeline only up to the first. */
   pending: string[]
   /** Steps left out of the picture, with why. */
@@ -124,10 +130,22 @@ export async function writePreview(
 
   const wanted = format ?? NATIVE_FORMAT
   const unchanged =
-    !original && wanted === NATIVE_FORMAT && options.width === undefined
+    !original &&
+    wanted === NATIVE_FORMAT &&
+    options.width === undefined &&
+    options.region === undefined
   let content: Readable = picture.stream
   if (!unchanged) {
     let image = sharp(await collect(picture.stream))
+    if (options.region !== undefined) {
+      const { width, height } = await image.metadata()
+      if (width === undefined || height === undefined) {
+        throw new Error('The picture has no size to take a region of.')
+      }
+      image = sharp(await image.toBuffer()).extract(
+        cropBox(options.region, width, height),
+      )
+    }
     if (options.width !== undefined) {
       image = image.resize({ width: options.width, withoutEnlargement: true })
     }
@@ -146,6 +164,7 @@ export async function writePreview(
     bytes: size,
     format: wanted,
     original,
+    region: options.region ?? null,
     pending: picture.pending,
     problems: picture.problems,
   }
