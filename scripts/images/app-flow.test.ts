@@ -468,3 +468,49 @@ describe('workflows through the CLI', () => {
     expect(emptied.document.pipeline.steps).toHaveLength(0)
   })
 })
+
+describe('naming and ordering documents through the CLI', () => {
+  it('renames a document and moves it in the list', async () => {
+    const first = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('one.png'),
+    )
+    const second = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('two.png'),
+    )
+    const { document: a } = await cli<Doc>(
+      'document',
+      'create',
+      first.source.id,
+    )
+    const { document: b } = await cli<Doc>(
+      'document',
+      'create',
+      second.source.id,
+    )
+
+    const renamed = await cli<{ document: { name: string } }>(
+      'document',
+      'rename',
+      b.id,
+      'Poster',
+    )
+    expect(renamed.document.name).toBe('Poster')
+
+    const before = await cli<{ documents: Array<{ id: string }> }>(
+      'document',
+      'list',
+    )
+    const to = before.documents.findIndex(({ id }) => id === a.id) === 0 ? 1 : 0
+    const moved = await cli<{ documents: Array<{ id: string }> }>(
+      'document',
+      'move',
+      a.id,
+      String(to),
+    )
+    expect(moved.documents[to]?.id).toBe(a.id)
+  })
+})

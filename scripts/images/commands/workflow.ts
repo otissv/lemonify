@@ -306,6 +306,18 @@ Options:
   },
 })
 
+export const workflowRunShowCommand = defineAppCommand({
+  name: 'workflow run show',
+  summary: 'Print one workflow run with its items',
+  synopsis: '<runId>',
+  help: 'Prints the run: its state and progress, and each item with its state and result.',
+  shape: { runId: id },
+  positionals: ['runId'],
+  async run({ app, actor, options }) {
+    return { run: await app.workflows.getRun(actor, options.runId) }
+  },
+})
+
 export const workflowCancelCommand = defineAppCommand({
   name: 'workflow cancel',
   summary: 'Cancel a run',

@@ -52,6 +52,33 @@ export const documentShowCommand = defineAppCommand({
   },
 })
 
+export const documentRenameCommand = defineAppCommand({
+  name: 'document rename',
+  summary: 'Rename a document',
+  synopsis: '<id> <name>',
+  help: 'Gives the document a new name, as double-clicking it in the sidebar does, and prints the document.',
+  shape: { id, name: z.string() },
+  positionals: ['id', 'name'],
+  async run({ app, actor, options }) {
+    return {
+      document: await app.documents.rename(actor, options.id, options.name),
+    }
+  },
+})
+
+export const documentMoveCommand = defineAppCommand({
+  name: 'document move',
+  summary: 'Move a document to another place in your list',
+  synopsis: '<id> <to>',
+  help: 'Moves the document so it sits at position <to> (counting from 0) among your documents, as dragging it in the sidebar does, and prints the new order.',
+  shape: { id, to: z.coerce.number().int().nonnegative() },
+  positionals: ['id', 'to'],
+  async run({ app, actor, options }) {
+    await app.documents.move(actor, options.id, options.to)
+    return { documents: await app.documents.list(actor) }
+  },
+})
+
 export const documentDeleteCommand = defineAppCommand({
   name: 'document delete',
   summary: 'Delete a document',

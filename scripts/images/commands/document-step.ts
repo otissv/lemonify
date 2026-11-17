@@ -14,6 +14,8 @@ import type { PipelineStep } from '../../../src/features/pipeline/pipeline.ts'
 import type { DocumentView } from '../../../src/features/documents/document.ts'
 import { ValidationError } from '../../../src/server/errors.ts'
 import { defineAppCommand } from '../app-command.ts'
+import { withWorkers } from '../in-process-workers.ts'
+import { runAiSteps } from '../run-ai-steps.ts'
 import type { AppCommandContext } from '../app-command.ts'
 
 const id = z.string().min(1)
@@ -300,3 +302,20 @@ export const documentStepDisableCommand = enabling(
   'document step disable',
   false,
 )
+
+export const documentStepRunCommand = defineAppCommand({
+  name: 'document step run',
+  summary: 'Run the AI steps of a document that have no result yet',
+  synopsis: '<documentId> [<stepId>]',
+  help: `Runs AI steps as the website's Run button does, one at a time and in order,
+because each works on the picture the steps before it made. Give <stepId> to
+run only that step; it must be the first one waiting. Prints the steps that
+were run. The AI steps of a document must have results before it can be
+exported.`,
+  shape: { documentId: id, stepId: id.optional() },
+  positionals: ['documentId', 'stepId'],
+  run: ({ app, actor, options }) =>
+    withWorkers(app, () =>
+      runAiSteps(app, actor, options.documentId, options.stepId),
+    ),
+})

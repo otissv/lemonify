@@ -21,7 +21,7 @@ export const exportCommand = defineAppCommand({
     '<documentId> --out <path> [--format <name>] [--options <json>] [--width <px>]',
   help: `Renders the document's pipeline at full size and writes the image to --out
 (a file path, or a folder to use the image's own name). AI steps must already
-have results; run them first. The export is also kept as a result.
+have results; run them first with 'document step run'. The export is also kept as a result.
 
 Options:
   --out <path>         Where to write the image (required)
