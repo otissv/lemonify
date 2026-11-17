@@ -7,6 +7,9 @@ import type { ExportSettings } from '@/features/export/export-settings'
 
 import type { AiToolRegistry } from '../ai/ai-tool-registry.ts'
 import type { DocumentDao, DocumentRecord } from '../dao/document-dao.ts'
+import type { WorkflowDao, WorkflowRecord } from '../dao/workflow-dao.ts'
+import type { RunCanvasMode } from '@/features/workflows/workflow'
+import { workflowPreviewNodeIds } from '@/features/workflows/workflow-graph-layout'
 import type { JobDao } from '../dao/job-dao.ts'
 import { ResultKind } from '../dao/result-dao.ts'
 import type { Actor } from '../domain/actor.ts'
@@ -28,6 +31,7 @@ import type { ResultService } from './result-service.ts'
 import { WorkerPool } from '@/features/ai/ai-tools'
 
 const MISSING_DOCUMENT = 'That image does not exist.'
+const MISSING_WORKFLOW = 'That workflow does not exist.'
 const MISSING_RENDER = 'That picture is not available. Request it again.'
 /** Every step that does work, and each sub-document, which has a picture of its own to show. */
 function thumbnailStepIds(pipeline: Pipeline): string[] {
@@ -45,6 +49,7 @@ const NO_MAX = Number.MAX_SAFE_INTEGER
 
 export type RenderServiceDependencies = {
   documents: DocumentDao
+  workflows: WorkflowDao
   planner: DocumentPlanner
   jobs: JobService
   jobDao: JobDao
@@ -119,6 +124,42 @@ export class RenderService {
         documentId,
       },
     ])
+  }
+
+  /** Queues small pictures under each node of a workflow diagram. */
+  async requestWorkflowThumbnails(
+    actor: Actor,
+    workflowId: string,
+    canvasMode: RunCanvasMode,
+    nodeIds?: ReadonlyArray<string>,
+  ): Promise<JobView> {
+    const workflow = await this.#ownedWorkflow(actor, workflowId)
+    const ids =
+      nodeIds ??
+      workflowPreviewNodeIds({
+        id: workflow.id,
+        name: workflow.name,
+        ...workflow.definition,
+      })
+    return this.#latestOnlyWorkflow(
+      actor,
+      workflow,
+      JobKind.WorkflowThumbnail,
+      async () => [
+        {
+          kind: JobKind.WorkflowThumbnail,
+          payload: {
+            kind: JobKind.WorkflowThumbnail,
+            workflowId,
+            revision: workflow.revision,
+            canvasMode,
+            nodeIds: [...ids],
+          },
+          pool: WorkerPool.Cpu,
+          groupKey: workflowId,
+        },
+      ],
+    )
   }
 
   /** Queues an AI step to run; the earlier AI steps must have Results already. */
@@ -213,6 +254,21 @@ export class RenderService {
     key: string,
   ): Promise<OpenedRender> {
     await this.#owned(actor, documentId)
+    return this.#openRender(kind, key)
+  }
+
+  /** A stored workflow diagram thumbnail. */
+  async fetchWorkflow(
+    actor: Actor,
+    workflowId: string,
+    kind: RenderKind,
+    key: string,
+  ): Promise<OpenedRender> {
+    await this.#ownedWorkflow(actor, workflowId)
+    return this.#openRender(kind, key)
+  }
+
+  async #openRender(kind: RenderKind, key: string): Promise<OpenedRender> {
     const { renders } = this.#deps
     let found: string | undefined
     try {
@@ -223,6 +279,41 @@ export class RenderService {
     }
     if (found === undefined) throw new NotFoundError(MISSING_RENDER)
     return { stream: renders.open(kind, key), mediaType: RENDER_MEDIA_TYPE }
+  }
+
+  async #ownedWorkflow(
+    actor: Actor,
+    workflowId: string,
+  ): Promise<WorkflowRecord> {
+    return requireOwned(
+      actor,
+      await this.#deps.workflows.findById(workflowId),
+      MISSING_WORKFLOW,
+    )
+  }
+
+  async #latestOnlyWorkflow(
+    actor: Actor,
+    workflow: WorkflowRecord,
+    kind: JobKind,
+    build: () => Promise<Parameters<JobService['enqueue']>[1]>,
+  ): Promise<JobView> {
+    const { jobDao, clock, jobs } = this.#deps
+    const active = (await jobDao.listActive({ kinds: [kind] })).filter(
+      (job) =>
+        job.ownerId === actor.userId &&
+        job.groupKey === workflow.id &&
+        job.payload.kind === kind,
+    )
+    let current: JobRecord | undefined
+    for (const job of active) {
+      const revision = 'revision' in job.payload ? job.payload.revision : NO_MAX
+      if (revision === workflow.revision) current ??= job
+      else await jobDao.requestCancel(job.id, isoNow(clock))
+    }
+    if (current !== undefined) return toView(current)
+    const [queued] = await jobs.enqueue(actor, await build())
+    return this.#only(queued)
   }
 
   /**
@@ -258,6 +349,11 @@ export class RenderService {
       await this.#deps.documents.findById(documentId),
       MISSING_DOCUMENT,
     )
+  }
+
+  #only(job: JobRecord | undefined): JobView {
+    if (job === undefined) throw new Error('A job was not queued.')
+    return toView(job)
   }
 
   #checkOptions(settings: ExportSettings): void {
@@ -307,10 +403,5 @@ export class RenderService {
     if (current !== undefined) return toView(current)
     const [queued] = await jobs.enqueue(actor, await build())
     return this.#only(queued)
-  }
-
-  #only(job: JobRecord | undefined): JobView {
-    if (job === undefined) throw new Error('A job was not queued.')
-    return toView(job)
   }
 }

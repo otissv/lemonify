@@ -3,7 +3,7 @@ import type { PipelineStep } from '@/features/pipeline/pipeline'
 import type { Workflow } from '@/features/workflows/workflow'
 
 export const COLUMN_WIDTH = 260
-export const ROW_HEIGHT = 130
+export const ROW_HEIGHT = 200
 
 export const CANVAS_NODE_ID = 'canvas'
 export const INPUTS_NODE_ID = 'inputs'
@@ -90,4 +90,9 @@ export function workflowGraph(workflow: Workflow): WorkflowGraph {
     }
   }
   return { nodes, edges }
+}
+
+/** Every node on the workflow diagram, in layout order. */
+export function workflowPreviewNodeIds(workflow: Workflow): string[] {
+  return workflowGraph(workflow).nodes.map((node) => node.id)
 }

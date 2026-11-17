@@ -201,6 +201,10 @@ export const RENDER_COMMANDS = {
   clearUnusedResults: [resultClearUnusedCommand],
   requestPreview: [documentPreviewCommand],
   requestThumbnails: { screenOnly: 'the small pictures in the step list' },
+  requestWorkflowThumbnails: {
+    screenOnly: 'the small pictures under each workflow node',
+  },
+  fetchWorkflow: { screenOnly: 'serving workflow diagram thumbnails' },
   fetch: { screenOnly: 'serves a rendered picture to the page' },
 } as const satisfies Record<keyof RenderService, Coverage>
 

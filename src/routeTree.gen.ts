@@ -21,6 +21,7 @@ import { Route as ApiResultsIdRouteImport } from './routes/api/results.$id'
 import { Route as ApiSourcesIdRouteImport } from './routes/api/sources.$id'
 import { Route as ApiDocumentsIdBundleRouteImport } from './routes/api/documents.$id.bundle'
 import { Route as ApiDocumentsIdRendersKindKeyRouteImport } from './routes/api/documents.$id.renders.$kind.$key'
+import { Route as ApiWorkflowsIdRendersKindKeyRouteImport } from './routes/api/workflows.$id.renders.$kind.$key'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -83,6 +84,12 @@ const ApiDocumentsIdRendersKindKeyRoute =
     path: '/api/documents/$id/renders/$kind/$key',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiWorkflowsIdRendersKindKeyRoute =
+  ApiWorkflowsIdRendersKindKeyRouteImport.update({
+    id: '/api/workflows/$id/renders/$kind/$key',
+    path: '/api/workflows/$id/renders/$kind/$key',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/api/sources/$id': typeof ApiSourcesIdRoute
   '/api/documents/$id/bundle': typeof ApiDocumentsIdBundleRoute
   '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
+  '/api/workflows/$id/renders/$kind/$key': typeof ApiWorkflowsIdRendersKindKeyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -111,6 +119,7 @@ export interface FileRoutesByTo {
   '/api/sources/$id': typeof ApiSourcesIdRoute
   '/api/documents/$id/bundle': typeof ApiDocumentsIdBundleRoute
   '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
+  '/api/workflows/$id/renders/$kind/$key': typeof ApiWorkflowsIdRendersKindKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -126,6 +135,7 @@ export interface FileRoutesById {
   '/api/sources/$id': typeof ApiSourcesIdRoute
   '/api/documents/$id/bundle': typeof ApiDocumentsIdBundleRoute
   '/api/documents/$id/renders/$kind/$key': typeof ApiDocumentsIdRendersKindKeyRoute
+  '/api/workflows/$id/renders/$kind/$key': typeof ApiWorkflowsIdRendersKindKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
     | '/api/sources/$id'
     | '/api/documents/$id/bundle'
     | '/api/documents/$id/renders/$kind/$key'
+    | '/api/workflows/$id/renders/$kind/$key'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -156,6 +167,7 @@ export interface FileRouteTypes {
     | '/api/sources/$id'
     | '/api/documents/$id/bundle'
     | '/api/documents/$id/renders/$kind/$key'
+    | '/api/workflows/$id/renders/$kind/$key'
   id:
     | '__root__'
     | '/'
@@ -170,6 +182,7 @@ export interface FileRouteTypes {
     | '/api/sources/$id'
     | '/api/documents/$id/bundle'
     | '/api/documents/$id/renders/$kind/$key'
+    | '/api/workflows/$id/renders/$kind/$key'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +197,7 @@ export interface RootRouteChildren {
   ApiResultsIdRoute: typeof ApiResultsIdRoute
   ApiDocumentsIdBundleRoute: typeof ApiDocumentsIdBundleRoute
   ApiDocumentsIdRendersKindKeyRoute: typeof ApiDocumentsIdRendersKindKeyRoute
+  ApiWorkflowsIdRendersKindKeyRoute: typeof ApiWorkflowsIdRendersKindKeyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -272,6 +286,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDocumentsIdRendersKindKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/workflows/$id/renders/$kind/$key': {
+      id: '/api/workflows/$id/renders/$kind/$key'
+      path: '/api/workflows/$id/renders/$kind/$key'
+      fullPath: '/api/workflows/$id/renders/$kind/$key'
+      preLoaderRoute: typeof ApiWorkflowsIdRendersKindKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -299,6 +320,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiResultsIdRoute: ApiResultsIdRoute,
   ApiDocumentsIdBundleRoute: ApiDocumentsIdBundleRoute,
   ApiDocumentsIdRendersKindKeyRoute: ApiDocumentsIdRendersKindKeyRoute,
+  ApiWorkflowsIdRendersKindKeyRoute: ApiWorkflowsIdRendersKindKeyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

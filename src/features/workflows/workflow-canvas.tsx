@@ -4,6 +4,9 @@ import { Background, Controls, ReactFlow } from '@xyflow/react'
 import type { Edge } from '@xyflow/react'
 import { useCallback, useMemo } from 'react'
 
+import { workflowThumbnailImageUrl } from '@/features/documents/image-urls'
+import { usePipelineStore } from '@/store/pipeline-store'
+
 import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
 import { StepNode } from '@/features/workflows/step-node'
 import type { StepFlowNode } from '@/features/workflows/step-node'
@@ -97,11 +100,28 @@ function describe(
   }
 }
 
+function thumbnailOf(
+  workflowId: string,
+  nodeId: string,
+  thumbnails:
+    | ReadonlyArray<{ stepId: string; key: string | null }>
+    | undefined,
+): string | undefined {
+  const key = thumbnails?.find(({ stepId }) => stepId === nodeId)?.key
+  return key === null || key === undefined
+    ? undefined
+    : workflowThumbnailImageUrl(workflowId, key)
+}
+
 function toFlowNodes(
   workflow: Workflow,
+  workflowId: string,
   nodes: ReadonlyArray<GraphNode>,
   selection: Selection,
   imageName: (sourceId: string) => string,
+  thumbnails:
+    | ReadonlyArray<{ stepId: string; key: string | null }>
+    | undefined,
 ): StepFlowNode[] {
   const groupIds = new Set(
     workflow.pipeline.steps
@@ -119,6 +139,7 @@ function toFlowNodes(
     selected: selectionIsNode(selection, node, chosen),
     data: {
       ...describe(workflow, node, imageName),
+      thumbnail: thumbnailOf(workflowId, node.id, thumbnails),
       position:
         node.kind === 'canvas'
           ? 'start'
@@ -176,10 +197,19 @@ export function WorkflowCanvas({
   onSelect,
   imageName,
 }: WorkflowCanvasProps): React.JSX.Element {
+  const thumbnails = usePipelineStore((state) => state.thumbnails[workflow.id])
   const graph = useMemo(() => workflowGraph(workflow), [workflow])
   const nodes = useMemo(
-    () => toFlowNodes(workflow, graph.nodes, selection, imageName),
-    [workflow, graph.nodes, selection, imageName],
+    () =>
+      toFlowNodes(
+        workflow,
+        workflow.id,
+        graph.nodes,
+        selection,
+        imageName,
+        thumbnails,
+      ),
+    [workflow, graph.nodes, selection, imageName, thumbnails],
   )
   const edges = useMemo(() => toFlowEdges(graph.nodes, graph.edges), [graph])
 

@@ -15,6 +15,7 @@ import { newWorkflowStep } from '@/features/workflows/new-workflow-step'
 import type { NewStepChoice } from '@/features/workflows/new-workflow-step'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import { useRunPolling } from '@/features/workflows/use-run-polling'
+import { useWorkflowThumbnails } from '@/features/workflows/use-workflow-thumbnails'
 import { useWorkflow } from '@/features/workflows/use-workflow'
 import { RunCanvasMode } from '@/features/workflows/workflow'
 import type { Workflow } from '@/features/workflows/workflow'
@@ -68,14 +69,15 @@ export function WorkflowPage({
   aiTools,
 }: WorkflowPageProps): React.JSX.Element {
   const { session, loadError } = useWorkflow(id)
+  const canvasMode = useUiStore(
+    (state) => state.runCanvasModes[id] ?? RunCanvasMode.Workflow,
+  )
   useRunPolling(id)
+  useWorkflowThumbnails(id, canvasMode, session !== undefined)
   const sources = useLibraryStore((state) => state.sources)
   const startRun = useLibraryStore((state) => state.startRun)
   const stepId = useUiStore((state) => state.selectedSteps[id])
   const focus = useUiStore((state) => state.workflowFocus[id])
-  const canvasMode = useUiStore(
-    (state) => state.runCanvasModes[id] ?? RunCanvasMode.Workflow,
-  )
   const setActiveTool = useUiStore((state) => state.setActiveTool)
   const selectInWorkflow = useUiStore((state) => state.selectInWorkflow)
   const setRunCanvasMode = useUiStore((state) => state.setRunCanvasMode)
@@ -83,7 +85,7 @@ export function WorkflowPage({
   const catalogues = useMemo(() => cataloguesOf(aiTools), [aiTools])
 
   useEffect(() => {
-    visitItem(id)
+    if (useUiStore.getState().visitTrail.at(-1) !== id) visitItem(id)
   }, [id, visitItem])
 
   const workflow = useMemo<Workflow | undefined>(

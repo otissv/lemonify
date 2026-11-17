@@ -170,7 +170,7 @@ describe('ToolsPanel', () => {
       expect(content.className).not.toMatch(/bg-/)
       expect(active).toHaveClass(
         'after:hidden',
-        'group-data-[variant=line]/tabs-list:data-[state=active]:bg-foreground/15',
+        'group-data-[variant=line]/tabs-list:data-[state=active]:!bg-muted',
       )
     })
   })

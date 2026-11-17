@@ -14,6 +14,11 @@ describe('visitInTrail', () => {
   it('moves a page already in the trail to the end, once', () => {
     expect(visitInTrail(['a', 'b', 'c'], 'a')).toEqual(['b', 'c', 'a'])
   })
+
+  it('keeps the same trail when the page is already last', () => {
+    const trail = ['a', 'b', 'c']
+    expect(visitInTrail(trail, 'c')).toBe(trail)
+  })
 })
 
 describe('closeInTrail', () => {

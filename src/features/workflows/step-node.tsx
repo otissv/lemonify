@@ -1,3 +1,4 @@
+import { RiImageLine } from '@remixicon/react'
 import { Handle, Position } from '@xyflow/react'
 import type { Node, NodeProps } from '@xyflow/react'
 
@@ -6,6 +7,7 @@ import { cn } from '@/lib/utils'
 export type StepNodeData = {
   label: string
   summary: string
+  thumbnail: string | undefined
   enabled: boolean
   /** Whether the node is the start of the line, the end of it, or a step between. */
   position: 'start' | 'middle' | 'end'
@@ -39,6 +41,24 @@ export function StepNode({
       <span className="truncate text-caption text-muted-foreground">
         {data.summary}
       </span>
+      {data.thumbnail ? (
+        <img
+          data-slot="workflow-step-thumbnail"
+          src={data.thumbnail}
+          alt=""
+          width={176}
+          height={99}
+          decoding="async"
+          className="mt-1 aspect-video w-full rounded-sm bg-muted object-cover"
+        />
+      ) : (
+        <span
+          data-slot="workflow-step-thumbnail"
+          className="mt-1 flex aspect-video w-full items-center justify-center rounded-sm bg-muted text-muted-foreground"
+        >
+          <RiImageLine aria-hidden="true" className="size-5" />
+        </span>
+      )}
       {data.position !== 'end' && (
         <Handle id="out" type="source" position={Position.Right} />
       )}

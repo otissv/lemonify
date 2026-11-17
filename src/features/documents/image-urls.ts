@@ -12,6 +12,10 @@ export function thumbnailImageUrl(documentId: string, key: string): string {
   return `/api/documents/${encodeURIComponent(documentId)}/renders/thumbnail/${encodeURIComponent(key)}`
 }
 
+export function workflowThumbnailImageUrl(workflowId: string, key: string): string {
+  return `/api/workflows/${encodeURIComponent(workflowId)}/renders/workflow-node/${encodeURIComponent(key)}`
+}
+
 export function resultDownloadUrl(resultId: string): string {
   return `/api/results/${encodeURIComponent(resultId)}`
 }

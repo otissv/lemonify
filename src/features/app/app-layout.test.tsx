@@ -16,9 +16,11 @@ import { followJob } from '@/features/jobs/follow-job'
 import {
   requestPreview,
   requestThumbnails,
+  requestWorkflowThumbnails,
 } from '@/features/render/render-functions'
 import {
   deleteWorkflow,
+  getWorkflow,
   listWorkflows,
   renameWorkflow,
 } from '@/features/workflows/workflow-functions'
@@ -45,12 +47,14 @@ vi.mock('@/features/documents/document-functions', () => ({
 }))
 vi.mock('@/features/workflows/workflow-functions', () => ({
   listWorkflows: vi.fn(),
+  getWorkflow: vi.fn(),
   deleteWorkflow: vi.fn(),
   renameWorkflow: vi.fn(),
 }))
 vi.mock('@/features/render/render-functions', () => ({
   requestPreview: vi.fn(),
   requestThumbnails: vi.fn(),
+  requestWorkflowThumbnails: vi.fn(),
   requestAiStep: vi.fn(),
 }))
 vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
@@ -111,9 +115,13 @@ describe('AppLayout', () => {
   beforeEach(() => {
     resetStores()
     vi.mocked(listWorkflows).mockResolvedValue([])
+    vi.mocked(getWorkflow).mockImplementation(async ({ data }) =>
+      Promise.resolve(workflowView(data.id, 'Web sizes')),
+    )
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
     vi.mocked(requestThumbnails).mockResolvedValue({ id: 't' } as never)
+    vi.mocked(requestWorkflowThumbnails).mockResolvedValue({ id: 'wt' } as never)
     vi.mocked(followJob).mockResolvedValue(previewJob())
     vi.mocked(getDocument).mockImplementation(({ data }) =>
       Promise.resolve(
@@ -388,6 +396,23 @@ describe('AppLayout', () => {
       await waitFor(() => {
         expect(router.state.location.pathname).toBe('/')
       })
+    })
+
+    it('expands to show a preview of the output when nothing is selected', async () => {
+      const { user } = await showWorkflows()
+      const bar = sidebar()
+      const panel = within(bar)
+      const preview = () =>
+        bar.querySelector('[data-slot="workflow-sidebar-preview"]')
+
+      expect(preview()).not.toBeInTheDocument()
+      await user.click(
+        panel.getByRole('button', { name: 'Show preview of Web sizes' }),
+      )
+      await waitFor(() => {
+        expect(preview()).toBeInTheDocument()
+      })
+      expect(getWorkflow).toHaveBeenCalled()
     })
   })
 

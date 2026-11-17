@@ -95,7 +95,7 @@ export function ToolTabs({
       {children}
       <TabsList
         variant="line"
-        className="h-auto shrink-0 justify-start gap-0 self-stretch border-0 bg-transparent p-0 group-data-[orientation=vertical]/tabs:h-auto"
+        className="h-auto shrink-0 p-1 justify-start gap-0 self-stretch border-y-0 border-r-0  border-border bg-transparent group-data-[orientation=vertical]/tabs:h-auto"
       >
         {tools.map((tool) => {
           const Icon = TOOL_ICONS[tool]
@@ -105,7 +105,7 @@ export function ToolTabs({
               value={tool}
               disabled={tool === Tool.Options && !optionsAvailable}
               aria-label={TOOL_LABELS[tool]}
-              className="size-10 flex-none rounded-none border-0 p-0 after:hidden group-data-[orientation=vertical]/tabs:w-10 group-data-[orientation=vertical]/tabs:justify-center group-data-[variant=line]/tabs-list:data-[state=active]:bg-foreground/15"
+              className="size-9 flex-none rounded-sm border-0 p-0 ml-3 after:hidden group-data-[orientation=vertical]/tabs:w-10 group-data-[orientation=vertical]/tabs:justify-center group-data-[variant=line]/tabs-list:data-[state=active]:!bg-muted group-data-[variant=line]/tabs-list:data-[state=active]:text-foreground"
               title={TOOL_LABELS[tool]}
             >
               <Icon aria-hidden="true" className="size-5" />

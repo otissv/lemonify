@@ -7,8 +7,10 @@ import type { Readable } from 'node:stream'
 export enum RenderKind {
   /** A display-sized render of a Pipeline. */
   Preview = 'preview',
-  /** A small render of a Pipeline up to one Step. */
+  /** A small render of a Pipeline up to one Step (48 px in the document step list). */
   Thumbnail = 'thumbnail',
+  /** Under a workflow diagram node (~176 px wide at 2× density). */
+  WorkflowNode = 'workflow-node',
 }
 
 export const RENDER_MEDIA_TYPE = 'image/webp'

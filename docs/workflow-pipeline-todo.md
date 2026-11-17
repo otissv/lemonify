@@ -64,7 +64,7 @@ Out of scope: batch steps, input steps, and layer kinds other than `image`.
 - [ ] Workflow-specific tabs: inputs, run settings, run results.
 - [x] Reuse the floating panel and the Tools browser on the workflow page.
 - [x] Remove the tool column on the left and the options column on the right; the diagram stays in the middle.
-- [ ] Workflow page preview: the last image added, through the existing render path; an empty state until one is added.
+- [x] Workflow page preview: the last image added, through the existing render path; an empty state until one is added.
 
 - [x] Workflows are held, edited and synced in the client like documents (one session type, one sync), with an Edit history identical to a document's (`workflow_history`, `WorkflowChange`, CLI `workflow rename|undo|redo`, `workflow update --without`), and the web sidebar can rename and delete a workflow. Client state is three stores: UI, pipelines (sessions and renders) and library (images, results, runs).
 

@@ -2,9 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
-import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import {
+  createAiStep,
+  createPipeline,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { AiStep, PipelineStep } from '@/features/pipeline/pipeline'
+import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import {
+  CANVAS_NODE_ID,
+  INPUTS_NODE_ID,
+} from '@/features/workflows/workflow-graph-layout'
 
 import { ResultKind } from '../dao/result-dao.ts'
 import {
@@ -612,5 +622,58 @@ describe('fetch', () => {
         '../etc/passwd',
       ),
     ).rejects.toBeInstanceOf(NotFoundError)
+  })
+})
+
+describe('workflow thumbnails', () => {
+  it('makes a picture under each node and does not run AI', async () => {
+    const source = await t.uploadImage(t.ann)
+    const { pipeline, output } = createWorkflow('Thumb')
+    const layer = pipeline.steps[0]
+    if (layer === undefined) throw new Error('missing layer')
+    const sharpen = createSharpStep('sharpen')
+    const ai = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
+    const definition = {
+      pipeline: createPipeline(canvasOfSize(40, 30), [layer, sharpen, ai]),
+      inputs: [source.id],
+      output,
+    }
+    const workflow = await t.app.workflows.create(t.ann, 'Thumb', definition)
+    const queued = await t.app.renders.requestWorkflowThumbnails(
+      t.ann,
+      workflow.id,
+      RunCanvasMode.Workflow,
+    )
+    const done = await run(queued)
+    if (done.result?.kind !== JobKind.WorkflowThumbnail) {
+      throw new Error('wrong result')
+    }
+    const canvasThumb = done.result.thumbnails.find(
+      ({ stepId }) => stepId === CANVAS_NODE_ID,
+    )
+    const inputsThumb = done.result.thumbnails.find(
+      ({ stepId }) => stepId === INPUTS_NODE_ID,
+    )
+    const sharpenThumb = done.result.thumbnails.find(
+      ({ stepId }) => stepId === sharpen.id,
+    )
+    const upscaleThumb = done.result.thumbnails.find(
+      ({ stepId }) => stepId === ai.id,
+    )
+    expect(canvasThumb?.key).toMatch(/^[0-9a-f]{64}$/)
+    expect(inputsThumb?.key).toMatch(/^[0-9a-f]{64}$/)
+    expect(sharpenThumb?.key).toMatch(/^[0-9a-f]{64}$/)
+    expect(upscaleThumb?.key).toBe(sharpenThumb?.key)
+    expect(t.aiEngine.batches).toHaveLength(0)
+    expect(
+      (
+        await t.app.renders.fetchWorkflow(
+          t.ann,
+          workflow.id,
+          RenderKind.WorkflowNode,
+          sharpenThumb?.key ?? '',
+        )
+      ).mediaType,
+    ).toBe('image/webp')
   })
 })

@@ -51,13 +51,17 @@ const CHANNELS = 4
 
 /** The longest side of a preview; images are shown no larger, whatever their real size. */
 export const PREVIEW_MAX_SIZE = 2560
+/** Document step list: shown at 48 px; 96 px is enough at 2×. */
 export const THUMBNAIL_MAX_SIZE = 96
+/** Workflow diagram node: ~176 px content width at 2× (see `step-node.tsx`). */
+export const WORKFLOW_NODE_THUMBNAIL_MAX_SIZE = 384
 const PREVIEW_QUALITY = 92
 const THUMBNAIL_QUALITY = 80
 
 export enum EngineTargetKind {
   Preview = 'preview',
   Thumbnail = 'thumbnail',
+  WorkflowNode = 'workflow-node',
   /** A lossless PNG that another step reads next. */
   Intermediate = 'intermediate',
   Export = 'export',
@@ -66,6 +70,7 @@ export enum EngineTargetKind {
 export type EngineTarget =
   | { kind: EngineTargetKind.Preview }
   | { kind: EngineTargetKind.Thumbnail }
+  | { kind: EngineTargetKind.WorkflowNode }
   | { kind: EngineTargetKind.Intermediate }
   | {
       kind: EngineTargetKind.Export
@@ -164,6 +169,10 @@ function encode(image: Sharp, target: EngineTarget, original: string): Sharp {
       })
     case EngineTargetKind.Thumbnail:
       return fitInside(image, THUMBNAIL_MAX_SIZE).webp({
+        quality: THUMBNAIL_QUALITY,
+      })
+    case EngineTargetKind.WorkflowNode:
+      return fitInside(image, WORKFLOW_NODE_THUMBNAIL_MAX_SIZE).webp({
         quality: THUMBNAIL_QUALITY,
       })
     case EngineTargetKind.Intermediate:
@@ -271,6 +280,7 @@ function sizesThePicture(target: EngineTarget): boolean {
   switch (target.kind) {
     case EngineTargetKind.Preview:
     case EngineTargetKind.Thumbnail:
+    case EngineTargetKind.WorkflowNode:
       return true
     case EngineTargetKind.Export:
       return target.width !== undefined

@@ -3,10 +3,12 @@ import { z } from 'zod'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { WorkerPool } from '@/features/ai/ai-tools'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
+import { RunCanvasModeSchema } from '@/features/workflows/workflow'
 
 export enum JobKind {
   Preview = 'preview',
   Thumbnail = 'thumbnail',
+  WorkflowThumbnail = 'workflow-thumbnail',
   AiStep = 'ai-step',
   Export = 'export',
   RunItem = 'run-item',
@@ -30,6 +32,7 @@ export const TERMINAL_STATES: ReadonlyArray<JobState> = [
 export const JOB_PRIORITY: Readonly<Record<JobKind, number>> = {
   [JobKind.Preview]: 0,
   [JobKind.Thumbnail]: 1,
+  [JobKind.WorkflowThumbnail]: 1,
   [JobKind.Export]: 2,
   [JobKind.AiStep]: 2,
   [JobKind.RunItem]: 3,
@@ -50,6 +53,13 @@ export const JobPayloadSchema = z.discriminatedUnion('kind', [
     documentId: id,
     revision,
     stepIds: z.array(id),
+  }),
+  z.strictObject({
+    kind: z.literal(JobKind.WorkflowThumbnail),
+    workflowId: id,
+    revision,
+    canvasMode: RunCanvasModeSchema,
+    nodeIds: z.array(id),
   }),
   z.strictObject({
     kind: z.literal(JobKind.AiStep),
@@ -98,6 +108,12 @@ export const JobResultSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({
     kind: z.literal(JobKind.Thumbnail),
+    thumbnails: z.array(
+      z.strictObject({ stepId: id, key: z.string().min(1).nullable() }),
+    ),
+  }),
+  z.strictObject({
+    kind: z.literal(JobKind.WorkflowThumbnail),
     thumbnails: z.array(
       z.strictObject({ stepId: id, key: z.string().min(1).nullable() }),
     ),

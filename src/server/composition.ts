@@ -41,10 +41,12 @@ import { ExportHandler } from './jobs/handlers/export-handler.ts'
 import { RunItemHandler } from './jobs/handlers/run-item-handler.ts'
 import { PreviewHandler } from './jobs/handlers/preview-handler.ts'
 import { ThumbnailHandler } from './jobs/handlers/thumbnail-handler.ts'
+import { WorkflowThumbnailHandler } from './jobs/handlers/workflow-thumbnail-handler.ts'
 import { JobKind } from './jobs/job-types.ts'
 import type { JobRecord } from './jobs/job-types.ts'
 import { Scheduler } from './jobs/scheduler.ts'
 import { DocumentPlanner } from './render/document-planner.ts'
+import { WorkflowPlanner } from './render/workflow-planner.ts'
 import { DocumentService } from './services/document-service.ts'
 import { JobService } from './services/job-service.ts'
 import { DocumentBundleService } from './services/document-bundle-service.ts'
@@ -265,8 +267,15 @@ export async function createApp(
     clock,
     changes,
   })
+  const workflowPlanner = new WorkflowPlanner({
+    workflows: workflowDao,
+    sources: sourceDao,
+    sourceStore,
+  })
+
   const renders = new RenderService({
     documents: documentDao,
+    workflows: workflowDao,
     planner,
     jobs,
     jobDao,
@@ -299,6 +308,14 @@ export async function createApp(
         renders: renderStore,
         engine: imageEngine,
         logger,
+      }),
+      [JobKind.WorkflowThumbnail]: new WorkflowThumbnailHandler({
+        planner,
+        renders: renderStore,
+        engine: imageEngine,
+        logger,
+        workflows: workflowDao,
+        workflowPlanner,
       }),
       [JobKind.Export]: new ExportHandler({
         planner,

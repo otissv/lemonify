@@ -38,7 +38,9 @@ export async function ensureRender(
         kind:
           kind === RenderKind.Preview
             ? EngineTargetKind.Preview
-            : EngineTargetKind.Thumbnail,
+            : kind === RenderKind.WorkflowNode
+              ? EngineTargetKind.WorkflowNode
+              : EngineTargetKind.Thumbnail,
       },
       output: target.partial,
     })

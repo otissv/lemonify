@@ -7,6 +7,7 @@ export type VisitedKind = 'document' | 'workflow'
 export type VisitedItem = { id: string; kind: VisitedKind }
 
 export function visitInTrail(trail: VisitTrail, id: string): VisitTrail {
+  if (trail.at(-1) === id) return trail
   return [...trail.filter((visited) => visited !== id), id]
 }
 

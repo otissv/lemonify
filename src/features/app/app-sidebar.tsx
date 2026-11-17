@@ -23,6 +23,7 @@ import {
 import type { WorkflowView } from '@/server/services/workflow-service'
 import { forgetItem } from '@/store/forget-item'
 import { AddWorkflowDialog } from '@/features/workflows/add-workflow-dialog'
+import { WorkflowSidebarPreview } from '@/features/workflows/workflow-sidebar-preview'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { filterByQuery } from '@/features/app/sidebar-search'
@@ -455,8 +456,16 @@ function WorkflowItem({
   const navigate = useNavigate()
   const router = useRouter()
   const confirmWorkflow = usePipelineStore((state) => state.confirmWorkflow)
+  const expanded = useUiStore(
+    (state) => state.expandedItems[workflow.id] ?? false,
+  )
+  const setExpanded = useUiStore((state) => state.setItemExpanded)
   const [error, setError] = useState<string | null>(null)
   const [renaming, setRenaming] = useState(false)
+
+  function handleToggle(): void {
+    setExpanded(workflow.id, !expanded)
+  }
 
   function handleStartRename(): void {
     setError(null)
@@ -504,6 +513,20 @@ function WorkflowItem({
         data-active={active}
         className="group/row flex items-center gap-1 rounded-md data-[active=true]:bg-sidebar-accent"
       >
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={ROW_BUTTON_CLASS}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Hide' : 'Show'} preview of ${workflow.name}`}
+          onClick={handleToggle}
+        >
+          {expanded ? (
+            <RiArrowDownSLine aria-hidden="true" />
+          ) : (
+            <RiArrowRightSLine aria-hidden="true" />
+          )}
+        </Button>
         {renaming ? (
           <DocumentNameInput
             name={workflow.name}
@@ -519,6 +542,7 @@ function WorkflowItem({
             <Link
               to="/workflows/$id"
               params={{ id: workflow.id }}
+              onClick={handleToggle}
               onDoubleClick={handleStartRename}
               onKeyDown={handleKey}
             >
@@ -542,6 +566,7 @@ function WorkflowItem({
           {error}
         </p>
       )}
+      {expanded && <WorkflowSidebarPreview workflowId={workflow.id} />}
     </SidebarMenuItem>
   )
 }
