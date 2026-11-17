@@ -953,7 +953,9 @@ describe('WorkflowPage', () => {
       await clickStep('Image layer')
 
       await user.click(
-        within(inspector()).getByRole('switch', { name: 'Image layer on' }),
+        within(inspector()).getByRole('button', {
+          name: 'Hide Image layer',
+        }),
       )
 
       await waitFor(() => {

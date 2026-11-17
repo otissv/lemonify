@@ -2,10 +2,11 @@ import {
   RiArrowDownLine,
   RiArrowUpLine,
   RiDeleteBinLine,
+  RiEyeLine,
+  RiEyeOffLine,
 } from '@remixicon/react'
 
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiContent } from '@/features/ai/ai-tools'
 import { CanvasForm } from '@/features/documents/canvas-form'
@@ -268,8 +269,8 @@ function StepActions({
 }: StepActionsProps): React.JSX.Element {
   const label = stepLabel(step)
 
-  function handleEnabled(enabled: boolean): void {
-    onChange({ type: 'set-enabled', stepId: step.id, enabled })
+  function handleToggle(): void {
+    onChange({ type: 'set-enabled', stepId: step.id, enabled: !step.enabled })
   }
 
   function handleEarlier(): void {
@@ -286,12 +287,19 @@ function StepActions({
 
   return (
     <div className="flex items-center gap-1">
-      <Switch
-        size="sm"
-        checked={step.enabled}
-        aria-label={`${label} on`}
-        onCheckedChange={handleEnabled}
-      />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`${step.enabled ? 'Hide' : 'Show'} ${label}`}
+        title={step.enabled ? 'Hide this step' : 'Show this step'}
+        onClick={handleToggle}
+      >
+        {step.enabled ? (
+          <RiEyeLine aria-hidden="true" />
+        ) : (
+          <RiEyeOffLine aria-hidden="true" />
+        )}
+      </Button>
       <Button
         variant="ghost"
         size="icon-sm"
