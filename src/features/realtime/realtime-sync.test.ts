@@ -1,24 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { reconcileDocument } from '@/features/documents/document-sync'
+import { reconcilePipeline } from '@/features/pipeline/pipeline-sync'
 import {
   DELETED_NOTICE,
   createListRefresher,
   createRealtimeSync,
 } from '@/features/realtime/realtime-sync'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useLibraryStore } from '@/store/library-store'
+import { useUiStore } from '@/store/ui-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 import { DOCUMENT_ID, documentView } from '@/test/document-fixtures'
+import { workflowView } from '@/test/workflow-fixtures'
+import { resetStores } from '@/store/reset-stores'
 
-vi.mock('@/features/documents/document-sync', () => ({
-  reconcileDocument: vi.fn(),
+vi.mock('@/features/pipeline/pipeline-sync', () => ({
+  reconcilePipeline: vi.fn(),
 }))
 
+const realRefreshResults = useLibraryStore.getState().refreshResults
+const refreshResults = vi.fn()
+
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
-  vi.mocked(reconcileDocument).mockResolvedValue(undefined)
+  resetStores()
+  refreshResults.mockResolvedValue(undefined)
+  useLibraryStore.setState({ refreshResults })
+  vi.mocked(reconcilePipeline).mockResolvedValue(undefined)
 })
 
 afterEach(() => {
+  useLibraryStore.setState({ refreshResults: realRefreshResults })
   vi.resetAllMocks()
 })
 
@@ -70,8 +80,8 @@ describe('createRealtimeSync', () => {
     const leaveDocument = vi.fn()
     const sync = createRealtimeSync({
       invalidate,
-      openDocumentId: () => open,
-      leaveDocument,
+      openItemId: () => open,
+      leaveItem: leaveDocument,
     })
     return { sync, invalidate, leaveDocument }
   }
@@ -94,14 +104,14 @@ describe('createRealtimeSync', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
     })
 
-    expect(reconcileDocument).toHaveBeenCalledWith('d1', {
+    expect(reconcilePipeline).toHaveBeenCalledWith('d1', {
       revision: 4,
       updatedAt: '2026-01-01T00:00:00.000Z',
     })
   })
 
   it('does not stop on a document that could not be read', async () => {
-    vi.mocked(reconcileDocument).mockRejectedValue(new Error('offline'))
+    vi.mocked(reconcilePipeline).mockRejectedValue(new Error('offline'))
     const { sync } = make()
 
     expect(() =>
@@ -120,7 +130,7 @@ describe('createRealtimeSync', () => {
 
     sync.handle({ type: 'results.changed' })
 
-    expect(useAppStore.getState().resultsVersion).toBe(1)
+    expect(refreshResults).toHaveBeenCalledTimes(1)
   })
 
   it('does nothing for a heartbeat', () => {
@@ -129,43 +139,78 @@ describe('createRealtimeSync', () => {
     sync.handle({ type: 'heartbeat' })
 
     expect(invalidate).not.toHaveBeenCalled()
-    expect(useAppStore.getState().resultsVersion).toBe(0)
+    expect(refreshResults).not.toHaveBeenCalled()
   })
 
   describe('a document deleted elsewhere', () => {
     it('is forgotten here, and the person is told if they had it open', () => {
-      useAppStore.getState().confirmDocument(documentView(), true)
+      usePipelineStore.getState().confirmDocument(documentView(), true)
       const { sync, leaveDocument } = make(DOCUMENT_ID)
 
       sync.handle({ type: 'document.deleted', documentId: DOCUMENT_ID })
 
-      expect(useAppStore.getState().documents[DOCUMENT_ID]).toBeUndefined()
+      expect(
+        documentSession(usePipelineStore.getState(), DOCUMENT_ID),
+      ).toBeUndefined()
       expect(leaveDocument).toHaveBeenCalled()
-      expect(useAppStore.getState().liveNotice).toBe(DELETED_NOTICE)
+      expect(useUiStore.getState().liveNotice).toBe(DELETED_NOTICE)
     })
 
     it('is forgotten quietly when it was not the one open', () => {
-      useAppStore.getState().confirmDocument(documentView(), true)
+      usePipelineStore.getState().confirmDocument(documentView(), true)
       const { sync, leaveDocument } = make('another')
 
       sync.handle({ type: 'document.deleted', documentId: DOCUMENT_ID })
 
-      expect(useAppStore.getState().documents[DOCUMENT_ID]).toBeUndefined()
+      expect(
+        documentSession(usePipelineStore.getState(), DOCUMENT_ID),
+      ).toBeUndefined()
       expect(leaveDocument).not.toHaveBeenCalled()
-      expect(useAppStore.getState().liveNotice).toBeUndefined()
+      expect(useUiStore.getState().liveNotice).toBeUndefined()
+    })
+  })
+
+  describe('a workflow', () => {
+    it('is reconciled when another tab changed it', () => {
+      const { sync } = make()
+
+      sync.handle({
+        type: 'workflow.updated',
+        workflowId: 'w1',
+        revision: 4,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      })
+
+      expect(reconcilePipeline).toHaveBeenCalledWith('w1', {
+        revision: 4,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      })
+    })
+
+    it('is forgotten when deleted elsewhere, and the person is told if they had it open', () => {
+      usePipelineStore.getState().confirmWorkflow(workflowView('w1'), true)
+      useLibraryStore.setState({ runs: { w1: [] } })
+      const { sync, leaveDocument } = make('w1')
+
+      sync.handle({ type: 'workflow.deleted', workflowId: 'w1' })
+
+      expect(usePipelineStore.getState().sessions.w1).toBeUndefined()
+      expect(useLibraryStore.getState().runs.w1).toBeUndefined()
+      expect(leaveDocument).toHaveBeenCalled()
+      expect(useUiStore.getState().liveNotice).toBe(DELETED_NOTICE)
     })
   })
 
   describe('catching up', () => {
     it('reads the lists and every open document, as nothing is known of what was missed', async () => {
-      useAppStore.getState().confirmDocument(documentView(), true)
+      usePipelineStore.getState().confirmDocument(documentView(), true)
       const { sync, invalidate } = make()
 
       await sync.catchUp()
 
       expect(invalidate).toHaveBeenCalled()
-      expect(reconcileDocument).toHaveBeenCalledWith(DOCUMENT_ID, undefined)
-      expect(useAppStore.getState().resultsVersion).toBe(1)
+      expect(reconcilePipeline).toHaveBeenCalledWith(DOCUMENT_ID, undefined)
+      expect(refreshResults).toHaveBeenCalledTimes(1)
     })
   })
 })

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { ZoomControl } from '@/features/viewport/zoom-control'
 import type { ViewFrame } from '@/features/viewport/viewport'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { resetStores } from '@/store/reset-stores'
 
 const ID = 'doc'
 const FRAME: ViewFrame = {
@@ -15,11 +16,11 @@ const FRAME: ViewFrame = {
 }
 
 function zoom(): number {
-  return useAppStore.getState().viewports[ID]?.zoom ?? 1
+  return useUiStore.getState().viewports[ID]?.zoom ?? 1
 }
 
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
 })
 
 describe('ZoomControl', () => {
@@ -35,7 +36,7 @@ describe('ZoomControl', () => {
   })
 
   it('shows the zoom as a percentage of the picture’s own pixels', () => {
-    useAppStore.getState().setViewFrame(ID, FRAME)
+    useUiStore.getState().setViewFrame(ID, FRAME)
     render(<ZoomControl documentId={ID} />)
 
     expect(screen.getByRole('textbox', { name: 'Zoom' })).toHaveValue('50%')
@@ -43,7 +44,7 @@ describe('ZoomControl', () => {
 
   it('zooms in and out with the small and large picture buttons', async () => {
     const user = userEvent.setup()
-    useAppStore.getState().setViewFrame(ID, FRAME)
+    useUiStore.getState().setViewFrame(ID, FRAME)
     render(<ZoomControl documentId={ID} />)
 
     await user.click(screen.getByRole('button', { name: 'Zoom in' }))
@@ -56,7 +57,7 @@ describe('ZoomControl', () => {
 
   it('zooms to a percentage typed in, with or without the percent sign', async () => {
     const user = userEvent.setup()
-    useAppStore.getState().setViewFrame(ID, FRAME)
+    useUiStore.getState().setViewFrame(ID, FRAME)
     render(<ZoomControl documentId={ID} />)
     const field = screen.getByRole('textbox', { name: 'Zoom' })
 
@@ -73,7 +74,7 @@ describe('ZoomControl', () => {
 
   it('puts back what was there when what was typed is not a percentage', async () => {
     const user = userEvent.setup()
-    useAppStore.getState().setViewFrame(ID, FRAME)
+    useUiStore.getState().setViewFrame(ID, FRAME)
     render(<ZoomControl documentId={ID} />)
     const field = screen.getByRole('textbox', { name: 'Zoom' })
 
@@ -86,7 +87,7 @@ describe('ZoomControl', () => {
 
   it('drops what was typed on Escape', async () => {
     const user = userEvent.setup()
-    useAppStore.getState().setViewFrame(ID, FRAME)
+    useUiStore.getState().setViewFrame(ID, FRAME)
     render(<ZoomControl documentId={ID} />)
     const field = screen.getByRole('textbox', { name: 'Zoom' })
 
@@ -99,7 +100,7 @@ describe('ZoomControl', () => {
 
   it('zooms with the slider, from the least at the left to the most at the right', async () => {
     const user = userEvent.setup()
-    useAppStore.getState().setViewFrame(ID, FRAME)
+    useUiStore.getState().setViewFrame(ID, FRAME)
     render(<ZoomControl documentId={ID} />)
     const slider = screen.getByRole('slider', { name: 'Zoom level' })
 
@@ -112,11 +113,11 @@ describe('ZoomControl', () => {
   })
 
   it('follows a change made elsewhere', () => {
-    useAppStore.getState().setViewFrame(ID, FRAME)
+    useUiStore.getState().setViewFrame(ID, FRAME)
     render(<ZoomControl documentId={ID} />)
 
     act(() => {
-      useAppStore.getState().setViewport(ID, { zoom: 8, x: 0.5, y: 0.5 })
+      useUiStore.getState().setViewport(ID, { zoom: 8, x: 0.5, y: 0.5 })
     })
 
     expect(screen.getByRole('textbox', { name: 'Zoom' })).toHaveValue('400%')

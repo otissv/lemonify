@@ -8,7 +8,8 @@ import { KeyBindings } from '@/features/keybindings/key-bindings'
 import { MenuPanel } from '@/features/app/menu-panel'
 import { usePreviewLoading } from '@/features/pipeline/use-preview'
 import { ToolsPanel } from '@/features/tools/tools-panel'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 
 interface DocumentPageProps {
   id: string
@@ -21,8 +22,10 @@ export function DocumentPage({
   tools,
   catalogues,
 }: DocumentPageProps): React.JSX.Element {
-  const loaded = useAppStore((state) => state.documents[id] !== undefined)
-  const visitDocument = useAppStore((state) => state.visitDocument)
+  const loaded = usePipelineStore(
+    (state) => documentSession(state, id) !== undefined,
+  )
+  const visitDocument = useUiStore((state) => state.visitItem)
   usePreviewLoading(id, true)
 
   useEffect(() => {

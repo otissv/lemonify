@@ -5,10 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SourceSummary } from '@/features/documents/document'
 import { ImageLibrary } from '@/features/library/image-library'
 import { deleteSource, listSources } from '@/features/sources/source-functions'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 
 vi.mock('@/features/sources/source-functions', () => ({
   listSources: vi.fn(),
@@ -27,7 +24,7 @@ function source(id: string, fileName = `${id}.png`): SourceSummary {
 }
 
 beforeEach(() => {
-  useSourcesStore.setState(INITIAL_SOURCES_STATE)
+  useLibraryStore.setState(INITIAL_LIBRARY_STATE)
 })
 
 afterEach(() => {

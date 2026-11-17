@@ -11,10 +11,11 @@ import {
   requestThumbnails,
 } from '@/features/render/render-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+
 import { DOCUMENT_ID, documentView, previewJob } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
 import { pipelineOf } from '@/test/pipelines'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock('@/features/render/render-functions', () => ({
 vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
 
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
   const view = documentView()
   vi.mocked(listWorkflows).mockResolvedValue([])
   vi.mocked(listDocuments).mockResolvedValue([

@@ -10,9 +10,10 @@ import {
 import { uploadSource } from '@/features/documents/upload-source'
 import { listSources } from '@/features/sources/source-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+
 import { DOCUMENT_ID, documentView } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock('@/features/workflows/workflow-functions', () => ({
 
 describe('ImageOpener', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listSources).mockResolvedValue([])

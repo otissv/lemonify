@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { RealtimeStatus } from '@/features/realtime/realtime-client'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 /** A brief loss of connection is not worth mentioning; a longer one is. */
 export const RECONNECT_NOTICE_DELAY_MS = 3000
@@ -11,9 +11,9 @@ export const RECONNECTING_MESSAGE =
 
 /** Says when live updates are down for a while, and what happened elsewhere that the person should know. */
 export function LiveStatus(): React.JSX.Element | null {
-  const status = useAppStore((state) => state.realtime)
-  const notice = useAppStore((state) => state.liveNotice)
-  const setLiveNotice = useAppStore((state) => state.setLiveNotice)
+  const status = useUiStore((state) => state.realtime)
+  const notice = useUiStore((state) => state.liveNotice)
+  const setLiveNotice = useUiStore((state) => state.setLiveNotice)
   const reconnecting = status === RealtimeStatus.Reconnecting
   const [late, setLate] = useState(false)
 

@@ -30,7 +30,7 @@ import {
 import { canvasSchema } from '@/features/pipeline/canvas'
 import { layerSettingsOf, layerSettingsSchema } from '@/features/pipeline/layer'
 
-/** The most changes History keeps for undo; older ones are dropped. */
+/** The most changes the Edit history keeps for undo; older ones are dropped. */
 export const MAX_HISTORY_ENTRIES = 100
 
 /** A change to a Document's Pipeline that is not valid as asked; the message is plain words. */
@@ -43,7 +43,7 @@ export class InvalidChangeError extends Error {
 
 const SharpOptionsSchema = z.record(z.string(), z.json())
 
-/** One edit of a Pipeline. Each is one History entry, and the client and the server apply it the same way. */
+/** One edit of a Pipeline. Each is one Edit history entry, and the client and the server apply it the same way. */
 export const DocumentChangeSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('add-step'),
@@ -108,7 +108,17 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
 
 export type DocumentChange = z.output<typeof DocumentChangeSchema>
 
-/** A change and the change that undoes it; the pair is what one History entry stores. */
+const DOCUMENT_CHANGE_TYPES: ReadonlySet<unknown> =
+  DocumentChangeSchema._zod.propValues.type ?? new Set()
+
+/** Whether a change of any kind is one a document takes: every kind but the few only a workflow has. */
+export function isDocumentChange(change: {
+  type: string
+}): change is DocumentChange {
+  return DOCUMENT_CHANGE_TYPES.has(change.type)
+}
+
+/** A change and the change that undoes it; the pair is what one Edit history entry stores. */
 export const HistoryPatchSchema = z.strictObject({
   forward: DocumentChangeSchema,
   inverse: DocumentChangeSchema,

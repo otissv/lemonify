@@ -2,7 +2,7 @@ import { Canvas } from '@/features/documents/canvas'
 import { useDocument } from '@/features/documents/use-document'
 import { pictureUrl } from '@/features/documents/use-shown-picture'
 import { usePreview } from '@/features/pipeline/use-preview'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 interface DocumentViewProps {
   id: string
@@ -10,7 +10,7 @@ interface DocumentViewProps {
 
 /** The image of a document: the result of its edits, or as uploaded while the person compares. */
 export function DocumentView({ id }: DocumentViewProps): React.JSX.Element {
-  const showOriginal = useAppStore((state) => state.showOriginal[id] ?? false)
+  const showOriginal = useUiStore((state) => state.showOriginal[id] ?? false)
   const { session, loadError } = useDocument(id)
   const preview = usePreview(id)
 

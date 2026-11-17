@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 
 import { CanvasForm } from '@/features/documents/canvas-form'
-import { applyEdit } from '@/features/documents/document-sync'
+import { applyEdit } from '@/features/pipeline/pipeline-sync'
 import type { Canvas } from '@/features/pipeline/canvas'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { isLayerStep } from '@/features/pipeline/layer-kinds'

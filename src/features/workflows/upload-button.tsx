@@ -3,7 +3,7 @@ import { useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import type { SourceSummary } from '@/features/documents/document'
-import { useSourcesStore } from '@/features/workflows/sources-store'
+import { useLibraryStore } from '@/store/library-store'
 import { cn } from '@/lib/utils'
 import { errorMessage } from '@/lib/error-message'
 
@@ -25,7 +25,7 @@ export function UploadButton({
   className,
   onUploaded,
 }: UploadButtonProps): React.JSX.Element {
-  const upload = useSourcesStore((state) => state.upload)
+  const upload = useLibraryStore((state) => state.upload)
   const input = useRef<HTMLInputElement>(null)
   const errorId = useId()
   const [busy, setBusy] = useState(false)

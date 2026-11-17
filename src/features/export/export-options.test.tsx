@@ -10,16 +10,15 @@ import { followJob } from '@/features/jobs/follow-job'
 import { requestExport } from '@/features/render/render-functions'
 import { JobKind, JobState } from '@/server/jobs/job-types'
 import type { JobView } from '@/server/services/job-service'
-import {
-  INITIAL_APP_STATE,
-  PreviewStatus,
-  useAppStore,
-} from '@/store/app-store'
+import { useLibraryStore } from '@/store/library-store'
+import { usePipelineStore } from '@/store/pipeline-store'
+import { PreviewStatus } from '@/features/documents/document-render'
 import {
   DOCUMENT_ID,
   documentView,
   loadDocumentIntoEditor,
 } from '@/test/document-fixtures'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/export/export-functions', () => ({
   getExportFormats: vi.fn(),
@@ -47,13 +46,13 @@ function job(state: JobState, resultId?: string, error?: string): JobView {
 
 describe('ExportOptions', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.mocked(getExportFormats).mockResolvedValue([
       ExportFormat.Original,
       ExportFormat.Webp,
     ])
     loadDocumentIntoEditor(documentView())
-    useAppStore.getState().setPreview(DOCUMENT_ID, {
+    usePipelineStore.getState().setPreview(DOCUMENT_ID, {
       status: PreviewStatus.Ready,
       pendingStepIds: [],
       problems: [],
@@ -89,7 +88,7 @@ describe('ExportOptions', () => {
         width: 640,
       },
     })
-    expect(useAppStore.getState().resultsVersion).toBe(1)
+    expect(useLibraryStore.getState().resultsVersion).toBe(1)
     expect(screen.getByRole('status')).toHaveTextContent('downloading')
   })
 
@@ -121,7 +120,7 @@ describe('ExportOptions', () => {
 
   it('cannot export while an AI step has not run', () => {
     loadDocumentIntoEditor(documentView([createSharpStep('blur')]))
-    useAppStore.getState().setPreview(DOCUMENT_ID, {
+    usePipelineStore.getState().setPreview(DOCUMENT_ID, {
       status: PreviewStatus.Ready,
       pendingStepIds: ['s1'],
       problems: [],

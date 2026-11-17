@@ -6,13 +6,13 @@ import type { RealtimeClient } from '@/features/realtime/realtime-client'
 import { getRealtimeUrl } from '@/features/realtime/realtime-functions'
 import { createRealtimeSync } from '@/features/realtime/realtime-sync'
 import { RealtimeStatus } from '@/features/realtime/realtime-client'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
-const DOCUMENT_PATH = /^\/documents\/([^/]+)/
+const ITEM_PATH = /^\/(?:documents|workflows)\/([^/]+)/
 
-/** The document a path shows, if it shows one. */
-export function documentIdFromPath(pathname: string): string | undefined {
-  const id = DOCUMENT_PATH.exec(pathname)?.[1]
+/** The document or workflow a path shows, if it shows one. */
+export function itemIdFromPath(pathname: string): string | undefined {
+  const id = ITEM_PATH.exec(pathname)?.[1]
   return id === undefined ? undefined : decodeURIComponent(id)
 }
 
@@ -28,18 +28,18 @@ export function useRealtime(): void {
   useEffect(() => {
     let client: RealtimeClient | undefined
     let stopped = false
-    const store = useAppStore.getState()
+    const store = useUiStore.getState()
     const sync = createRealtimeSync({
       invalidate: () => router.invalidate(),
-      openDocumentId: () => documentIdFromPath(router.state.location.pathname),
-      leaveDocument: () => {
+      openItemId: () => itemIdFromPath(router.state.location.pathname),
+      leaveItem: () => {
         void router.navigate({ to: '/' })
       },
     })
 
     function handleWake(): void {
       if (document.visibilityState === 'hidden') return
-      if (useAppStore.getState().realtime === RealtimeStatus.Open) {
+      if (useUiStore.getState().realtime === RealtimeStatus.Open) {
         void sync.catchUp()
         return
       }

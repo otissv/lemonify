@@ -17,16 +17,20 @@ import {
   requestPreview,
   requestThumbnails,
 } from '@/features/render/render-functions'
-import { listWorkflows } from '@/features/workflows/workflow-functions'
 import {
-  INITIAL_APP_STATE,
+  deleteWorkflow,
+  listWorkflows,
+  renameWorkflow,
+} from '@/features/workflows/workflow-functions'
+import {
   PREFERENCES_STORAGE_KEY,
   SidebarTab,
-  useAppStore,
-} from '@/store/app-store'
+  useUiStore,
+} from '@/store/ui-store'
 import { documentView, previewJob } from '@/test/document-fixtures'
-import { workflowDefinition } from '@/test/workflow-fixtures'
+import { workflowView } from '@/test/workflow-fixtures'
 import { renderApp } from '@/test/render-app'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -41,6 +45,8 @@ vi.mock('@/features/documents/document-functions', () => ({
 }))
 vi.mock('@/features/workflows/workflow-functions', () => ({
   listWorkflows: vi.fn(),
+  deleteWorkflow: vi.fn(),
+  renameWorkflow: vi.fn(),
 }))
 vi.mock('@/features/render/render-functions', () => ({
   requestPreview: vi.fn(),
@@ -103,7 +109,7 @@ function documentLink(name: string): HTMLElement {
 
 describe('AppLayout', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
@@ -129,7 +135,7 @@ describe('AppLayout', () => {
     await renderApp()
 
     await waitFor(() => {
-      expect(useAppStore.getState().recentUpscaleModels).toEqual(['waifu'])
+      expect(useUiStore.getState().recentUpscaleModels).toEqual(['waifu'])
     })
   })
 
@@ -137,7 +143,7 @@ describe('AppLayout', () => {
     it('collapses and brings back the sidebar from a tab on its edge', async () => {
       const user = userEvent.setup()
       await renderApp()
-      expect(useAppStore.getState().sidebarOpen).toBe(true)
+      expect(useUiStore.getState().sidebarOpen).toBe(true)
 
       const hide = screen.getByRole('button', { name: 'Hide sidebar' })
       expect(hide).toHaveAttribute('aria-expanded', 'true')
@@ -145,12 +151,12 @@ describe('AppLayout', () => {
       expect(hide).toHaveClass('size-8')
       await user.click(hide)
 
-      expect(useAppStore.getState().sidebarOpen).toBe(false)
+      expect(useUiStore.getState().sidebarOpen).toBe(false)
       const show = screen.getByRole('button', { name: 'Show sidebar' })
       expect(show).toHaveAttribute('aria-expanded', 'false')
       await user.click(show)
 
-      expect(useAppStore.getState().sidebarOpen).toBe(true)
+      expect(useUiStore.getState().sidebarOpen).toBe(true)
     })
   })
 
@@ -212,7 +218,7 @@ describe('AppLayout', () => {
       expect(
         screen.queryByRole('button', { name: 'Open image' }),
       ).not.toBeInTheDocument()
-      expect(useAppStore.getState().sidebarTab).toBe(SidebarTab.Workflow)
+      expect(useUiStore.getState().sidebarTab).toBe(SidebarTab.Workflow)
     })
 
     it('lists one link per document, at the address of its page', async () => {
@@ -251,14 +257,7 @@ describe('AppLayout', () => {
 
     it('lists the workflows the server holds', async () => {
       vi.mocked(listWorkflows).mockResolvedValue([
-        {
-          id: 'w1',
-          name: 'Saved earlier',
-          ...workflowDefinition(),
-          revision: 0,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
+        workflowView('w1', 'Saved earlier'),
       ])
       const user = userEvent.setup()
       await renderApp()
@@ -297,17 +296,9 @@ describe('AppLayout', () => {
     })
 
     it('searches the workflows by name', async () => {
-      const workflow = (id: string, name: string) => ({
-        id,
-        name,
-        ...workflowDefinition(),
-        revision: 0,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      })
       vi.mocked(listWorkflows).mockResolvedValue([
-        workflow('w1', 'Web sizes'),
-        workflow('w2', 'Print'),
+        workflowView('w1', 'Web sizes'),
+        workflowView('w2', 'Print'),
       ])
       const user = userEvent.setup()
       await renderApp()
@@ -343,6 +334,60 @@ describe('AppLayout', () => {
       expect(
         screen.queryByRole('link', { name: 'one.png' }),
       ).not.toBeInTheDocument()
+    })
+  })
+
+  describe('workflows in the sidebar', () => {
+    async function showWorkflows(path = '/') {
+      vi.mocked(listWorkflows).mockResolvedValue([
+        workflowView('w1', 'Web sizes'),
+      ])
+      const user = userEvent.setup()
+      const rendered = await renderApp(path)
+      await user.click(within(sidebar()).getByRole('tab', { name: 'Workflow' }))
+      return { user, ...rendered }
+    }
+
+    it('renames a workflow in place on a double-click, and saves it on Enter', async () => {
+      vi.mocked(renameWorkflow).mockResolvedValue({
+        ...workflowView('w1', 'Resize'),
+      })
+      const { user } = await showWorkflows()
+
+      await user.dblClick(
+        within(sidebar()).getByText('Web sizes', { selector: 'span' }),
+      )
+      await user.keyboard('Resize{Enter}')
+
+      expect(renameWorkflow).toHaveBeenCalledWith({
+        data: { id: 'w1', name: 'Resize' },
+      })
+    })
+
+    it('shows why a rename failed', async () => {
+      vi.mocked(renameWorkflow).mockRejectedValue(new Error('Name taken.'))
+      const { user } = await showWorkflows()
+
+      await user.dblClick(
+        within(sidebar()).getByText('Web sizes', { selector: 'span' }),
+      )
+      await user.keyboard('Other{Enter}')
+
+      expect(await within(sidebar()).findByRole('alert')).toHaveTextContent(
+        'Name taken.',
+      )
+    })
+
+    it('deletes a workflow, forgets it and leaves its page', async () => {
+      vi.mocked(deleteWorkflow).mockResolvedValue(undefined)
+      const { user, router } = await showWorkflows('/workflows/w1')
+
+      await user.click(screen.getByRole('button', { name: 'Delete Web sizes' }))
+
+      expect(deleteWorkflow).toHaveBeenCalledWith({ data: { id: 'w1' } })
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/')
+      })
     })
   })
 

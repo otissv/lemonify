@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useViewport } from '@/features/viewport/use-viewport'
 import type { ViewFrame } from '@/features/viewport/viewport'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { resetStores } from '@/store/reset-stores'
+import { forgetItem } from '@/store/forget-item'
 
 const ID = 'doc'
 /** A 2000 x 1000 picture in a 1000 x 800 window: fitted it is 1000 x 500, or 50%. */
@@ -15,7 +17,7 @@ const FRAME: ViewFrame = {
 }
 
 function measured(): void {
-  useAppStore.getState().setViewFrame(ID, FRAME)
+  useUiStore.getState().setViewFrame(ID, FRAME)
 }
 
 function view() {
@@ -23,7 +25,7 @@ function view() {
 }
 
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
 })
 
 describe('useViewport', () => {
@@ -42,7 +44,7 @@ describe('useViewport', () => {
       result.current.zoomIn()
     })
 
-    expect(useAppStore.getState().viewports[ID]).toBeUndefined()
+    expect(useUiStore.getState().viewports[ID]).toBeUndefined()
   })
 
   it('says the zoom as a percentage of the picture’s own pixels, and how far it can go', () => {
@@ -143,7 +145,7 @@ describe('useViewport', () => {
     })
 
     act(() => {
-      useAppStore
+      useUiStore
         .getState()
         .setViewFrame(ID, { ...FRAME, viewWidth: 4000, viewHeight: 2000 })
     })
@@ -155,18 +157,18 @@ describe('useViewport', () => {
 
   it('keeps each document’s view apart, and forgets it with the document', () => {
     measured()
-    useAppStore.getState().setViewFrame('other', FRAME)
+    useUiStore.getState().setViewFrame('other', FRAME)
     const { result } = view()
     act(() => {
       result.current.zoomIn()
     })
 
-    expect(useAppStore.getState().viewports.other).toBeUndefined()
+    expect(useUiStore.getState().viewports.other).toBeUndefined()
 
     act(() => {
-      useAppStore.getState().forgetDocument(ID)
+      forgetItem(ID)
     })
-    expect(useAppStore.getState().viewports[ID]).toBeUndefined()
-    expect(useAppStore.getState().viewFrames[ID]).toBeUndefined()
+    expect(useUiStore.getState().viewports[ID]).toBeUndefined()
+    expect(useUiStore.getState().viewFrames[ID]).toBeUndefined()
   })
 })

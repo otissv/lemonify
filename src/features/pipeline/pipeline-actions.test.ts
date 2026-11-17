@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
-import { applyEdit, loadDocument } from '@/features/documents/document-sync'
+import { applyEdit, loadDocument } from '@/features/pipeline/pipeline-sync'
 import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
@@ -19,7 +19,8 @@ import {
   setStepBlend,
   setStepImage,
 } from '@/features/pipeline/pipeline-actions'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { usePipelineStore } from '@/store/pipeline-store'
 import {
   DOCUMENT_ID,
   documentView,
@@ -27,8 +28,10 @@ import {
   baseLayer,
 } from '@/test/document-fixtures'
 import { pipelineOf } from '@/test/pipelines'
+import { resetStores } from '@/store/reset-stores'
+import { forgetItem } from '@/store/forget-item'
 
-vi.mock('@/features/documents/document-sync', () => ({
+vi.mock('@/features/pipeline/pipeline-sync', () => ({
   applyEdit: vi.fn().mockResolvedValue(undefined),
   loadDocument: vi.fn().mockResolvedValue(undefined),
 }))
@@ -38,7 +41,7 @@ const IMAGE = baseLayer(`source-${DOCUMENT_ID}`)
 beforeEach(() => {
   vi.mocked(applyEdit).mockClear()
   vi.mocked(loadDocument).mockReset().mockResolvedValue(undefined)
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
 })
 
 describe('insertImage', () => {
@@ -46,7 +49,7 @@ describe('insertImage', () => {
     const blur = createSharpStep('blur')
     const flip = createSharpStep('flip')
     loadDocumentIntoEditor(documentView([blur, flip]))
-    useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
 
     insertImage(DOCUMENT_ID, 'mask')
 
@@ -71,7 +74,7 @@ describe('insertImage', () => {
 
   it('puts it just above the document’s image when that is selected', () => {
     loadDocumentIntoEditor(documentView([createSharpStep('blur')]))
-    useAppStore.getState().selectStep(DOCUMENT_ID, IMAGE.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, IMAGE.id)
 
     insertImage(DOCUMENT_ID, 'mask')
 
@@ -89,10 +92,8 @@ describe('insertImage', () => {
 
     const added = vi.mocked(applyEdit).mock.calls[0]?.[1]
     if (added?.type !== 'add-step') throw new Error('no step added')
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
-      added.step.id,
-    )
-    expect(useAppStore.getState().activeTool).toBe('options')
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(added.step.id)
+    expect(useUiStore.getState().activeTool).toBe('options')
   })
 })
 
@@ -100,7 +101,7 @@ describe('addEmptyImageLayer', () => {
   it('adds an image layer with no image just after the selected step', () => {
     const blur = createSharpStep('blur')
     loadDocumentIntoEditor(documentView([blur, createSharpStep('flip')]))
-    useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
 
     addEmptyImageLayer(DOCUMENT_ID)
 
@@ -109,8 +110,8 @@ describe('addEmptyImageLayer', () => {
     expect(call.index).toBe(2)
     expect(call.step).toMatchObject({ kind: 'image-layer', enabled: true })
     expect(call.step).not.toHaveProperty('sourceId')
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(call.step.id)
-    expect(useAppStore.getState().activeTool).toBe('options')
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(call.step.id)
+    expect(useUiStore.getState().activeTool).toBe('options')
   })
 })
 
@@ -149,7 +150,7 @@ describe('replaceImage', () => {
   it('fills the selected layer when it is empty', () => {
     const empty = createImageLayerStep()
     loadDocumentIntoEditor(documentView([empty]))
-    useAppStore.getState().selectStep(DOCUMENT_ID, empty.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, empty.id)
 
     replaceImage(DOCUMENT_ID, 'other')
 
@@ -179,7 +180,7 @@ describe('replaceImage', () => {
   it('makes the selected layer use the other image', () => {
     const layer = createImageLayerStep('second')
     loadDocumentIntoEditor(documentView([layer]))
-    useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, layer.id)
 
     replaceImage(DOCUMENT_ID, 'other')
 
@@ -193,7 +194,7 @@ describe('replaceImage', () => {
   it('replaces the document’s image when the selected step is not an image', () => {
     const blur = createSharpStep('blur')
     loadDocumentIntoEditor(documentView([blur]))
-    useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
 
     replaceImage(DOCUMENT_ID, 'other')
 
@@ -387,12 +388,12 @@ describe('copyStepToDocument', () => {
 
     await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
 
-    expect(useAppStore.getState().expandedDocuments[OTHER_ID]).toBe(true)
+    expect(useUiStore.getState().expandedItems[OTHER_ID]).toBe(true)
   })
 
   it('reads the other document first when the editor does not have it yet', async () => {
     const { layer } = load()
-    useAppStore.getState().forgetDocument(OTHER_ID)
+    forgetItem(OTHER_ID)
     vi.mocked(loadDocument).mockImplementation(async () => {
       loadDocumentIntoEditor(documentView([], OTHER_ID))
     })
@@ -409,7 +410,7 @@ describe('copyStepToDocument', () => {
 
   it('says why when the other document could not be read', async () => {
     const { layer } = load()
-    useAppStore.getState().forgetDocument(OTHER_ID)
+    forgetItem(OTHER_ID)
     vi.mocked(loadDocument).mockRejectedValue(new Error('Gone.'))
 
     const failure = await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
@@ -421,7 +422,7 @@ describe('copyStepToDocument', () => {
   it('says why when the other document would not take it', async () => {
     const { layer } = load()
     vi.mocked(applyEdit).mockImplementation(async () => {
-      useAppStore.getState().setDocumentError(OTHER_ID, 'Not allowed.')
+      usePipelineStore.getState().setSessionError(OTHER_ID, 'Not allowed.')
     })
 
     const failure = await copyStepToDocument(DOCUMENT_ID, layer.id, OTHER_ID)
@@ -497,7 +498,7 @@ describe('groups', () => {
       type: 'group-steps',
       group: { kind: 'group', steps: [blur, flip] },
     })
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
       change?.type === 'group-steps' ? change.group.id : undefined,
     )
   })
@@ -515,7 +516,7 @@ describe('groups', () => {
 
   it('takes a group apart and clears the selection when it was the group', () => {
     loadDocumentIntoEditor(documentView([group]))
-    useAppStore.getState().selectStep(DOCUMENT_ID, group.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, group.id)
 
     ungroupSteps(DOCUMENT_ID, group.id)
 
@@ -523,7 +524,7 @@ describe('groups', () => {
       type: 'ungroup',
       groupId: group.id,
     })
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBeUndefined()
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBeUndefined()
   })
 
   it('makes a group a sub-document only for a group', () => {

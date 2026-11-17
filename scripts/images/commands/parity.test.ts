@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
+import { WorkflowChangeSchema } from '../../../src/features/workflows/workflow-change.ts'
 import { DocumentChangeSchema } from '../../../src/features/pipeline/document-change.ts'
 import { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
 import { DocumentService } from '../../../src/server/services/document-service.ts'
@@ -20,6 +21,7 @@ import {
   RENDER_COMMANDS,
   RESULT_COMMANDS,
   SOURCE_COMMANDS,
+  WORKFLOW_CHANGE_COMMANDS,
   WORKFLOW_COMMANDS,
 } from './parity.ts'
 import type { Coverage } from './parity.ts'
@@ -34,6 +36,9 @@ function typesOf(schema: ChangeShape | ChangeUnion): string[] {
 }
 
 const changeTypes = [...new Set(typesOf(DocumentChangeSchema))]
+const workflowOnlyTypes = [...new Set(typesOf(WorkflowChangeSchema))].filter(
+  (type) => !changeTypes.includes(type),
+)
 
 function publicMethods(service: { prototype: object }): string[] {
   return Object.getOwnPropertyNames(service.prototype).filter(
@@ -69,9 +74,16 @@ describe('the website and the command line have the same features', () => {
     )
   })
 
+  it('has a command for every kind of change only a workflow has', () => {
+    expect(Object.keys(WORKFLOW_CHANGE_COMMANDS).sort()).toEqual(
+      [...workflowOnlyTypes].sort(),
+    )
+  })
+
   it('only names commands that are registered', () => {
     const named = [
       ...Object.values(DOCUMENT_CHANGE_COMMANDS).flat(),
+      ...Object.values(WORKFLOW_CHANGE_COMMANDS).flat(),
       ...SERVICES.flatMap(([, , table]) =>
         Object.values(table).flatMap(commandsIn),
       ),

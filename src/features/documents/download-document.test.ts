@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { settleDocument } from '@/features/documents/document-sync'
+import { settlePipeline } from '@/features/pipeline/pipeline-sync'
 import { downloadDocument } from '@/features/documents/download-document'
 
-vi.mock('@/features/documents/document-sync', () => ({
-  settleDocument: vi.fn(),
+vi.mock('@/features/pipeline/pipeline-sync', () => ({
+  settlePipeline: vi.fn(),
 }))
 
 const DISPOSITION = `attachment; filename="kant.lemon"; filename*=UTF-8''kant.lemon`
@@ -32,7 +32,7 @@ let saved: Array<{ href: string; name: string }>
 
 beforeEach(() => {
   saved = []
-  vi.mocked(settleDocument).mockResolvedValue()
+  vi.mocked(settlePipeline).mockResolvedValue()
   vi.stubGlobal('URL', {
     createObjectURL: vi.fn(() => 'blob:saved'),
     revokeObjectURL: vi.fn(),
@@ -52,7 +52,7 @@ afterEach(() => {
 describe('downloadDocument', () => {
   it('waits for the document’s edits to reach the server before it asks for the file', async () => {
     let finish: () => void = () => {}
-    vi.mocked(settleDocument).mockReturnValue(
+    vi.mocked(settlePipeline).mockReturnValue(
       new Promise<void>((resolve) => {
         finish = resolve
       }),

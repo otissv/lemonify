@@ -18,6 +18,7 @@ import { defaultOutputSettings } from '@/features/workflows/output-settings'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
+import type { WorkflowChange } from '@/features/workflows/workflow-change'
 
 import { ResultKind } from '../dao/result-dao.ts'
 import { RunState } from '../dao/workflow-dao.ts'
@@ -118,21 +119,35 @@ describe('create, update and list', () => {
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
-  it('updates with the revision the caller saw, and refuses a stale one', async () => {
+  it('changes with the revision the caller saw, and refuses a stale one', async () => {
     const created = await t.app.workflows.create(t.ann, 'Resize')
-    const changes = {
-      name: 'Resize 2',
-      definition: {
-        pipeline: created.pipeline,
-        inputs: created.inputs,
-        output: created.output,
-      },
-    }
-    const updated = await t.app.workflows.update(t.ann, created.id, 0, changes)
-    expect(updated).toMatchObject({ name: 'Resize 2', revision: 1 })
+    const change = { type: 'set-canvas', canvas: canvasOfSize(30, 30) } as const
+    const changed = await t.app.workflows.change(t.ann, created.id, 0, change)
+    expect(changed).toMatchObject({
+      revision: 1,
+      canUndo: true,
+      canRedo: false,
+    })
+    expect(changed.pipeline.canvas).toMatchObject({ width: 30, height: 30 })
     await expect(
-      t.app.workflows.update(t.ann, created.id, 0, changes),
+      t.app.workflows.change(t.ann, created.id, 0, change),
     ).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  it('renames without a revision, and keeps names unique', async () => {
+    const first = await t.app.workflows.create(t.ann, 'Resize')
+    await t.app.workflows.create(t.ann, 'Flip')
+    const renamed = await t.app.workflows.rename(t.ann, first.id, ' Scale ')
+    expect(renamed).toMatchObject({ name: 'Scale', revision: 0 })
+    await expect(
+      t.app.workflows.rename(t.ann, first.id, 'flip'),
+    ).rejects.toBeInstanceOf(ConflictError)
+    await expect(
+      t.app.workflows.rename(t.ann, first.id, '  '),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(
+      t.app.workflows.rename(t.bob, first.id, 'Mine'),
+    ).rejects.toBeInstanceOf(NotFoundError)
   })
 
   it('refuses a workflow that names another User’s image', async () => {
@@ -383,8 +398,8 @@ describe('running a workflow', () => {
       definitionOf([source.id], createSharpStep('flip')),
     )
     const run = await t.app.workflows.run(t.ann, workflow.id)
-    await t.app.workflows.update(t.ann, workflow.id, 0, {
-      name: 'Edited',
+    await t.app.workflows.change(t.ann, workflow.id, 0, {
+      type: 'replace',
       definition: definitionOf([source.id], createSharpStep('flop')),
     })
     await t.app.scheduler.start()
@@ -581,21 +596,26 @@ describe('image layers and canvases in a workflow', () => {
 })
 
 describe('telling the person’s tabs', () => {
-  it('says the workflows changed when one is made, saved or deleted', async () => {
+  it('says the workflows changed when one is made, renamed or deleted, and which one when it is edited', async () => {
     const workflow = await t.app.workflows.create(t.ann, 'Flow')
-    await t.app.workflows.update(t.ann, workflow.id, workflow.revision, {
-      name: 'Renamed',
-      definition: {
-        pipeline: workflow.pipeline,
-        inputs: workflow.inputs,
-        output: workflow.output,
-      },
+    const edited = await t.app.workflows.change(t.ann, workflow.id, 0, {
+      type: 'set-canvas',
+      canvas: canvasOfSize(5, 5),
     })
+    await t.app.workflows.rename(t.ann, workflow.id, 'Renamed')
     await t.app.workflows.delete(t.ann, workflow.id)
 
     expect(t.changes.eventsFor('ann')).toEqual([
       { type: 'workflows.changed' },
+      {
+        type: 'workflow.updated',
+        workflowId: workflow.id,
+        revision: 1,
+        updatedAt: edited.updatedAt,
+      },
+      expect.objectContaining({ type: 'workflow.updated', revision: 1 }),
       { type: 'workflows.changed' },
+      { type: 'workflow.deleted', workflowId: workflow.id },
       { type: 'workflows.changed' },
     ])
   })
@@ -638,19 +658,130 @@ describe('telling the person’s tabs', () => {
     t.changes.clear()
 
     await expect(
-      t.app.workflows.update(t.bob, workflow.id, workflow.revision, {
-        name: 'Stolen',
-        definition: {
-          pipeline: workflow.pipeline,
-          inputs: workflow.inputs,
-          output: workflow.output,
-        },
+      t.app.workflows.change(t.bob, workflow.id, workflow.revision, {
+        type: 'set-canvas',
+        canvas: canvasOfSize(5, 5),
       }),
+    ).rejects.toThrow(NotFoundError)
+    await expect(
+      t.app.workflows.rename(t.bob, workflow.id, 'Stolen'),
     ).rejects.toThrow(NotFoundError)
     await expect(t.app.workflows.delete(t.bob, workflow.id)).rejects.toThrow(
       NotFoundError,
     )
 
     expect(t.changes.sent).toEqual([])
+  })
+})
+
+describe('the Edit history of a workflow', () => {
+  const CHANGE: WorkflowChange = {
+    type: 'set-canvas',
+    canvas: canvasOfSize(30, 30),
+  }
+
+  it('undoes and redoes a change, whatever kind it is', async () => {
+    const source = await t.uploadImage(t.ann)
+    const created = await t.app.workflows.create(t.ann, 'Flow')
+    const output = { ...defaultOutputSettings(), widths: [64] }
+    let revision = created.revision
+    const changes: WorkflowChange[] = [
+      CHANGE,
+      { type: 'set-inputs', sourceIds: [source.id] },
+      { type: 'set-output', output },
+      { type: 'add-step', step: createSharpStep('flip'), index: 1 },
+    ]
+    for (const change of changes) {
+      revision = (
+        await t.app.workflows.change(t.ann, created.id, revision, change)
+      ).revision
+    }
+    const done = await t.app.workflows.get(t.ann, created.id)
+
+    let view = done
+    for (let count = 0; count < 4; count += 1) {
+      view = await t.app.workflows.undo(t.ann, created.id, view.revision)
+    }
+    expect(view).toMatchObject({ canUndo: false, canRedo: true })
+    expect(view.pipeline).toEqual(created.pipeline)
+    expect(view.inputs).toEqual([])
+    expect(view.output).toEqual(created.output)
+
+    for (let count = 0; count < 4; count += 1) {
+      view = await t.app.workflows.redo(t.ann, created.id, view.revision)
+    }
+    expect(view).toMatchObject({ canUndo: true, canRedo: false })
+    expect(view.pipeline).toEqual(done.pipeline)
+    expect(view.inputs).toEqual(done.inputs)
+    expect(view.output).toEqual(done.output)
+  })
+
+  it('refuses to undo or redo when there is nothing to', async () => {
+    const created = await t.app.workflows.create(t.ann, 'Flow')
+    await expect(
+      t.app.workflows.undo(t.ann, created.id, 0),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(
+      t.app.workflows.redo(t.ann, created.id, 0),
+    ).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  it('records nothing for a change that changes nothing', async () => {
+    const created = await t.app.workflows.create(t.ann, 'Flow')
+    const same = await t.app.workflows.change(t.ann, created.id, 0, {
+      type: 'set-inputs',
+      sourceIds: [],
+    })
+    expect(same).toMatchObject({ revision: 0, canUndo: false })
+  })
+
+  it('refuses a change that makes the workflow invalid, and a stale undo', async () => {
+    const created = await t.app.workflows.create(t.ann, 'Flow')
+    await expect(
+      t.app.workflows.change(t.ann, created.id, 0, {
+        type: 'remove-step',
+        stepId: 'gone',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(
+      t.app.workflows.change(t.ann, created.id, 0, {
+        type: 'set-inputs',
+        sourceIds: ['a', 'a'],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await t.app.workflows.change(t.ann, created.id, 0, CHANGE)
+    await expect(
+      t.app.workflows.undo(t.ann, created.id, 0),
+    ).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  it('refuses inputs that are not the User’s images, and another User’s workflow', async () => {
+    const foreign = await t.uploadImage(t.bob)
+    const created = await t.app.workflows.create(t.ann, 'Flow')
+    await expect(
+      t.app.workflows.change(t.ann, created.id, 0, {
+        type: 'set-inputs',
+        sourceIds: [foreign.id],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(
+      t.app.workflows.undo(t.bob, created.id, 0),
+    ).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('keeps the names and runs when it is undone, and tells the tabs which workflow moved', async () => {
+    const created = await t.app.workflows.create(t.ann, 'Flow')
+    await t.app.workflows.change(t.ann, created.id, 0, CHANGE)
+    t.changes.clear()
+    const undone = await t.app.workflows.undo(t.ann, created.id, 1)
+    expect(undone.name).toBe('Flow')
+    expect(t.changes.eventsFor('ann')).toEqual([
+      {
+        type: 'workflow.updated',
+        workflowId: created.id,
+        revision: 2,
+        updatedAt: undone.updatedAt,
+      },
+    ])
   })
 })

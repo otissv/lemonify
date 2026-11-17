@@ -37,7 +37,7 @@ import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 interface StepOptionsProps {
   documentId: string
@@ -199,7 +199,7 @@ export function StepOptions({
   documentId,
   catalogues,
 }: StepOptionsProps): React.JSX.Element {
-  const selectedId = useAppStore((state) => state.selectedSteps[documentId])
+  const selectedId = useUiStore((state) => state.selectedSteps[documentId])
   const preview = usePreview(documentId)
   const step =
     preview && selectedId !== undefined

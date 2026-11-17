@@ -1,6 +1,6 @@
 import { EditsNotices } from '@/features/documents/edits-notices'
 import { usePreview } from '@/features/pipeline/use-preview'
-import { useAppStore } from '@/store/app-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 
 interface DocumentNoticesProps {
   documentId: string
@@ -10,7 +10,9 @@ interface DocumentNoticesProps {
 export function DocumentNotices({
   documentId,
 }: DocumentNoticesProps): React.JSX.Element | null {
-  const session = useAppStore((state) => state.documents[documentId])
+  const session = usePipelineStore((state) =>
+    documentSession(state, documentId),
+  )
   const preview = usePreview(documentId)
 
   if (!session || !preview) return null

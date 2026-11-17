@@ -1,3 +1,4 @@
+import type { WorkflowChange } from '../../../src/features/workflows/workflow-change.ts'
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
 import type { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
 import type { DocumentService } from '../../../src/server/services/document-service.ts'
@@ -61,12 +62,15 @@ import {
   workflowCreateCommand,
   workflowDeleteCommand,
   workflowListCommand,
+  workflowRedoCommand,
+  workflowRenameCommand,
   workflowResultsCommand,
   workflowRunCommand,
   workflowRunDeleteCommand,
   workflowRunShowCommand,
   workflowRunsCommand,
   workflowShowCommand,
+  workflowUndoCommand,
   workflowUpdateCommand,
 } from './workflow.ts'
 
@@ -105,6 +109,16 @@ export const DOCUMENT_CHANGE_COMMANDS = {
   'set-image': [documentStepSetCommand],
   'set-sub-document': [documentStepSetCommand],
 } as const satisfies Record<DocumentChange['type'], ReadonlyArray<ImageCommand>>
+
+/** The command that makes each kind of edit to a workflow's pipeline, inputs and Output settings. The ones a document has go through `workflow update`, which writes the whole workflow as one change. */
+export const WORKFLOW_CHANGE_COMMANDS = {
+  'set-inputs': [workflowUpdateCommand],
+  'set-output': [workflowUpdateCommand],
+  replace: [workflowUpdateCommand],
+} as const satisfies Record<
+  Exclude<WorkflowChange['type'], DocumentChange['type']>,
+  ReadonlyArray<ImageCommand>
+>
 
 const BACKGROUND = { internal: 'runs by itself as part of the app' }
 const LIFECYCLE = { internal: 'called by another service when something ends' }
@@ -167,7 +181,10 @@ export const WORKFLOW_COMMANDS = {
   create: [workflowCreateCommand],
   list: [workflowListCommand],
   get: [workflowShowCommand],
-  update: [workflowUpdateCommand],
+  change: [workflowUpdateCommand],
+  rename: [workflowRenameCommand],
+  undo: [workflowUndoCommand],
+  redo: [workflowRedoCommand],
   delete: [workflowDeleteCommand],
   run: [workflowRunCommand],
   getRun: [workflowRunShowCommand],

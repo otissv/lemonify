@@ -1,4 +1,4 @@
-import { applyEdit, loadDocument } from '@/features/documents/document-sync'
+import { applyEdit, loadDocument } from '@/features/pipeline/pipeline-sync'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import { supportsBlend } from '@/features/pipeline/step-blend'
@@ -22,7 +22,12 @@ import {
   createImageLayerStep,
   isLayerStep,
 } from '@/features/pipeline/layer-kinds'
-import { Tool, currentPipeline, useAppStore } from '@/store/app-store'
+import { Tool, useUiStore } from '@/store/ui-store'
+import {
+  currentPipeline,
+  documentSession,
+  usePipelineStore,
+} from '@/store/pipeline-store'
 import type { AiContent } from '@/features/ai/ai-tools'
 import { errorMessage } from '@/lib/error-message'
 
@@ -44,10 +49,10 @@ function addStepAt(
     index,
     ...(groupId === undefined ? {} : { groupId }),
   })
-  const store = useAppStore.getState()
-  store.selectStep(documentId, step.id)
-  store.setDocumentExpanded(documentId, true)
-  store.setActiveTool(Tool.Options)
+  const ui = useUiStore.getState()
+  ui.selectStep(documentId, step.id)
+  ui.setItemExpanded(documentId, true)
+  ui.setActiveTool(Tool.Options)
 }
 
 /** Adds a step after `afterId` (at the end by default), selects it and shows its options, as one undoable change. After a step in a group it goes in that group; after a group, after the whole group. A group cannot be added inside a group. */
@@ -56,7 +61,7 @@ export function addStepAfter(
   step: PipelineStep,
   afterId?: string,
 ): void {
-  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  const pipeline = currentPipeline(usePipelineStore.getState(), documentId)
   if (!pipeline) return
   const after = afterId === undefined ? undefined : findStep(pipeline, afterId)
   const groupId =
@@ -81,9 +86,9 @@ function findGroup(
 
 export function deleteStep(documentId: string, stepId: string): void {
   void applyEdit(documentId, { type: 'remove-step', stepId })
-  const store = useAppStore.getState()
-  if (store.selectedSteps[documentId] === stepId) {
-    store.selectStep(documentId, undefined)
+  const ui = useUiStore.getState()
+  if (ui.selectedSteps[documentId] === stepId) {
+    ui.selectStep(documentId, undefined)
   }
 }
 
@@ -107,24 +112,24 @@ export function groupSteps(
   documentId: string,
   stepIds: ReadonlyArray<string>,
 ): string | undefined {
-  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  const pipeline = currentPipeline(usePipelineStore.getState(), documentId)
   if (!pipeline) return undefined
   const members = groupableSteps(pipeline, stepIds)
   if (members === undefined) return GROUPING_NEEDS_STEPS
   const group = createGroupStep(members)
   void applyEdit(documentId, { type: 'group-steps', group })
-  const store = useAppStore.getState()
-  store.selectStep(documentId, group.id)
-  store.setDocumentExpanded(documentId, true)
+  const ui = useUiStore.getState()
+  ui.selectStep(documentId, group.id)
+  ui.setItemExpanded(documentId, true)
   return undefined
 }
 
 /** Takes the steps out of a group, leaving them where it was, as one undoable change. */
 export function ungroupSteps(documentId: string, groupId: string): void {
   void applyEdit(documentId, { type: 'ungroup', groupId })
-  const store = useAppStore.getState()
-  if (store.selectedSteps[documentId] === groupId) {
-    store.selectStep(documentId, undefined)
+  const ui = useUiStore.getState()
+  if (ui.selectedSteps[documentId] === groupId) {
+    ui.selectStep(documentId, undefined)
   }
 }
 
@@ -137,7 +142,7 @@ export function setStepOn(
 }
 
 function stepOf(documentId: string, stepId: string): PipelineStep | undefined {
-  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  const pipeline = currentPipeline(usePipelineStore.getState(), documentId)
   return pipeline ? findStep(pipeline, stepId)?.step : undefined
 }
 
@@ -159,17 +164,17 @@ export async function copyStepToDocument(
   } catch (caught) {
     return errorMessage(caught, OPEN_FAILED)
   }
-  const store = useAppStore.getState()
-  const steps = currentPipeline(store, toId)?.steps
+  const pipelines = usePipelineStore.getState()
+  const steps = currentPipeline(pipelines, toId)?.steps
   if (!steps) return undefined
-  store.clearDocumentError(toId)
-  store.setDocumentExpanded(toId, true)
+  pipelines.clearSessionError(toId)
+  useUiStore.getState().setItemExpanded(toId, true)
   await applyEdit(toId, {
     type: 'add-step',
     step: copyStep(step),
     index: steps.length,
   })
-  return useAppStore.getState().documents[toId]?.error
+  return documentSession(usePipelineStore.getState(), toId)?.error
 }
 
 /** Adds an image layer for `sourceId` just after the selected step, on top of it (on top of everything when none is selected), as one undoable change. */
@@ -177,7 +182,7 @@ export function insertImage(documentId: string, sourceId: string): void {
   addStepAfter(
     documentId,
     createImageLayerStep(sourceId),
-    useAppStore.getState().selectedSteps[documentId],
+    useUiStore.getState().selectedSteps[documentId],
   )
 }
 
@@ -186,7 +191,7 @@ export function addEmptyImageLayer(documentId: string): void {
   addStepAfter(
     documentId,
     createImageLayerStep(),
-    useAppStore.getState().selectedSteps[documentId],
+    useUiStore.getState().selectedSteps[documentId],
   )
 }
 
@@ -204,11 +209,11 @@ function replaceTarget(
 
 /** Makes the selected layer use `sourceId` instead (filling it if it is empty), or the first layer with an image when another kind of step is selected, as one undoable change. */
 export function replaceImage(documentId: string, sourceId: string): void {
-  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  const pipeline = currentPipeline(usePipelineStore.getState(), documentId)
   if (!pipeline) return
   const stepId = replaceTarget(
     pipeline,
-    useAppStore.getState().selectedSteps[documentId],
+    useUiStore.getState().selectedSteps[documentId],
   )
   if (stepId !== undefined) setStepImage(documentId, stepId, sourceId)
 }

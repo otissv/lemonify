@@ -16,9 +16,10 @@ import {
   requestThumbnails,
 } from '@/features/render/render-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 import { DOCUMENT_ID, documentView } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -44,7 +45,7 @@ const BLUR = createSharpStep('blur')
 
 describe('DocumentNotices', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
@@ -82,7 +83,8 @@ describe('DocumentNotices', () => {
     })
     await waitFor(() => {
       expect(
-        useAppStore.getState().documents[DOCUMENT_ID]?.confirmed.canRedo,
+        documentSession(usePipelineStore.getState(), DOCUMENT_ID)?.confirmed
+          .canRedo,
       ).toBe(true)
     })
     await user.keyboard('{Control>}{Shift>}z{/Shift}{/Control}')
@@ -110,7 +112,8 @@ describe('DocumentNotices', () => {
       'This image was changed somewhere else.',
     )
     expect(
-      useAppStore.getState().documents[DOCUMENT_ID]?.confirmed.pipeline.steps,
+      documentSession(usePipelineStore.getState(), DOCUMENT_ID)?.confirmed
+        .pipeline.steps,
     ).toEqual(documentView().pipeline.steps)
   })
 })

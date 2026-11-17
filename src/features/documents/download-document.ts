@@ -2,7 +2,7 @@ import {
   DOCUMENT_FILE_EXTENSION,
   documentFileUrl,
 } from '@/features/documents/document-file'
-import { settleDocument } from '@/features/documents/document-sync'
+import { settlePipeline } from '@/features/pipeline/pipeline-sync'
 import { readErrorMessage } from '@/lib/read-error-message'
 
 const SAVE_FAILED = 'The document could not be saved.'
@@ -77,7 +77,7 @@ export async function downloadDocument(
   documentId: string,
   onProgress: (progress: DownloadProgress) => void,
 ): Promise<string> {
-  await settleDocument(documentId)
+  await settlePipeline(documentId)
   const response = await fetch(documentFileUrl(documentId))
   if (!response.ok)
     throw new Error(await readErrorMessage(response, SAVE_FAILED))

@@ -12,7 +12,7 @@ import type { PipelineStep } from '@/features/pipeline/pipeline'
 import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
 import { JobKind, JobState } from '@/server/jobs/job-types'
 import type { JobView } from '@/server/services/job-service'
-import { useAppStore } from '@/store/app-store'
+import { usePipelineStore } from '@/store/pipeline-store'
 
 export const DOCUMENT_ID = '6f1c6c4e-0f43-4a8f-9a57-2d2f0f8f2b11'
 
@@ -87,7 +87,7 @@ export function documentView(
 
 /** Puts a document in the editor as if the server had just sent it. */
 export function loadDocumentIntoEditor(view: DocumentView): void {
-  useAppStore.getState().confirmDocument(view, true)
+  usePipelineStore.getState().confirmDocument(view, true)
 }
 
 /**

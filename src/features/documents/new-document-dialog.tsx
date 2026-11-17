@@ -15,7 +15,7 @@ import { createBlankDocument } from '@/features/documents/document-functions'
 import { canvasOfSize } from '@/features/pipeline/canvas'
 import type { Canvas } from '@/features/pipeline/canvas'
 import { errorMessage } from '@/lib/error-message'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 const DEFAULT_NAME = 'Untitled'
 const DEFAULT_WIDTH = 1920
@@ -25,8 +25,8 @@ const INITIAL_CANVAS = canvasOfSize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
 
 /** Makes a document with nothing in it, on a canvas the person sizes. */
 export function NewDocumentDialog(): React.JSX.Element {
-  const open = useAppStore((state) => state.newDocumentOpen)
-  const setOpen = useAppStore((state) => state.setNewDocumentOpen)
+  const open = useUiStore((state) => state.newDocumentOpen)
+  const setOpen = useUiStore((state) => state.setNewDocumentOpen)
   const router = useRouter()
   const navigate = useNavigate()
   const [name, setName] = useState(DEFAULT_NAME)

@@ -55,6 +55,7 @@ const BUILD_SHAPE = {
   width: dimension.optional(),
   height: dimension.optional(),
   background: z.string().optional(),
+  without: z.string().optional(),
 }
 
 const BUILD_FLAGS = {
@@ -65,6 +66,7 @@ const BUILD_FLAGS = {
   width: { type: 'string' },
   height: { type: 'string' },
   background: { type: 'string' },
+  without: { type: 'string' },
 } as const
 
 type BuildOptions = {
@@ -75,6 +77,7 @@ type BuildOptions = {
   width?: number
   height?: number
   background?: string
+  without?: string
 }
 
 function hasCanvasFlags(options: BuildOptions): boolean {
@@ -100,8 +103,12 @@ function chosenCanvas(
 function withNewInputs(
   current: ReadonlyArray<string>,
   raw: string | undefined,
+  without: string | undefined = undefined,
 ): string[] {
-  return [...new Set([...current, ...sourceIds(raw)])]
+  const dropped = new Set(sourceIds(without))
+  return [...new Set([...current, ...sourceIds(raw)])].filter(
+    (id) => !dropped.has(id),
+  )
 }
 
 /**
@@ -115,7 +122,7 @@ function chooseDefinition(
   options: BuildOptions,
   current: WorkflowView | undefined,
 ): WorkflowDefinition {
-  const { pipeline, steps, sources, output } = options
+  const { pipeline, steps, sources, output, without } = options
   if (pipeline !== undefined) {
     if (steps !== undefined || hasCanvasFlags(options)) {
       throw new ValidationError(
@@ -124,12 +131,12 @@ function chooseDefinition(
     }
     return {
       pipeline,
-      inputs: withNewInputs(current?.inputs ?? [], sources),
+      inputs: withNewInputs(current?.inputs ?? [], sources, without),
       output: output ?? current?.output ?? defaultOutputSettings(),
     }
   }
   const canvas = chosenCanvas(options, current)
-  const inputs = withNewInputs(current?.inputs ?? [], sources)
+  const inputs = withNewInputs(current?.inputs ?? [], sources, without)
   if (current !== undefined && steps === undefined) {
     return {
       pipeline: { ...current.pipeline, canvas },
@@ -201,8 +208,9 @@ export const workflowUpdateCommand = defineAppCommand({
   name: 'workflow update',
   summary: 'Change a workflow',
   synopsis:
-    '<id> [--name <name>] [--width <px> --height <px> --background <c>] [--sources <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
-  help: `Changes a workflow as it is now. The canvas flags change the canvas and what you
+    '<id> [--name <name>] [--width <px> --height <px> --background <c>] [--sources <ids>] [--without <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
+  help: `Changes a workflow as it is now, as one change in its Edit history (undo it
+with workflow undo). A new --name is a rename, which is not in it. The canvas flags change the canvas and what you
 leave out stays. --sources adds source images and --output replaces the Output
 settings. --steps replaces the steps after one empty image layer. --pipeline
 replaces the whole pipeline.
@@ -211,6 +219,7 @@ Options:
   --name <name>        Rename the workflow
 ${CANVAS_HELP}
   ${SOURCES_HELP}
+  --without <ids>      Comma-separated source ids to take out of the workflow's sources
   --steps <json>       The steps after the input layer (${JSON_FLAG})
   ${OUTPUT_HELP}
   --pipeline <json>    The whole pipeline (${JSON_FLAG}); not with --steps or the canvas flags`,
@@ -219,14 +228,60 @@ ${CANVAS_HELP}
   flags: { name: { type: 'string' }, ...BUILD_FLAGS },
   async run({ app, actor, options }) {
     const current = await app.workflows.get(actor, options.id)
-    const name = options.name ?? current.name
+    const definition = chooseDefinition(options, current)
+    let workflow = await app.workflows.change(
+      actor,
+      options.id,
+      current.revision,
+      { type: 'replace', definition },
+    )
+    if (options.name !== undefined && options.name !== current.name) {
+      workflow = await app.workflows.rename(actor, options.id, options.name)
+    }
+    return { workflow }
+  },
+})
+
+export const workflowRenameCommand = defineAppCommand({
+  name: 'workflow rename',
+  summary: 'Rename a workflow',
+  synopsis: '<id> <name>',
+  help: 'Gives the workflow a new name, as double-clicking it in the sidebar does, and prints the workflow. A rename is not an edit: it is not in the Edit history.',
+  shape: { id, name: z.string() },
+  positionals: ['id', 'name'],
+  async run({ app, actor, options }) {
     return {
-      workflow: await app.workflows.update(
-        actor,
-        options.id,
-        current.revision,
-        { name, definition: chooseDefinition(options, current) },
-      ),
+      workflow: await app.workflows.rename(actor, options.id, options.name),
+    }
+  },
+})
+
+export const workflowUndoCommand = defineAppCommand({
+  name: 'workflow undo',
+  summary: 'Undo the last change to a workflow',
+  synopsis: '<id>',
+  help: 'Undoes the last change in the workflow’s Edit history, if any, and prints the workflow.',
+  shape: { id },
+  positionals: ['id'],
+  async run({ app, actor, options }) {
+    const current = await app.workflows.get(actor, options.id)
+    return {
+      workflow: await app.workflows.undo(actor, options.id, current.revision),
+    }
+  },
+})
+
+export const workflowRedoCommand = defineAppCommand({
+  name: 'workflow redo',
+  summary: 'Redo a change that was undone',
+  synopsis: '<id>',
+  help: 'Redoes the change that was undone last, if any, and prints the workflow.',
+  shape: { id },
+  positionals: ['id'],
+  async run({ app, actor, options }) {
+    const current = await app.workflows.get(actor, options.id)
+    return {
+      workflow: await app.workflows.redo(actor, options.id, current.revision),
     }
   },
 })

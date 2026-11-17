@@ -3,16 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NavigatorPanel } from '@/features/viewport/navigator-panel'
 import type { ViewFrame } from '@/features/viewport/viewport'
-import {
-  INITIAL_APP_STATE,
-  PreviewStatus,
-  useAppStore,
-} from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { usePipelineStore } from '@/store/pipeline-store'
+import { PreviewStatus } from '@/features/documents/document-render'
 import {
   DOCUMENT_ID,
   documentView,
   loadDocumentIntoEditor,
 } from '@/test/document-fixtures'
+import { resetStores } from '@/store/reset-stores'
 
 /** A square picture in a 1000 x 800 window: fitted it is 800 x 800. */
 const FRAME: ViewFrame = {
@@ -35,7 +34,7 @@ function mockPreviewBox(): void {
 
 function viewport() {
   return (
-    useAppStore.getState().viewports[DOCUMENT_ID] ?? {
+    useUiStore.getState().viewports[DOCUMENT_ID] ?? {
       zoom: 1,
       x: 0.5,
       y: 0.5,
@@ -45,7 +44,7 @@ function viewport() {
 
 function zoomTo(zoom: number): void {
   act(() => {
-    useAppStore.getState().setViewport(DOCUMENT_ID, { zoom, x: 0.5, y: 0.5 })
+    useUiStore.getState().setViewport(DOCUMENT_ID, { zoom, x: 0.5, y: 0.5 })
   })
 }
 
@@ -63,18 +62,18 @@ function finder(): HTMLElement {
 
 function show(): void {
   loadDocumentIntoEditor(documentView())
-  useAppStore.getState().setPreview(DOCUMENT_ID, {
+  usePipelineStore.getState().setPreview(DOCUMENT_ID, {
     status: PreviewStatus.Ready,
     key: 'preview-key',
     pendingStepIds: [],
     problems: [],
   })
-  useAppStore.getState().setViewFrame(DOCUMENT_ID, FRAME)
+  useUiStore.getState().setViewFrame(DOCUMENT_ID, FRAME)
   render(<NavigatorPanel documentId={DOCUMENT_ID} />)
 }
 
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
   mockPreviewBox()
 })
 

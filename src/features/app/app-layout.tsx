@@ -11,26 +11,28 @@ import { MenuPanel } from '@/features/app/menu-panel'
 import { LiveStatus } from '@/features/realtime/live-status'
 import { useRealtime } from '@/features/realtime/use-realtime'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
-const DOCUMENT_PATH = '/documents/'
+/** Pages that bring their own floating panel. */
+const PANEL_PATHS = ['/documents/', '/workflows/']
 
 /**
  * The shell has no header: everything the header held lives in the menu of the
- * floating panel, so the page fills the whole area. A document page brings its
- * own panel; every other page gets one holding just the menu.
+ * floating panel, so the page fills the whole area. A document page and a workflow
+ * page bring their own panel; every other page gets one holding just the menu.
  */
 export function AppLayout(): React.JSX.Element {
-  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
-  const setSidebarOpen = useAppStore((state) => state.setSidebarOpen)
-  const onDocument = useRouterState({
-    select: (state) => state.location.pathname.startsWith(DOCUMENT_PATH),
+  const sidebarOpen = useUiStore((state) => state.sidebarOpen)
+  const setSidebarOpen = useUiStore((state) => state.setSidebarOpen)
+  const ownsPanel = useRouterState({
+    select: (state) =>
+      PANEL_PATHS.some((path) => state.location.pathname.startsWith(path)),
   })
 
   useRealtime()
 
   useEffect(() => {
-    void useAppStore.persist.rehydrate()
+    void useUiStore.persist.rehydrate()
   }, [])
 
   return (
@@ -40,8 +42,8 @@ export function AppLayout(): React.JSX.Element {
           <SidebarInset className="h-svh">
             <main className="relative min-h-0 flex-1 overflow-hidden">
               <Outlet />
-              {onDocument ? null : <MenuPanel />}
-              {onDocument ? null : <KeyBindings />}
+              {ownsPanel ? null : <MenuPanel />}
+              {ownsPanel ? null : <KeyBindings />}
               <LiveStatus />
             </main>
           </SidebarInset>

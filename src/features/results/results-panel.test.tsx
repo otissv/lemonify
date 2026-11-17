@@ -10,8 +10,9 @@ import {
   listResults,
 } from '@/features/results/result-functions'
 import { ResultsPanel } from '@/features/results/results-panel'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+
 import { DOCUMENT_ID } from '@/test/document-fixtures'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/results/result-functions', () => ({
   listResults: vi.fn(),
@@ -43,7 +44,7 @@ const AI: ResultView = {
 
 describe('ResultsPanel', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.mocked(getResultUsage).mockResolvedValue({
       usedBytes: 5_000_000,
       maxBytes: 100_000_000,

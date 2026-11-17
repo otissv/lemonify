@@ -1,5 +1,5 @@
 import { screen, within } from '@testing-library/react'
-import { workflowDefinition } from '@/test/workflow-fixtures'
+import { workflowView } from '@/test/workflow-fixtures'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,9 +8,10 @@ import { listDocuments } from '@/features/documents/document-functions'
 import { listSources } from '@/features/sources/source-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import type { WorkflowView } from '@/server/services/workflow-service'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+
 import { documentView } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -49,12 +50,12 @@ function documentSummary(
   return { id, name: `Photo ${index}`, source, revision: 0, updatedAt }
 }
 
-function workflowView(index: number, updatedAt: string): WorkflowView {
+function flowView(index: number, updatedAt: string): WorkflowView {
   return {
-    id: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-    name: `Flow ${index}`,
-    ...workflowDefinition(),
-    revision: 0,
+    ...workflowView(
+      `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      `Flow ${index}`,
+    ),
     createdAt: updatedAt,
     updatedAt,
   }
@@ -66,7 +67,7 @@ function page(): HTMLElement {
 
 describe('HomePage', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listSources).mockResolvedValue([])
@@ -216,7 +217,7 @@ describe('HomePage', () => {
     it('lists up to five, newest changed first, each linking to its workflow', async () => {
       vi.mocked(listWorkflows).mockResolvedValue(
         Array.from({ length: 7 }, (_, index) =>
-          workflowView(index + 1, minutesAgo((7 - index) * 10)),
+          flowView(index + 1, minutesAgo((7 - index) * 10)),
         ),
       )
       await renderApp()

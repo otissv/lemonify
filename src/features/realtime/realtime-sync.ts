@@ -1,9 +1,11 @@
-import { reconcileDocument } from '@/features/documents/document-sync'
+import { reconcilePipeline } from '@/features/pipeline/pipeline-sync'
+import { forgetItem } from '@/store/forget-item'
+import { useLibraryStore } from '@/store/library-store'
+import { usePipelineStore } from '@/store/pipeline-store'
+import { useUiStore } from '@/store/ui-store'
 import type { RealtimeEvent } from '@/features/realtime/realtime-events'
-import { useAppStore } from '@/store/app-store'
 
-export const DELETED_NOTICE =
-  'This document was deleted in another tab or window.'
+export const DELETED_NOTICE = 'This was deleted in another tab or window.'
 
 export type ListRefresher = {
   /** Reads the lists again. Asks that arrive while one read is running share one more read. */
@@ -43,9 +45,9 @@ export function createListRefresher(
 
 export type RealtimeSyncOptions = {
   invalidate: () => Promise<void> | void
-  openDocumentId: () => string | undefined
-  /** Moves away from a document that no longer exists. */
-  leaveDocument: () => void
+  openItemId: () => string | undefined
+  /** Moves away from a document or workflow that no longer exists. */
+  leaveItem: () => void
 }
 
 export type RealtimeSync = {
@@ -60,9 +62,16 @@ export function createRealtimeSync(options: RealtimeSyncOptions): RealtimeSync {
 
   function reconcile(
     documentId: string,
-    remote?: Parameters<typeof reconcileDocument>[1],
+    remote?: Parameters<typeof reconcilePipeline>[1],
   ): Promise<void> {
-    return reconcileDocument(documentId, remote).catch(() => undefined)
+    return reconcilePipeline(documentId, remote).catch(() => undefined)
+  }
+
+  function forgetDeleted(id: string): void {
+    forgetItem(id)
+    if (options.openItemId() !== id) return
+    options.leaveItem()
+    useUiStore.getState().setLiveNotice(DELETED_NOTICE)
   }
 
   return {
@@ -79,28 +88,32 @@ export function createRealtimeSync(options: RealtimeSyncOptions): RealtimeSync {
             updatedAt: event.updatedAt,
           })
           return
-        case 'document.deleted': {
-          const store = useAppStore.getState()
-          store.forgetDocument(event.documentId)
-          if (options.openDocumentId() === event.documentId) {
-            options.leaveDocument()
-            store.setLiveNotice(DELETED_NOTICE)
-          }
+        case 'workflow.updated':
+          void reconcile(event.workflowId, {
+            revision: event.revision,
+            updatedAt: event.updatedAt,
+          })
           return
-        }
+        case 'document.deleted':
+          forgetDeleted(event.documentId)
+          return
+        case 'workflow.deleted':
+          forgetDeleted(event.workflowId)
+          return
         case 'results.changed':
-          useAppStore.getState().bumpResults()
+          void useLibraryStore.getState().refreshResults()
           return
         case 'heartbeat':
           return
       }
     },
     async catchUp() {
-      const store = useAppStore.getState()
-      store.bumpResults()
       await Promise.all([
         lists.request(),
-        ...Object.keys(store.documents).map((id) => reconcile(id)),
+        useLibraryStore.getState().refreshResults(),
+        ...Object.keys(usePipelineStore.getState().sessions).map((id) =>
+          reconcile(id),
+        ),
       ])
     },
   }

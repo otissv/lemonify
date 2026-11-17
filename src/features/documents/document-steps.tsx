@@ -24,7 +24,8 @@ import {
 import { pipelineStepTitle } from '@/features/pipeline/step-problems'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { useStepThumbnails } from '@/features/pipeline/use-step-thumbnails'
-import { Tool, useAppStore } from '@/store/app-store'
+import { Tool, useUiStore } from '@/store/ui-store'
+import { usePipelineStore } from '@/store/pipeline-store'
 
 function sourceNameOf(
   step: PipelineStep,
@@ -54,15 +55,15 @@ export function DocumentSteps({
   const navigate = useNavigate()
   useDocument(documentId)
   const preview = usePreview(documentId)
-  const selectedId = useAppStore((state) => state.selectedSteps[documentId])
-  const marked = useAppStore((state) => state.markedSteps[documentId])
-  const collapsedGroups = useAppStore((state) => state.collapsedGroups)
-  const thumbnails = useAppStore((state) => state.thumbnails[documentId])
-  const run = useAppStore((state) => state.aiRuns[documentId])
-  const selectStep = useAppStore((state) => state.selectStep)
-  const markSteps = useAppStore((state) => state.markSteps)
-  const setGroupCollapsed = useAppStore((state) => state.setGroupCollapsed)
-  const setActiveTool = useAppStore((state) => state.setActiveTool)
+  const selectedId = useUiStore((state) => state.selectedSteps[documentId])
+  const marked = useUiStore((state) => state.markedSteps[documentId])
+  const collapsedGroups = useUiStore((state) => state.collapsedGroups)
+  const thumbnails = usePipelineStore((state) => state.thumbnails[documentId])
+  const run = usePipelineStore((state) => state.aiRuns[documentId])
+  const selectStep = useUiStore((state) => state.selectStep)
+  const markSteps = useUiStore((state) => state.markSteps)
+  const setGroupCollapsed = useUiStore((state) => state.setGroupCollapsed)
+  const setActiveTool = useUiStore((state) => state.setActiveTool)
   const [draggedId, setDraggedId] = useState<string | undefined>(undefined)
   const [overGroupId, setOverGroupId] = useState<string | undefined>(undefined)
   useStepThumbnails(documentId, true)

@@ -11,10 +11,7 @@ import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { addStepAfter } from '@/features/pipeline/pipeline-actions'
 import { listSources } from '@/features/sources/source-functions'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 import { requestAiStep } from '@/features/render/render-functions'
 import { StepOptions } from '@/features/tools/step-options'
 import {
@@ -25,11 +22,9 @@ import {
   loadDocumentIntoEditor,
   baseLayer,
 } from '@/test/document-fixtures'
-import {
-  INITIAL_APP_STATE,
-  currentPipeline,
-  useAppStore,
-} from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { currentPipeline, usePipelineStore } from '@/store/pipeline-store'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   getDocument: vi.fn(),
@@ -55,7 +50,7 @@ function upscaleStep(): PipelineStep {
 }
 
 function firstStep(): PipelineStep | undefined {
-  return currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps.at(1)
+  return currentPipeline(usePipelineStore.getState(), DOCUMENT_ID)?.steps.at(1)
 }
 
 function showOptionsOf(step?: PipelineStep): void {
@@ -68,7 +63,7 @@ function showOptionsOf(step?: PipelineStep): void {
 
 describe('StepOptions', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
   })
 
   afterEach(() => {
@@ -88,7 +83,7 @@ describe('StepOptions', () => {
       const view = documentView(extra)
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
-      useAppStore
+      useUiStore
         .getState()
         .selectStep(DOCUMENT_ID, baseLayer(view.source.id).id)
       render(
@@ -97,7 +92,7 @@ describe('StepOptions', () => {
     }
 
     beforeEach(() => {
-      useSourcesStore.setState(INITIAL_SOURCES_STATE)
+      useLibraryStore.setState(INITIAL_LIBRARY_STATE)
       vi.mocked(listSources).mockResolvedValue([])
     })
 
@@ -173,7 +168,7 @@ describe('StepOptions', () => {
 
   describe('a step that uses a second image', () => {
     beforeEach(() => {
-      useSourcesStore.setState(INITIAL_SOURCES_STATE)
+      useLibraryStore.setState(INITIAL_LIBRARY_STATE)
     })
 
     it('offers every image in the library, not only those the document uses', async () => {
@@ -213,7 +208,7 @@ describe('StepOptions', () => {
       const view = documentView([blur])
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
-      useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
       const user = userEvent.setup()
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
@@ -242,7 +237,7 @@ describe('StepOptions', () => {
       const view = documentView([blur])
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
-      useAppStore.getState().selectStep(DOCUMENT_ID, blur.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
       )
@@ -273,7 +268,7 @@ describe('StepOptions', () => {
     it('is not offered for a geometry step, which changes the size of the picture', () => {
       const flip = createSharpStep('flip')
       loadDocumentIntoEditor(documentView([flip]))
-      useAppStore.getState().selectStep(DOCUMENT_ID, flip.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, flip.id)
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
       )
@@ -286,7 +281,7 @@ describe('StepOptions', () => {
 
   describe('a layer', () => {
     beforeEach(() => {
-      useSourcesStore.setState(INITIAL_SOURCES_STATE)
+      useLibraryStore.setState(INITIAL_LIBRARY_STATE)
       vi.mocked(listSources).mockResolvedValue([])
     })
 
@@ -300,7 +295,7 @@ describe('StepOptions', () => {
           { ...view.source, id: 'src-mask', fileName: 'mask.png' },
         ],
       })
-      useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, layer.id)
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
       )
@@ -322,7 +317,7 @@ describe('StepOptions', () => {
       const view = documentView([empty])
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
-      useAppStore.getState().selectStep(DOCUMENT_ID, empty.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, empty.id)
       const user = userEvent.setup()
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
@@ -364,7 +359,7 @@ describe('StepOptions', () => {
       const view = documentView([layer])
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
-      useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, layer.id)
       const user = userEvent.setup()
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
@@ -386,7 +381,7 @@ describe('StepOptions', () => {
       const view = documentView([layer])
       echoChanges(vi.mocked(changeDocument), view)
       loadDocumentIntoEditor(view)
-      useAppStore.getState().selectStep(DOCUMENT_ID, layer.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, layer.id)
       const user = userEvent.setup()
       render(
         <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
@@ -452,7 +447,7 @@ describe('StepOptions', () => {
       })
 
       const restored = documentView([blur])
-      useAppStore.getState().confirmDocument(restored, true)
+      usePipelineStore.getState().confirmDocument(restored, true)
 
       await waitFor(() => {
         expect(screen.getByLabelText('Sigma')).toHaveValue(2)
@@ -553,7 +548,7 @@ describe('StepOptions', () => {
       vi.mocked(followJob).mockResolvedValue(undefined)
       const user = userEvent.setup()
       showOptionsOf(step)
-      useAppStore.getState().setPreview(DOCUMENT_ID, {
+      usePipelineStore.getState().setPreview(DOCUMENT_ID, {
         status: PreviewStatus.Ready,
         key: 'k',
         pendingStepIds: [step.id],
@@ -569,7 +564,7 @@ describe('StepOptions', () => {
 
     it('says the step has run, with no Run, once it has a result', async () => {
       showOptionsOf(upscaleStep())
-      useAppStore.getState().setPreview(DOCUMENT_ID, {
+      usePipelineStore.getState().setPreview(DOCUMENT_ID, {
         status: PreviewStatus.Ready,
         key: 'k',
         pendingStepIds: [],

@@ -5,7 +5,7 @@ import {
 } from '@/features/documents/document-render-sync'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { JobState } from '@/server/jobs/job-types'
-import { useAppStore } from '@/store/app-store'
+import { usePipelineStore } from '@/store/pipeline-store'
 
 interface AiRunControlProps {
   documentId: string
@@ -22,7 +22,7 @@ export function AiRunControl({
   documentId,
   stepId,
 }: AiRunControlProps): React.JSX.Element {
-  const run = useAppStore((state) => state.aiRuns[documentId])
+  const run = usePipelineStore((state) => state.aiRuns[documentId])
   const preview = usePreview(documentId)
   const active = run !== undefined && run.state !== JobState.Failed
   const outOfDate = preview?.pending.includes(stepId) ?? false

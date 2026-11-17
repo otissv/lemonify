@@ -8,17 +8,14 @@ import { DocumentInfo } from '@/features/documents/document-info'
 import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import { AiToolId } from '@/features/ai/ai-tools'
-import {
-  INITIAL_APP_STATE,
-  currentPipeline,
-  useAppStore,
-} from '@/store/app-store'
+import { currentPipeline, usePipelineStore } from '@/store/pipeline-store'
 import {
   DOCUMENT_ID,
   documentView,
   echoChanges,
   loadDocumentIntoEditor,
 } from '@/test/document-fixtures'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   getDocument: vi.fn(),
@@ -39,7 +36,7 @@ const UPSCALE = createAiStep({
 })
 
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
 })
 
 function show(): void {
@@ -135,7 +132,7 @@ describe('DocumentInfo', () => {
 
       await waitFor(() =>
         expect(
-          currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.canvas,
+          currentPipeline(usePipelineStore.getState(), DOCUMENT_ID)?.canvas,
         ).toEqual({
           width: 200,
           height: 10,
@@ -143,7 +140,7 @@ describe('DocumentInfo', () => {
         }),
       )
       expect(
-        currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps,
+        currentPipeline(usePipelineStore.getState(), DOCUMENT_ID)?.steps,
       ).toHaveLength(2)
       expect(changeDocument).toHaveBeenCalledTimes(1)
     })

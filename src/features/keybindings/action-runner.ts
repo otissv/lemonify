@@ -1,7 +1,7 @@
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import type { ImageOpener } from '@/features/app/image-opener'
-import { canRedoNow, canUndoNow } from '@/features/documents/document-session'
-import { redoEdit, undoEdit } from '@/features/documents/document-sync'
+import { canRedoNow, canUndoNow } from '@/features/pipeline/pipeline-session'
+import { redoEdit, undoEdit } from '@/features/pipeline/pipeline-sync'
 import { actionById } from '@/features/keybindings/actions'
 import {
   PipelineStepKind,
@@ -22,7 +22,12 @@ import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import { addTool } from '@/features/tools/add-tool'
 import { FAR_PAN_MULTIPLIER, KEY_PAN_STEP } from '@/features/viewport/pan-step'
 import { viewportActionsFor } from '@/features/viewport/use-viewport'
-import { Tool, currentPipeline, useAppStore } from '@/store/app-store'
+import { Tool, useUiStore } from '@/store/ui-store'
+import {
+  currentPipeline,
+  documentSession,
+  usePipelineStore,
+} from '@/store/pipeline-store'
 
 /** What an action needs from the page it runs on. */
 export interface ActionContext {
@@ -66,13 +71,14 @@ type Snapshot = {
 }
 
 function snapshot(documentId: string): Snapshot {
-  const state = useAppStore.getState()
+  const pipelines = usePipelineStore.getState()
+  const ui = useUiStore.getState()
   return {
     documentId,
-    hasSession: state.documents[documentId] !== undefined,
-    pipeline: currentPipeline(state, documentId),
-    selectedId: state.selectedSteps[documentId],
-    marked: state.markedSteps[documentId] ?? [],
+    hasSession: pipelines.sessions[documentId] !== undefined,
+    pipeline: currentPipeline(pipelines, documentId),
+    selectedId: ui.selectedSteps[documentId],
+    marked: ui.markedSteps[documentId] ?? [],
   }
 }
 
@@ -152,17 +158,21 @@ function stepKeyEnabled(id: string, now: Snapshot): boolean {
 
 function documentEnabled(id: string, now: Snapshot): boolean {
   const { documentId, pipeline } = now
-  const state = useAppStore.getState()
-  const session = state.documents[documentId]
+  const pipelines = usePipelineStore.getState()
+  const session = pipelines.sessions[documentId]
+  const document = documentSession(pipelines, documentId)
   switch (id) {
     case 'edit.undo':
       return session !== undefined && canUndoNow(session)
     case 'edit.redo':
       return session !== undefined && canRedoNow(session)
+    case 'file.exportImage':
+    case 'file.exportDocument':
+      return document !== undefined
     case 'edit.replaceImage':
-      return hasLayer(pipeline)
+      return document !== undefined && hasLayer(pipeline)
     case 'edit.showOriginal':
-      return session !== undefined && hasEdits(session.confirmed.pipeline)
+      return document !== undefined && hasEdits(document.confirmed.pipeline)
     default:
       return true
   }
@@ -193,7 +203,7 @@ export function canRunAction(id: string, context: ActionContext): boolean {
   }
   if (id.startsWith('step.')) return stepKeyEnabled(id, now)
   if (id in PANS || id.startsWith('view.')) {
-    return useAppStore.getState().viewFrames[documentId] !== undefined
+    return useUiStore.getState().viewFrames[documentId] !== undefined
   }
   return documentEnabled(id, now)
 }
@@ -230,7 +240,7 @@ function selectNeighbour(now: Snapshot, direction: -1 | 1): void {
   const fallback = direction === 1 ? 0 : ids.length - 1
   const next = at === -1 ? ids[fallback] : ids[at + direction]
   if (next === undefined) return
-  useAppStore.getState().selectStep(now.documentId, next)
+  useUiStore.getState().selectStep(now.documentId, next)
 }
 
 function runStepAction(id: string, now: Snapshot): void {
@@ -239,7 +249,7 @@ function runStepAction(id: string, now: Snapshot): void {
   switch (id) {
     case 'step.group': {
       const problem = groupSteps(documentId, now.marked)
-      if (problem !== undefined) useAppStore.getState().setLiveNotice(problem)
+      if (problem !== undefined) useUiStore.getState().setLiveNotice(problem)
       return
     }
     case 'step.ungroup':
@@ -277,7 +287,7 @@ function runDocumentAction(
   documentId: string,
   context: ActionContext,
 ): void {
-  const store = useAppStore.getState()
+  const store = useUiStore.getState()
   switch (id) {
     case 'edit.undo':
       void undoEdit(documentId)
@@ -318,7 +328,7 @@ function runDocumentAction(
 export function runAction(id: string, context: ActionContext): boolean {
   if (!canRunAction(id, context)) return false
   const definition = actionById(id)
-  const store = useAppStore.getState()
+  const store = useUiStore.getState()
   switch (id) {
     case 'file.newDocument':
       store.setNewDocumentOpen(true)

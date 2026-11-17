@@ -30,7 +30,9 @@ import { resultDownloadUrl } from '@/features/documents/image-urls'
 import { errorMessage } from '@/lib/error-message'
 import { JobKind, JobState } from '@/server/jobs/job-types'
 import { usePreview } from '@/features/pipeline/use-preview'
-import { useAppStore } from '@/store/app-store'
+import { useLibraryStore } from '@/store/library-store'
+import { useUiStore } from '@/store/ui-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 
 interface ExportOptionsProps {
   documentId: string
@@ -127,10 +129,12 @@ function startDownload(resultId: string): void {
 export function ExportOptions({
   documentId,
 }: ExportOptionsProps): React.JSX.Element {
-  const stored = useAppStore((state) => state.exportSettings[documentId])
-  const setExportSettings = useAppStore((state) => state.setExportSettings)
-  const bumpResults = useAppStore((state) => state.bumpResults)
-  const session = useAppStore((state) => state.documents[documentId])
+  const stored = useUiStore((state) => state.exportSettings[documentId])
+  const setExportSettings = useUiStore((state) => state.setExportSettings)
+  const refreshResults = useLibraryStore((state) => state.refreshResults)
+  const session = usePipelineStore((state) =>
+    documentSession(state, documentId),
+  )
   const preview = usePreview(documentId)
   const blocked =
     (preview?.pending.length ?? 0) > 0 ||
@@ -184,7 +188,7 @@ export function ExportOptions({
         ended?.state === JobState.Done &&
         ended.result?.kind === JobKind.Export
       ) {
-        bumpResults()
+        void refreshResults()
         startDownload(ended.result.resultId)
         setExported(
           'The export is ready and downloading. It is also kept in Results.',

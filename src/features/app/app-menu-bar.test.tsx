@@ -22,12 +22,10 @@ import {
   requestThumbnails,
 } from '@/features/render/render-functions'
 import { listSources } from '@/features/sources/source-functions'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
-import { INITIAL_APP_STATE, Tool, useAppStore } from '@/store/app-store'
+import { Tool, useUiStore } from '@/store/ui-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 import {
   DOCUMENT_ID,
   documentView,
@@ -37,6 +35,7 @@ import {
 } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
 import { pipelineOf } from '@/test/pipelines'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/auth/auth-client', () => ({ signOut: vi.fn() }))
 vi.mock('@/features/documents/document-functions', () => ({
@@ -84,8 +83,8 @@ async function openMenu(
 
 describe('AppMenuBar', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
-    useSourcesStore.setState(INITIAL_SOURCES_STATE)
+    resetStores()
+    useLibraryStore.setState(INITIAL_LIBRARY_STATE)
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
@@ -142,7 +141,7 @@ describe('AppMenuBar', () => {
       expect(item).toHaveTextContent('Alt+N')
       await user.click(item)
 
-      expect(useAppStore.getState().newDocumentOpen).toBe(true)
+      expect(useUiStore.getState().newDocumentOpen).toBe(true)
     })
 
     it('opens an image from this computer', async () => {
@@ -248,13 +247,13 @@ describe('AppMenuBar', () => {
         within(view).queryByRole('menuitem', { name: 'Tools' }),
       ).not.toBeInTheDocument()
       await user.click(toggle)
-      expect(useAppStore.getState().sidebarOpen).toBe(false)
+      expect(useUiStore.getState().sidebarOpen).toBe(false)
 
       view = await openMenu(user, 'View')
       await user.click(
         within(view).getByRole('menuitemcheckbox', { name: 'Sidebar' }),
       )
-      expect(useAppStore.getState().sidebarOpen).toBe(true)
+      expect(useUiStore.getState().sidebarOpen).toBe(true)
     })
 
     it('names the signed-in user and signs out', async () => {
@@ -329,7 +328,7 @@ describe('AppMenuBar', () => {
       const user = userEvent.setup()
       await renderApp(`/documents/${DOCUMENT_ID}`)
       await screen.findByRole('dialog', { name: 'Tools' })
-      useAppStore.getState().selectStep(DOCUMENT_ID, BLUR.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, BLUR.id)
 
       const edit = await openMenu(user, 'Edit')
       await user.click(
@@ -368,7 +367,7 @@ describe('AppMenuBar', () => {
       const user = userEvent.setup()
       await renderApp(`/documents/${DOCUMENT_ID}`)
       await screen.findByRole('dialog', { name: 'Tools' })
-      useAppStore.getState().selectStep(DOCUMENT_ID, BLUR.id)
+      useUiStore.getState().selectStep(DOCUMENT_ID, BLUR.id)
 
       const edit = await openMenu(user, 'Edit')
       await user.click(
@@ -389,7 +388,7 @@ describe('AppMenuBar', () => {
       const added = vi.mocked(changeDocument).mock.calls[0]?.[0].data.change
       if (added?.type !== 'add-step') throw new Error('no step added')
       expect(added.step).not.toHaveProperty('sourceId')
-      expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
+      expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
         added.step.id,
       )
     })
@@ -432,7 +431,7 @@ describe('AppMenuBar', () => {
       vi.mocked(getDocument).mockResolvedValue(view)
       echoChanges(vi.mocked(changeDocument), view)
       vi.mocked(listSources).mockResolvedValue([])
-      useSourcesStore.setState({ upload: vi.fn().mockResolvedValue(OTHER) })
+      useLibraryStore.setState({ upload: vi.fn().mockResolvedValue(OTHER) })
       const user = userEvent.setup()
       await renderApp(`/documents/${DOCUMENT_ID}`)
       await screen.findByRole('dialog', { name: 'Tools' })
@@ -603,7 +602,8 @@ describe('AppMenuBar', () => {
 
       await waitFor(() => {
         expect(
-          useAppStore.getState().documents[DOCUMENT_ID]?.confirmed.revision,
+          documentSession(usePipelineStore.getState(), DOCUMENT_ID)?.confirmed
+            .revision,
         ).toBe(4)
       })
       edit = await openMenu(user, 'Edit')
@@ -641,7 +641,7 @@ describe('AppMenuBar', () => {
           originalUrl,
         ),
       )
-      expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(true)
+      expect(useUiStore.getState().showOriginal[DOCUMENT_ID]).toBe(true)
 
       const again = await openMenu(user, 'Edit')
       const toggle = within(again).getByRole('menuitemcheckbox', {
@@ -649,7 +649,7 @@ describe('AppMenuBar', () => {
       })
       expect(toggle).toBeChecked()
       await user.click(toggle)
-      expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
+      expect(useUiStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
       vi.unstubAllGlobals()
     })
 
@@ -766,7 +766,7 @@ describe('AppMenuBar', () => {
       await user.click(
         within(file).getByRole('menuitem', { name: 'Export image' }),
       )
-      expect(useAppStore.getState().activeTool).toBe(Tool.Export)
+      expect(useUiStore.getState().activeTool).toBe(Tool.Export)
 
       for (const [name, tool] of [
         ['Tools', Tool.Tools],
@@ -776,7 +776,7 @@ describe('AppMenuBar', () => {
       ] as const) {
         const view = await openMenu(user, 'View')
         await user.click(within(view).getByRole('menuitem', { name }))
-        expect(useAppStore.getState().activeTool).toBe(tool)
+        expect(useUiStore.getState().activeTool).toBe(tool)
       }
     })
   })

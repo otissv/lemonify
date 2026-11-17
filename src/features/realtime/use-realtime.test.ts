@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { documentIdFromPath } from '@/features/realtime/use-realtime'
+import { itemIdFromPath } from '@/features/realtime/use-realtime'
 
-describe('documentIdFromPath', () => {
-  it('reads the id of the document a path shows', () => {
-    expect(documentIdFromPath('/documents/abc-123')).toBe('abc-123')
-    expect(documentIdFromPath('/documents/abc-123/')).toBe('abc-123')
+describe('itemIdFromPath', () => {
+  it('reads the id of the document or workflow a path shows', () => {
+    expect(itemIdFromPath('/documents/abc-123')).toBe('abc-123')
+    expect(itemIdFromPath('/documents/abc-123/')).toBe('abc-123')
+    expect(itemIdFromPath('/workflows/w-1')).toBe('w-1')
   })
 
   it('is undefined for every other page', () => {
-    expect(documentIdFromPath('/')).toBeUndefined()
-    expect(documentIdFromPath('/workflows/x')).toBeUndefined()
-    expect(documentIdFromPath('/documents')).toBeUndefined()
+    expect(itemIdFromPath('/')).toBeUndefined()
+    expect(itemIdFromPath('/documents')).toBeUndefined()
+    expect(itemIdFromPath('/workflows')).toBeUndefined()
   })
 })

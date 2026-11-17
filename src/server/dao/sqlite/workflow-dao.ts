@@ -1,5 +1,6 @@
 import type { Knex } from 'knex'
 
+import { WorkflowHistoryPatchSchema } from '@/features/workflows/workflow-change'
 import {
   RunCanvasModeSchema,
   WorkflowDefinitionSchema,
@@ -16,8 +17,11 @@ import {
 } from '../../errors.ts'
 import { STALE_WORKFLOW_MESSAGE } from '../workflow-dao.ts'
 import type {
+  MovedWorkflowCursor,
+  RecordedWorkflowChange,
   RunState,
   WorkflowDao,
+  WorkflowHistoryEntryRecord,
   WorkflowRecord,
   WorkflowRunRecord,
 } from '../workflow-dao.ts'
@@ -28,8 +32,16 @@ type WorkflowRow = {
   name: string
   definition: string
   revision: number
+  history_cursor: number
   created_at: string
   updated_at: string
+}
+
+type EntryRow = {
+  workflow_id: string
+  position: number
+  patch: string
+  created_at: string
 }
 
 type RunRow = {
@@ -45,6 +57,7 @@ type RunRow = {
 
 const MISSING = 'That workflow does not exist.'
 const UNREADABLE = 'A saved workflow could not be read.'
+const UNREADABLE_EDITS = 'The saved edits of this workflow could not be read.'
 
 function parseDefinition(text: string): WorkflowDefinition {
   let json: unknown
@@ -75,9 +88,55 @@ function toWorkflow(row: WorkflowRow): WorkflowRecord {
     name: row.name,
     definition: parseDefinition(row.definition),
     revision: row.revision,
+    historyCursor: row.history_cursor,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+}
+
+function toEntry(row: EntryRow): WorkflowHistoryEntryRecord {
+  let json: unknown
+  try {
+    json = JSON.parse(row.patch)
+  } catch (error) {
+    throw new DataIntegrityError(UNREADABLE_EDITS, { cause: error })
+  }
+  const patch = WorkflowHistoryPatchSchema.safeParse(json)
+  if (!patch.success) {
+    throw new DataIntegrityError(UNREADABLE_EDITS, { cause: patch.error })
+  }
+  return {
+    workflowId: row.workflow_id,
+    position: row.position,
+    patch: patch.data,
+    createdAt: row.created_at,
+  }
+}
+
+async function lockedRow(
+  trx: Knex.Transaction,
+  id: string,
+  expectedRevision: number,
+): Promise<WorkflowRow> {
+  const row: WorkflowRow | undefined = await trx('workflows')
+    .where({ id })
+    .first()
+  if (row === undefined) throw new NotFoundError(MISSING)
+  if (row.revision !== expectedRevision) {
+    throw new ConflictError(STALE_WORKFLOW_MESSAGE)
+  }
+  return row
+}
+
+async function reload(
+  trx: Knex.Transaction,
+  id: string,
+): Promise<WorkflowRecord> {
+  const row: WorkflowRow | undefined = await trx('workflows')
+    .where({ id })
+    .first()
+  if (row === undefined) throw new NotFoundError(MISSING)
+  return toWorkflow(row)
 }
 
 function toRun(row: RunRow): WorkflowRunRecord {
@@ -107,6 +166,7 @@ export class SqliteWorkflowDao implements WorkflowDao {
       name: workflow.name,
       definition: JSON.stringify(workflow.definition),
       revision: workflow.revision,
+      history_cursor: workflow.historyCursor,
       created_at: workflow.createdAt,
       updated_at: workflow.updatedAt,
     })
@@ -127,28 +187,69 @@ export class SqliteWorkflowDao implements WorkflowDao {
     return rows.map(toWorkflow)
   }
 
-  async update(
-    id: string,
-    expectedRevision: number,
-    changes: Pick<WorkflowRecord, 'name' | 'definition'>,
-    now: string,
-  ): Promise<WorkflowRecord> {
-    const changed = await this.#database('workflows')
-      .where({ id, revision: expectedRevision })
-      .update({
-        name: changes.name,
-        definition: JSON.stringify(changes.definition),
-        revision: expectedRevision + 1,
-        updated_at: now,
+  rename(id: string, name: string, now: string): Promise<WorkflowRecord> {
+    return this.#database.transaction(async (trx) => {
+      const count = await trx('workflows')
+        .where({ id })
+        .update({ name, updated_at: now })
+      if (count === 0) throw new NotFoundError(MISSING)
+      return reload(trx, id)
+    })
+  }
+
+  applyChange(change: RecordedWorkflowChange): Promise<WorkflowRecord> {
+    return this.#database.transaction(async (trx) => {
+      const row = await lockedRow(trx, change.id, change.expectedRevision)
+      await trx('workflow_history')
+        .where({ workflow_id: change.id })
+        .andWhere('position', '>=', row.history_cursor)
+        .delete()
+      await trx('workflow_history').insert({
+        workflow_id: change.id,
+        position: row.history_cursor,
+        patch: JSON.stringify(change.patch),
+        created_at: change.now,
       })
-    if (changed === 0) {
-      const exists = await this.findById(id)
-      if (exists === null) throw new NotFoundError(MISSING)
-      throw new ConflictError(STALE_WORKFLOW_MESSAGE)
-    }
-    const updated = await this.findById(id)
-    if (updated === null) throw new NotFoundError(MISSING)
-    return updated
+      const cursor = row.history_cursor + 1
+      await trx('workflow_history')
+        .where({ workflow_id: change.id })
+        .andWhere('position', '<', cursor - change.maxEntries)
+        .delete()
+      await trx('workflows')
+        .where({ id: change.id })
+        .update({
+          definition: JSON.stringify(change.definition),
+          revision: row.revision + 1,
+          history_cursor: cursor,
+          updated_at: change.now,
+        })
+      return reload(trx, change.id)
+    })
+  }
+
+  moveCursor(move: MovedWorkflowCursor): Promise<WorkflowRecord> {
+    return this.#database.transaction(async (trx) => {
+      const row = await lockedRow(trx, move.id, move.expectedRevision)
+      await trx('workflows')
+        .where({ id: move.id })
+        .update({
+          definition: JSON.stringify(move.definition),
+          revision: row.revision + 1,
+          history_cursor: move.cursor,
+          updated_at: move.now,
+        })
+      return reload(trx, move.id)
+    })
+  }
+
+  async findEntry(
+    workflowId: string,
+    position: number,
+  ): Promise<WorkflowHistoryEntryRecord | null> {
+    const row: EntryRow | undefined = await this.#database('workflow_history')
+      .where({ workflow_id: workflowId, position })
+      .first()
+    return row === undefined ? null : toEntry(row)
   }
 
   async delete(id: string): Promise<void> {

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { createSharpStep } from '@/features/pipeline/pipeline'
+import type { WorkflowHistoryPatch } from '@/features/workflows/workflow-change'
 import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 import { ConflictError, NotFoundError } from '../../errors.ts'
 import { RunState } from '../workflow-dao.ts'
 import type {
+  RecordedWorkflowChange,
   WorkflowDao,
   WorkflowRecord,
   WorkflowRunRecord,
@@ -36,8 +37,32 @@ export function workflow(
     name: 'Resize',
     definition: definitionOf(),
     revision: 0,
+    historyCursor: 0,
     createdAt: T0,
     updatedAt: T0,
+    ...overrides,
+  }
+}
+
+const PATCH: WorkflowHistoryPatch = {
+  forward: { type: 'set-inputs', sourceIds: ['a'] },
+  inverse: { type: 'set-inputs', sourceIds: [] },
+}
+
+function withInputs(inputs: string[]): WorkflowDefinition {
+  return { ...definitionOf(), inputs }
+}
+
+function recorded(
+  overrides: Partial<RecordedWorkflowChange> = {},
+): RecordedWorkflowChange {
+  return {
+    id: 'wf-1',
+    expectedRevision: 0,
+    definition: withInputs(['a']),
+    patch: PATCH,
+    maxEntries: 100,
+    now: T1,
     ...overrides,
   }
 }
@@ -92,46 +117,139 @@ export function workflowDaoContract(
       await close()
     })
 
-    it('saves a new name and definition and raises the revision', async () => {
+    it('starts with nothing to undo', async () => {
       const { dao, close } = await prepare(create)
       await dao.insert(workflow())
-      const base = definitionOf()
-      const definition: WorkflowDefinition = {
-        ...base,
-        pipeline: {
-          ...base.pipeline,
-          steps: [...base.pipeline.steps, createSharpStep('flip')],
-        },
-        inputs: ['src-1'],
-      }
-      const updated = await dao.update(
-        'wf-1',
-        0,
-        { name: 'Flip', definition },
-        T1,
-      )
-      expect(updated).toMatchObject({
-        name: 'Flip',
-        revision: 1,
-        updatedAt: T1,
-        createdAt: T0,
-      })
-      expect(updated.definition).toEqual(definition)
-      expect(await dao.findById('wf-1')).toEqual(updated)
+      expect((await dao.findById('wf-1'))?.historyCursor).toBe(0)
+      expect(await dao.findEntry('wf-1', 0)).toBeNull()
       await close()
     })
 
-    it('refuses to save over a newer revision, and says when it is gone', async () => {
+    it('records a change: the definition, the entry at the cursor, a higher revision', async () => {
       const { dao, close } = await prepare(create)
       await dao.insert(workflow())
-      await dao.update('wf-1', 0, { name: 'A', definition: definitionOf() }, T1)
+      const next = withInputs(['src-1'])
+      const saved = await dao.applyChange(recorded({ definition: next }))
+      expect(saved).toMatchObject({
+        revision: 1,
+        historyCursor: 1,
+        updatedAt: T1,
+        createdAt: T0,
+        name: 'Resize',
+      })
+      expect(saved.definition).toEqual(next)
+      expect(await dao.findById('wf-1')).toEqual(saved)
+      expect(await dao.findEntry('wf-1', 0)).toEqual({
+        workflowId: 'wf-1',
+        position: 0,
+        patch: PATCH,
+        createdAt: T1,
+      })
+      await close()
+    })
+
+    it('drops the undone entries when a new change is made', async () => {
+      const { dao, close } = await prepare(create)
+      await dao.insert(workflow())
+      await dao.applyChange(recorded())
+      await dao.applyChange(recorded({ expectedRevision: 1 }))
+      await dao.moveCursor({
+        id: 'wf-1',
+        expectedRevision: 2,
+        definition: definitionOf(),
+        cursor: 1,
+        now: T2,
+      })
+      await dao.applyChange(recorded({ expectedRevision: 3 }))
+      expect((await dao.findById('wf-1'))?.historyCursor).toBe(2)
+      expect(await dao.findEntry('wf-1', 0)).not.toBeNull()
+      expect(await dao.findEntry('wf-1', 1)).not.toBeNull()
+      expect(await dao.findEntry('wf-1', 2)).toBeNull()
+      await close()
+    })
+
+    it('keeps only the newest entries', async () => {
+      const { dao, close } = await prepare(create)
+      await dao.insert(workflow())
+      for (let revision = 0; revision < 3; revision += 1) {
+        await dao.applyChange(
+          recorded({ expectedRevision: revision, maxEntries: 2 }),
+        )
+      }
+      expect(await dao.findEntry('wf-1', 0)).toBeNull()
+      expect(await dao.findEntry('wf-1', 1)).not.toBeNull()
+      expect(await dao.findEntry('wf-1', 2)).not.toBeNull()
+      await close()
+    })
+
+    it('moves the cursor with the definition an undo or redo made', async () => {
+      const { dao, close } = await prepare(create)
+      const original = definitionOf()
+      await dao.insert(workflow({ definition: original }))
+      await dao.applyChange(recorded({ definition: withInputs(['a']) }))
+      const moved = await dao.moveCursor({
+        id: 'wf-1',
+        expectedRevision: 1,
+        definition: original,
+        cursor: 0,
+        now: T2,
+      })
+      expect(moved).toMatchObject({
+        revision: 2,
+        historyCursor: 0,
+        updatedAt: T2,
+      })
+      expect(moved.definition).toEqual(original)
+      expect(await dao.findEntry('wf-1', 0)).not.toBeNull()
+      await close()
+    })
+
+    it('refuses a change or a move over a newer revision, and says when it is gone', async () => {
+      const { dao, close } = await prepare(create)
+      await dao.insert(workflow())
+      await dao.applyChange(recorded({ definition: withInputs(['a']) }))
+      await expect(dao.applyChange(recorded())).rejects.toBeInstanceOf(
+        ConflictError,
+      )
       await expect(
-        dao.update('wf-1', 0, { name: 'B', definition: definitionOf() }, T2),
+        dao.moveCursor({
+          id: 'wf-1',
+          expectedRevision: 0,
+          definition: definitionOf(),
+          cursor: 0,
+          now: T2,
+        }),
       ).rejects.toBeInstanceOf(ConflictError)
       await expect(
-        dao.update('missing', 0, { name: 'B', definition: definitionOf() }, T2),
+        dao.applyChange(recorded({ id: 'missing' })),
       ).rejects.toBeInstanceOf(NotFoundError)
-      expect((await dao.findById('wf-1'))?.name).toBe('A')
+      expect((await dao.findById('wf-1'))?.historyCursor).toBe(1)
+      await close()
+    })
+
+    it('renames without touching the definition, the revision or the history', async () => {
+      const { dao, close } = await prepare(create)
+      await dao.insert(workflow())
+      await dao.applyChange(recorded())
+      const renamed = await dao.rename('wf-1', 'Flip', T2)
+      expect(renamed).toMatchObject({
+        name: 'Flip',
+        revision: 1,
+        historyCursor: 1,
+        updatedAt: T2,
+      })
+      await expect(dao.rename('missing', 'x', T2)).rejects.toBeInstanceOf(
+        NotFoundError,
+      )
+      await close()
+    })
+
+    it('deletes the history with the Workflow', async () => {
+      const { dao, close } = await prepare(create)
+      await dao.insert(workflow())
+      await dao.applyChange(recorded())
+      await dao.delete('wf-1')
+      expect(await dao.findEntry('wf-1', 0)).toBeNull()
       await close()
     })
 
@@ -140,12 +258,7 @@ export function workflowDaoContract(
       await dao.insert(workflow())
       const started = run()
       await dao.insertRun(started)
-      await dao.update(
-        'wf-1',
-        0,
-        { name: 'Changed', definition: { ...definitionOf(), inputs: ['x'] } },
-        T1,
-      )
+      await dao.applyChange(recorded({ definition: withInputs(['x']) }))
       expect(await dao.findRun('run-1')).toEqual(started)
       expect(await dao.findRun('missing')).toBeNull()
       await dao.insertRun(

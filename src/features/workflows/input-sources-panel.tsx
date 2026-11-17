@@ -7,8 +7,8 @@ import type { SourceSummary } from '@/features/documents/document'
 import {
   SourcesStatus,
   sourceFileName,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+  useLibraryStore,
+} from '@/store/library-store'
 import { UploadButton } from '@/features/workflows/upload-button'
 
 interface InputSourcesPanelProps {
@@ -23,10 +23,10 @@ export function InputSourcesPanel({
   onAdd,
   onRemove,
 }: InputSourcesPanelProps): React.JSX.Element {
-  const sources = useSourcesStore((state) => state.sources)
-  const status = useSourcesStore((state) => state.status)
-  const error = useSourcesStore((state) => state.error)
-  const load = useSourcesStore((state) => state.load)
+  const sources = useLibraryStore((state) => state.sources)
+  const status = useLibraryStore((state) => state.status)
+  const error = useLibraryStore((state) => state.error)
+  const load = useLibraryStore((state) => state.load)
 
   useEffect(() => {
     if (status === SourcesStatus.Idle) void load()

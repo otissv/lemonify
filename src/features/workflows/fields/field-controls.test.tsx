@@ -5,10 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { listSources } from '@/features/sources/source-functions'
 import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 
 vi.mock('@/features/sources/source-functions', () => ({
   listSources: vi.fn(),
@@ -74,7 +71,7 @@ function show(op: string, initial: Options = {}): void {
 
 describe('option controls', () => {
   beforeEach(() => {
-    useSourcesStore.setState(INITIAL_SOURCES_STATE)
+    useLibraryStore.setState(INITIAL_LIBRARY_STATE)
     vi.mocked(listSources).mockResolvedValue([])
   })
 

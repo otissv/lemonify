@@ -1,6 +1,11 @@
-import { RiDeleteBinLine } from '@remixicon/react'
+import {
+  RiArrowDownLine,
+  RiArrowUpLine,
+  RiDeleteBinLine,
+} from '@remixicon/react'
 
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiContent } from '@/features/ai/ai-tools'
 import { CanvasForm } from '@/features/documents/canvas-form'
@@ -31,13 +36,14 @@ import { stepLabel } from '@/features/workflows/workflow-steps'
 
 type ChangeHandler = (change: DocumentChange) => void
 
-interface StepInspectorProps {
+interface WorkflowOptionsProps {
   workflow: Workflow
   selection: Selection
   aiTools: ReadonlyArray<AiToolEntry>
   /** Applies a change to the workflow's pipeline, as in a document. */
   onChange: ChangeHandler
   onRemove: (id: string) => void
+  onMove: (id: string, delta: -1 | 1) => void
   onAddSources: (sourceIds: ReadonlyArray<string>) => void
   onRemoveSource: (sourceId: string) => void
   onOutputChange: (settings: OutputSettings) => void
@@ -181,8 +187,16 @@ function CanvasPanel({
   )
 }
 
-function Content(props: StepInspectorProps): React.JSX.Element {
-  const { workflow, selection, aiTools, imageName, onChange, onRemove } = props
+function Content(props: WorkflowOptionsProps): React.JSX.Element {
+  const {
+    workflow,
+    selection,
+    aiTools,
+    imageName,
+    onChange,
+    onRemove,
+    onMove,
+  } = props
   switch (selection.kind) {
     case 'none':
       return <NothingSelected />
@@ -216,7 +230,14 @@ function Content(props: StepInspectorProps): React.JSX.Element {
       return (
         <Panel
           title={stepLabel(step)}
-          action={<RemoveButton stepId={step.id} onRemove={onRemove} />}
+          action={
+            <StepActions
+              step={step}
+              onChange={onChange}
+              onMove={onMove}
+              onRemove={onRemove}
+            />
+          }
         >
           <StepOptions
             key={step.id}
@@ -231,27 +252,74 @@ function Content(props: StepInspectorProps): React.JSX.Element {
   }
 }
 
-function RemoveButton({
-  stepId,
-  onRemove,
-}: {
-  stepId: string
+interface StepActionsProps {
+  step: PipelineStep
+  onChange: ChangeHandler
+  onMove: (id: string, delta: -1 | 1) => void
   onRemove: (id: string) => void
-}): React.JSX.Element {
+}
+
+/** Switch a step on or off, move it earlier or later in its list, or remove it. */
+function StepActions({
+  step,
+  onChange,
+  onMove,
+  onRemove,
+}: StepActionsProps): React.JSX.Element {
+  const label = stepLabel(step)
+
+  function handleEnabled(enabled: boolean): void {
+    onChange({ type: 'set-enabled', stepId: step.id, enabled })
+  }
+
+  function handleEarlier(): void {
+    onMove(step.id, -1)
+  }
+
+  function handleLater(): void {
+    onMove(step.id, 1)
+  }
+
   function handleRemove(): void {
-    onRemove(stepId)
+    onRemove(step.id)
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Remove step"
-      title="Remove step"
-      onClick={handleRemove}
-    >
-      <RiDeleteBinLine aria-hidden="true" />
-    </Button>
+    <div className="flex items-center gap-1">
+      <Switch
+        size="sm"
+        checked={step.enabled}
+        aria-label={`${label} on`}
+        onCheckedChange={handleEnabled}
+      />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Move ${label} earlier`}
+        title="Move earlier"
+        onClick={handleEarlier}
+      >
+        <RiArrowUpLine aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Move ${label} later`}
+        title="Move later"
+        onClick={handleLater}
+      >
+        <RiArrowDownLine aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Remove step"
+        title="Remove step"
+        onClick={handleRemove}
+      >
+        <RiDeleteBinLine aria-hidden="true" />
+      </Button>
+    </div>
   )
 }
 
@@ -264,13 +332,8 @@ function NothingSelected(): React.JSX.Element {
 }
 
 /** The options of whatever is selected: a step, or the canvas, input images or output of the workflow. */
-export function StepInspector(props: StepInspectorProps): React.JSX.Element {
-  return (
-    <section
-      aria-label="Step options"
-      className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-border"
-    >
-      <Content {...props} />
-    </section>
-  )
+export function WorkflowOptions(
+  props: WorkflowOptionsProps,
+): React.JSX.Element {
+  return <Content {...props} />
 }

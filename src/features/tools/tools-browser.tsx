@@ -1,5 +1,5 @@
 import { RiAddLine, RiArrowDownSLine, RiSearchLine } from '@remixicon/react'
-import { useId, useState } from 'react'
+import { useCallback, useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,14 @@ interface ToolsBrowserProps {
   documentId: string
   tools: ReadonlyArray<AiToolSummary>
   catalogues: AiCatalogues
+}
+
+interface ToolsListProps {
+  tools: ReadonlyArray<AiToolSummary>
+  /** Adds the tool; returns why it could not be added, or nothing when it was. */
+  onAdd: (tool: ToolEntry) => string | undefined
+  /** Shown above the groups, for what only some pages offer. */
+  before?: React.ReactNode
 }
 
 interface ToolGroupProps {
@@ -100,12 +108,12 @@ function ToolGroupList({
   )
 }
 
-/** Every editing tool, grouped and searchable. Choosing one adds it as a step after the selected step, or at the end. */
-export function ToolsBrowser({
-  documentId,
+/** Every editing tool, grouped and searchable. Choosing one hands it to `onAdd`. A document and a workflow both browse tools here, and each adds them to its own steps. */
+export function ToolsList({
   tools,
-  catalogues,
-}: ToolsBrowserProps): React.JSX.Element {
+  onAdd,
+  before,
+}: ToolsListProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
@@ -126,7 +134,7 @@ export function ToolsBrowser({
   }
 
   function handleAdd(tool: ToolEntry): void {
-    setError(addTool(documentId, tool, catalogues) ?? null)
+    setError(onAdd(tool) ?? null)
   }
 
   return (
@@ -147,6 +155,7 @@ export function ToolsBrowser({
         />
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4">
+        {before}
         {error && (
           <p role="alert" className="text-body-md text-destructive">
             {error}
@@ -170,4 +179,19 @@ export function ToolsBrowser({
       </div>
     </div>
   )
+}
+
+/** Every editing tool for a document. Choosing one adds it as a step after the selected step, or at the end. */
+export function ToolsBrowser({
+  documentId,
+  tools,
+  catalogues,
+}: ToolsBrowserProps): React.JSX.Element {
+  const handleAdd = useCallback(
+    (tool: ToolEntry): string | undefined =>
+      addTool(documentId, tool, catalogues),
+    [documentId, catalogues],
+  )
+
+  return <ToolsList tools={tools} onAdd={handleAdd} />
 }

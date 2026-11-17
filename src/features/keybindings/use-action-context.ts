@@ -3,9 +3,9 @@ import { useMemo } from 'react'
 
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { useImageOpener } from '@/features/app/image-opener'
-import { previousDocumentId } from '@/features/documents/document-history'
+import { previousVisit } from '@/features/documents/visit-trail'
 import type { ActionContext } from '@/features/keybindings/action-runner'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 const rootRoute = getRouteApi('__root__')
 
@@ -16,8 +16,8 @@ export function useActionContext(
 ): ActionContext {
   const opener = useImageOpener()
   const navigate = useNavigate()
-  const { documents } = rootRoute.useLoaderData()
-  const closeDocumentVisit = useAppStore((state) => state.closeDocumentVisit)
+  const { documents, workflows } = rootRoute.useLoaderData()
+  const closeDocumentVisit = useUiStore((state) => state.closeVisit)
 
   return useMemo<ActionContext>(
     () => ({
@@ -25,20 +25,31 @@ export function useActionContext(
       catalogues,
       opener,
       closeDocument: (closing) => {
-        const { documentHistory } = useAppStore.getState()
-        const previous = previousDocumentId(
-          documentHistory,
-          closing,
-          documents.map(({ id }) => id),
-        )
+        const { visitTrail } = useUiStore.getState()
+        const previous = previousVisit(visitTrail, closing, [
+          ...documents.map(({ id }) => ({ id, kind: 'document' as const })),
+          ...workflows.map(({ id }) => ({ id, kind: 'workflow' as const })),
+        ])
         closeDocumentVisit(closing)
         if (previous === undefined) {
           void navigate({ to: '/' })
           return
         }
-        void navigate({ to: '/documents/$id', params: { id: previous } })
+        if (previous.kind === 'workflow') {
+          void navigate({ to: '/workflows/$id', params: { id: previous.id } })
+          return
+        }
+        void navigate({ to: '/documents/$id', params: { id: previous.id } })
       },
     }),
-    [documentId, catalogues, opener, documents, closeDocumentVisit, navigate],
+    [
+      documentId,
+      catalogues,
+      opener,
+      documents,
+      workflows,
+      closeDocumentVisit,
+      navigate,
+    ],
   )
 }

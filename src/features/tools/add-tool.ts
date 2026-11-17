@@ -4,7 +4,7 @@ import { createSharpStep } from '@/features/pipeline/pipeline'
 import { addStepAfter } from '@/features/pipeline/pipeline-actions'
 import type { ToolChoice } from '@/features/tools/tool-catalogue'
 import { errorMessage } from '@/lib/error-message'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 export const NO_CATALOGUE = 'That AI tool is not available right now.'
 
@@ -14,7 +14,7 @@ export function addTool(
   tool: ToolChoice,
   catalogues: AiCatalogues,
 ): string | undefined {
-  const afterId = useAppStore.getState().selectedSteps[documentId]
+  const afterId = useUiStore.getState().selectedSteps[documentId]
   if (tool.kind === 'sharp') {
     addStepAfter(documentId, createSharpStep(tool.value), afterId)
     return undefined

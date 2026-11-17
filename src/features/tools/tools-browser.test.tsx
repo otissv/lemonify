@@ -5,10 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { changeDocument } from '@/features/documents/document-functions'
 import { listSources } from '@/features/sources/source-functions'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 import { ToolsBrowser } from '@/features/tools/tools-browser'
 import {
   AI_CATALOGUES,
@@ -18,12 +15,13 @@ import {
   echoChanges,
   loadDocumentIntoEditor,
 } from '@/test/document-fixtures'
+import { Tool, useUiStore } from '@/store/ui-store'
 import {
-  INITIAL_APP_STATE,
-  Tool,
   currentPipeline,
-  useAppStore,
-} from '@/store/app-store'
+  documentSession,
+  usePipelineStore,
+} from '@/store/pipeline-store'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/sources/source-functions', () => ({
   listSources: vi.fn(),
@@ -36,7 +34,8 @@ vi.mock('@/features/documents/document-functions', () => ({
 }))
 
 function steps() {
-  const all = currentPipeline(useAppStore.getState(), DOCUMENT_ID)?.steps ?? []
+  const all =
+    currentPipeline(usePipelineStore.getState(), DOCUMENT_ID)?.steps ?? []
   return all.filter((step) => !isLayerStep(step))
 }
 
@@ -59,8 +58,8 @@ async function expandAll(
 
 describe('ToolsBrowser', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
-    useSourcesStore.setState(INITIAL_SOURCES_STATE)
+    resetStores()
+    useLibraryStore.setState(INITIAL_LIBRARY_STATE)
     vi.resetAllMocks()
     vi.mocked(listSources).mockResolvedValue([
       { ...documentView().source, id: 'src-2', fileName: 'two.png' },
@@ -97,8 +96,8 @@ describe('ToolsBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'Add Flip' }))
 
     expect(stepNames()).toEqual(['blur', 'flip'])
-    expect(useAppStore.getState().activeTool).toBe(Tool.Options)
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
+    expect(useUiStore.getState().activeTool).toBe(Tool.Options)
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
       steps().at(1)?.id,
     )
   })
@@ -111,7 +110,9 @@ describe('ToolsBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'Add Flip' }))
 
     await waitFor(() => {
-      expect(useAppStore.getState().documents[DOCUMENT_ID]?.pending).toEqual([])
+      expect(
+        documentSession(usePipelineStore.getState(), DOCUMENT_ID)?.pending,
+      ).toEqual([])
     })
     const revisions = vi
       .mocked(changeDocument)
@@ -126,7 +127,7 @@ describe('ToolsBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'Add Flop' }))
     const [flip] = steps()
     if (!flip) throw new Error('no step')
-    useAppStore.getState().selectStep(DOCUMENT_ID, flip.id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, flip.id)
 
     await user.click(screen.getByRole('button', { name: 'Add Blur' }))
 

@@ -3,10 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { SourceSummary } from '@/features/documents/document'
 import { sourceImageUrl } from '@/features/documents/image-urls'
-import {
-  SourcesStatus,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { SourcesStatus, useLibraryStore } from '@/store/library-store'
 import { errorMessage } from '@/lib/error-message'
 
 const DELETE_FAILED = 'The image could not be deleted.'
@@ -25,11 +22,11 @@ interface ImageLibraryProps {
 export function ImageLibrary({
   onChoose,
 }: ImageLibraryProps): React.JSX.Element {
-  const sources = useSourcesStore((state) => state.sources)
-  const status = useSourcesStore((state) => state.status)
-  const loadError = useSourcesStore((state) => state.error)
-  const load = useSourcesStore((state) => state.load)
-  const remove = useSourcesStore((state) => state.remove)
+  const sources = useLibraryStore((state) => state.sources)
+  const status = useLibraryStore((state) => state.status)
+  const loadError = useLibraryStore((state) => state.error)
+  const load = useLibraryStore((state) => state.load)
+  const remove = useLibraryStore((state) => state.remove)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {

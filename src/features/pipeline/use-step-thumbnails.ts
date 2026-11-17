@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 
 import { refreshThumbnails } from '@/features/documents/document-render-sync'
-import { useAppStore } from '@/store/app-store'
+import { useLibraryStore } from '@/store/library-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 
 export const THUMBNAIL_DELAY_MS = 300
 
@@ -12,8 +13,10 @@ export const THUMBNAIL_DELAY_MS = 300
  * later steps showable.
  */
 export function useStepThumbnails(documentId: string, active: boolean): void {
-  const session = useAppStore((state) => state.documents[documentId])
-  const resultsVersion = useAppStore((state) => state.resultsVersion)
+  const session = usePipelineStore((state) =>
+    documentSession(state, documentId),
+  )
+  const resultsVersion = useLibraryStore((state) => state.resultsVersion)
   const settled = session !== undefined && session.pending.length === 0
   const revision = session?.confirmed.revision
   const hasSteps = (session?.confirmed.pipeline.steps.length ?? 0) > 0

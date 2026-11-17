@@ -6,10 +6,17 @@ import {
   canUndoNow,
   replayPending,
   shownPipeline,
-} from '@/features/documents/document-session'
-import type { DocumentSession } from '@/features/documents/document-session'
+  shownWorkflow,
+  withConfirmed,
+} from '@/features/pipeline/pipeline-session'
+import type {
+  DocumentSession,
+  WorkflowSession,
+} from '@/features/pipeline/pipeline-session'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 import { pipelineOf } from '@/test/pipelines'
+import { workflowDefinition } from '@/test/workflow-fixtures'
+import type { WorkflowView } from '@/server/services/workflow-service'
 
 function view(steps: ReturnType<typeof createSharpStep>[]): DocumentView {
   return {
@@ -37,7 +44,7 @@ function session(
   steps: ReturnType<typeof createSharpStep>[],
   pending: DocumentSession['pending'],
 ): DocumentSession {
-  return { confirmed: view(steps), pending, syncing: false }
+  return { kind: 'document', confirmed: view(steps), pending, syncing: false }
 }
 
 describe('shownPipeline', () => {
@@ -132,6 +139,7 @@ describe('replayPending', () => {
     canUndo = false,
     canRedo = false,
   ) => ({
+    kind: 'document' as const,
     pipeline: pipelineOf(...steps),
     canUndo,
     canRedo,
@@ -231,5 +239,115 @@ describe('replayPending', () => {
 
   it('does nothing for nothing waiting', () => {
     expect(replayPending(base([]), [])).toEqual({ pending: [], dropped: 0 })
+  })
+})
+
+function workflowView(inputs: string[] = []): WorkflowView {
+  return {
+    id: 'w1',
+    name: 'Flow',
+    ...workflowDefinition(),
+    inputs,
+    revision: 2,
+    canUndo: false,
+    canRedo: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function workflowSession(
+  pending: WorkflowSession['pending'],
+  inputs: string[] = [],
+): WorkflowSession {
+  return {
+    kind: 'workflow',
+    confirmed: workflowView(inputs),
+    pending,
+    syncing: false,
+  }
+}
+
+describe('a workflow session', () => {
+  const setInputs = (id: number, sourceIds: string[]) => ({
+    id,
+    op: { kind: 'change', change: { type: 'set-inputs', sourceIds } } as const,
+  })
+
+  it('shows the inputs, the output and the pipeline with the waiting changes applied', () => {
+    const flip = createSharpStep('flip')
+    const shown = shownWorkflow(
+      workflowSession([
+        setInputs(1, ['a', 'b']),
+        {
+          id: 2,
+          op: {
+            kind: 'change',
+            change: { type: 'add-step', step: flip, index: 1 },
+          },
+        },
+      ]),
+    )
+    expect(shown.inputs).toEqual(['a', 'b'])
+    expect(shown.pipeline.steps.map(({ id }) => id)).toContain(flip.id)
+    expect(shownPipeline(workflowSession([])).steps).toHaveLength(1)
+  })
+
+  it('can undo what is waiting and follows the server otherwise', () => {
+    expect(canUndoNow(workflowSession([]))).toBe(false)
+    expect(canUndoNow(workflowSession([setInputs(1, ['a'])]))).toBe(true)
+    expect(canRedoNow(workflowSession([setInputs(1, ['a'])]))).toBe(false)
+  })
+
+  it('replays waiting changes on a newer workflow, dropping those that no longer apply', () => {
+    const view = workflowView(['a'])
+    const stale = {
+      id: 1,
+      op: { kind: 'change', change: { type: 'remove-step', stepId: 'gone' } },
+    } as const
+    const keep = setInputs(2, ['a', 'b'])
+    expect(
+      replayPending(
+        {
+          kind: 'workflow',
+          definition: {
+            pipeline: view.pipeline,
+            inputs: view.inputs,
+            output: view.output,
+          },
+          canUndo: false,
+          canRedo: false,
+        },
+        [stale, keep],
+      ),
+    ).toEqual({ pending: [keep], dropped: 1 })
+  })
+})
+
+describe('a document session', () => {
+  it('refuses a change only a workflow has, as one that does not apply', () => {
+    const waiting = session(
+      [],
+      [
+        {
+          id: 1,
+          op: { kind: 'change', change: { type: 'set-inputs', sourceIds: [] } },
+        },
+      ],
+    )
+    expect(() => shownPipeline(waiting)).toThrow()
+  })
+})
+
+describe('withConfirmed', () => {
+  it('replaces the confirmed state of the same kind and ignores the other kind', () => {
+    const doc = session([], [])
+    const next = { ...view([]), revision: 9 }
+    expect(withConfirmed(doc, { kind: 'document', view: next }).confirmed).toBe(
+      next,
+    )
+    expect(withConfirmed(doc, { kind: 'workflow', view: workflowView() })).toBe(
+      doc,
+    )
   })
 })

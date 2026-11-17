@@ -24,7 +24,8 @@ import {
 } from '@/features/render/render-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import { JobState } from '@/server/jobs/job-types'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { usePipelineStore } from '@/store/pipeline-store'
 import {
   DOCUMENT_ID,
   documentView,
@@ -32,6 +33,7 @@ import {
 } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
 import { pipelineOf } from '@/test/pipelines'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -84,7 +86,7 @@ async function showSteps(
 
 describe('DocumentSteps', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([SUMMARY])
     vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
@@ -283,15 +285,15 @@ describe('DocumentSteps', () => {
 
     await user.click(screen.getByRole('button', { name: 'Blur' }))
 
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(BLUR.id)
-    expect(useAppStore.getState().activeTool).toBe('options')
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(BLUR.id)
+    expect(useUiStore.getState().activeTool).toBe('options')
   })
 
   it('shows the small picture the server made for a step', async () => {
     const user = userEvent.setup()
     const list = await showSteps([BLUR], user)
 
-    useAppStore
+    usePipelineStore
       .getState()
       .setThumbnails(DOCUMENT_ID, [{ stepId: BLUR.id, key: 'abc' }])
 
@@ -456,7 +458,7 @@ describe('DocumentSteps', () => {
       const user = userEvent.setup()
       const list = await showSteps([UPSCALE], user)
 
-      useAppStore.getState().setPreview(DOCUMENT_ID, {
+      usePipelineStore.getState().setPreview(DOCUMENT_ID, {
         status: PreviewStatus.Ready,
         key: 'k',
         pendingStepIds: [UPSCALE.id],
@@ -471,7 +473,7 @@ describe('DocumentSteps', () => {
       const user = userEvent.setup()
       const list = await showSteps([UPSCALE], user)
 
-      useAppStore.getState().setAiRun(DOCUMENT_ID, {
+      usePipelineStore.getState().setAiRun(DOCUMENT_ID, {
         jobId: 'job-1',
         stepId: UPSCALE.id,
         state: JobState.Running,
@@ -487,7 +489,7 @@ describe('DocumentSteps', () => {
       const user = userEvent.setup()
       const list = await showSteps([UPSCALE], user)
 
-      useAppStore.getState().setAiRun(DOCUMENT_ID, {
+      usePipelineStore.getState().setAiRun(DOCUMENT_ID, {
         jobId: null,
         stepId: UPSCALE.id,
         state: JobState.Failed,

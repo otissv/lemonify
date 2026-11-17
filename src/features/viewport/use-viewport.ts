@@ -20,7 +20,7 @@ import type {
   Viewport,
   ZoomLimits,
 } from '@/features/viewport/viewport'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 /** What the canvas and the Navigator can do to the view of a document, shared so they do the same thing. */
 export interface ViewportActions {
@@ -56,7 +56,7 @@ const NEAR = 0.5
 type Change = (viewport: Viewport, frame: ViewFrame) => Viewport
 
 function change(documentId: string, update: Change): void {
-  const state = useAppStore.getState()
+  const state = useUiStore.getState()
   const frame = state.viewFrames[documentId]
   if (!frame) return
   const current = clampViewport(
@@ -138,8 +138,8 @@ export function useViewportActions(documentId: string): ViewportActions {
 
 /** The view of a document, kept inside what its window allows, with the actions that change it. */
 export function useViewport(documentId: string): DocumentViewport {
-  const frame = useAppStore((state) => state.viewFrames[documentId])
-  const stored = useAppStore((state) => state.viewports[documentId])
+  const frame = useUiStore((state) => state.viewFrames[documentId])
+  const stored = useUiStore((state) => state.viewports[documentId])
   const actions = useViewportActions(documentId)
 
   return useMemo(() => {

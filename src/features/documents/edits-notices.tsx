@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { runPendingAiSteps } from '@/features/documents/document-render-sync'
 import { JobState } from '@/server/jobs/job-types'
-import { useAppStore } from '@/store/app-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 
 interface EditsNoticesProps {
   documentId: string
@@ -23,8 +23,10 @@ export function EditsNotices({
   skippedSteps,
   renderError,
 }: EditsNoticesProps): React.JSX.Element {
-  const error = useAppStore((state) => state.documents[documentId]?.error)
-  const run = useAppStore((state) => state.aiRuns[documentId])
+  const error = usePipelineStore(
+    (state) => documentSession(state, documentId)?.error,
+  )
+  const run = usePipelineStore((state) => state.aiRuns[documentId])
   const running = run !== undefined && run.state !== JobState.Failed
 
   function handleRender(): void {

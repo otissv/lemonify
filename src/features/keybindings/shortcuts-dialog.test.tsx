@@ -10,13 +10,11 @@ import {
 import { keybindingsView } from '@/features/keybindings/keybindings-view'
 import type { KeybindingsFile } from '@/features/keybindings/keybindings-file'
 import { listSources } from '@/features/sources/source-functions'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 import { renderApp } from '@/test/render-app'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/auth/auth-client', () => ({ signOut: vi.fn() }))
 vi.mock('@/features/documents/document-functions', () => ({
@@ -41,7 +39,7 @@ const NONE: KeybindingsFile = { version: 1, bindings: {} }
 async function openDialog(): Promise<HTMLElement> {
   await renderApp()
   await screen.findByRole('menubar', { name: 'Application' })
-  useAppStore.getState().setShortcutsOpen(true)
+  useUiStore.getState().setShortcutsOpen(true)
   return screen.findByRole('dialog', { name: 'Keyboard shortcuts' })
 }
 
@@ -60,8 +58,8 @@ function press(code: string, init: KeyboardEventInit = {}): void {
 
 describe('the shortcuts dialog', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
-    useSourcesStore.setState(INITIAL_SOURCES_STATE)
+    resetStores()
+    useLibraryStore.setState(INITIAL_LIBRARY_STATE)
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(listSources).mockResolvedValue([])
@@ -291,6 +289,6 @@ describe('the shortcuts dialog', () => {
         screen.queryByRole('dialog', { name: 'Keyboard shortcuts' }),
       ).not.toBeInTheDocument()
     })
-    expect(useAppStore.getState().shortcutsOpen).toBe(false)
+    expect(useUiStore.getState().shortcutsOpen).toBe(false)
   })
 })

@@ -3,14 +3,15 @@ import { useEffect, useMemo } from 'react'
 import type { DocumentView, SourceSummary } from '@/features/documents/document'
 import { refreshPreview } from '@/features/documents/document-render-sync'
 import type { StepProblem } from '@/features/documents/document-render'
-import { shownPipeline } from '@/features/documents/document-session'
+import { shownPipeline } from '@/features/pipeline/pipeline-session'
 import {
   previewImageUrl,
   sourceImageUrl,
 } from '@/features/documents/image-urls'
 import { originalSourceId } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
-import { PreviewStatus, useAppStore } from '@/store/app-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
+import { PreviewStatus } from '@/features/documents/document-render'
 
 /** How long edits settle before the preview is asked for, so a burst of changes renders once. */
 export const PREVIEW_DELAY_MS = 120
@@ -47,7 +48,9 @@ export function activeSource(
  * canvas, so every document has a picture to render.
  */
 export function usePreviewLoading(documentId: string, enabled: boolean): void {
-  const session = useAppStore((state) => state.documents[documentId])
+  const session = usePipelineStore((state) =>
+    documentSession(state, documentId),
+  )
   const settled = session !== undefined && session.pending.length === 0
   const revision = session?.confirmed.revision
 
@@ -67,8 +70,10 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
 
 /** What a document looks like after its pipeline. Undefined until the document has loaded. */
 export function usePreview(documentId: string): PipelinePreview | undefined {
-  const session = useAppStore((state) => state.documents[documentId])
-  const current = useAppStore((state) => state.previews[documentId])
+  const session = usePipelineStore((state) =>
+    documentSession(state, documentId),
+  )
+  const current = usePipelineStore((state) => state.previews[documentId])
 
   return useMemo(() => {
     if (!session) return undefined

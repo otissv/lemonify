@@ -4,7 +4,7 @@ import { useViewport } from '@/features/viewport/use-viewport'
 import { useViewportGestures } from '@/features/viewport/use-viewport-gestures'
 import { fitSize } from '@/features/viewport/viewport'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 interface CanvasProps {
   id: string
@@ -90,7 +90,7 @@ export function Canvas({
   const windowRef = useRef<HTMLDivElement>(null)
   const size = useElementSize(windowRef)
   const gestures = useViewportGestures(windowRef, id)
-  const setViewFrame = useAppStore((state) => state.setViewFrame)
+  const setViewFrame = useUiStore((state) => state.setViewFrame)
   const { viewport, frame, percent } = useViewport(id)
 
   useEffect(() => {

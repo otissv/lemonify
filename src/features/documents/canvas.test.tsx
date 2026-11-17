@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Canvas } from '@/features/documents/canvas'
 import { percentOf } from '@/features/viewport/viewport'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
+import { resetStores } from '@/store/reset-stores'
 
 const ID = 'doc'
 
@@ -24,17 +25,17 @@ function show(): HTMLElement {
 }
 
 function viewport() {
-  return useAppStore.getState().viewports[ID] ?? { zoom: 1, x: 0.5, y: 0.5 }
+  return useUiStore.getState().viewports[ID] ?? { zoom: 1, x: 0.5, y: 0.5 }
 }
 
 function setView(zoom: number, x: number, y: number): void {
   act(() => {
-    useAppStore.getState().setViewport(ID, { zoom, x, y })
+    useUiStore.getState().setViewport(ID, { zoom, x, y })
   })
 }
 
 function percent(): number {
-  const frame = useAppStore.getState().viewFrames[ID]
+  const frame = useUiStore.getState().viewFrames[ID]
   if (!frame) throw new Error('The canvas has not been measured.')
   return percentOf(viewport().zoom, frame)
 }
@@ -46,7 +47,7 @@ function canvasBox(): HTMLElement {
 }
 
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
     function measure(this: HTMLElement) {
       return this.dataset.slot === 'canvas-window' ? box(1000, 800) : box(0, 0)
@@ -62,7 +63,7 @@ describe('Canvas zoom and pan', () => {
   it('tells the store how big the window and the picture are', () => {
     show()
 
-    expect(useAppStore.getState().viewFrames[ID]).toEqual({
+    expect(useUiStore.getState().viewFrames[ID]).toEqual({
       viewWidth: 1000,
       viewHeight: 800,
       ratio: 2,

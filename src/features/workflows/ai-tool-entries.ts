@@ -1,12 +1,6 @@
+import type { AiToolId } from '@/features/ai/ai-tools'
 import { getAiCatalogue, listAiTools } from '@/features/ai/ai-functions'
-import { AiToolId } from '@/features/ai/ai-tools'
-import type {
-  AiCatalogue,
-  AiContent,
-  AiToolSummary,
-} from '@/features/ai/ai-tools'
-import { defaultUpscaleSettings } from '@/features/upscale/upscale-settings'
-import type { AiStep } from '@/features/pipeline/pipeline'
+import type { AiCatalogue, AiToolSummary } from '@/features/ai/ai-tools'
 
 /** An AI tool the server can run, with the models it offers. Plain data, so a route can load it. */
 export interface AiToolEntry {
@@ -23,17 +17,6 @@ export async function loadAiToolEntries(): Promise<Array<AiToolEntry>> {
       catalogue: await getAiCatalogue({ data: { tool: tool.id } }),
     })),
   )
-}
-
-/** The tool and settings a new step of this tool starts with. */
-export function defaultAiContent(entry: AiToolEntry): AiContent<AiStep> {
-  switch (entry.tool.id) {
-    case AiToolId.Upscale:
-      return {
-        tool: AiToolId.Upscale,
-        settings: defaultUpscaleSettings(entry.catalogue),
-      }
-  }
 }
 
 export function catalogueOf(

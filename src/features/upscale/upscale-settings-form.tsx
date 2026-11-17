@@ -22,7 +22,7 @@ import type {
   UpscaleModelSummary,
   UpscaleSettings,
 } from '@/features/upscale/upscale-settings'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 interface UpscaleSettingsFormProps {
   catalogue: UpscaleCatalogue
@@ -83,10 +83,8 @@ export function UpscaleSettingsForm({
     passes: useId(),
     tta: useId(),
   }
-  const recentNames = useAppStore((state) => state.recentUpscaleModels)
-  const rememberUpscaleModel = useAppStore(
-    (state) => state.rememberUpscaleModel,
-  )
+  const recentNames = useUiStore((state) => state.recentUpscaleModels)
+  const rememberUpscaleModel = useUiStore((state) => state.rememberUpscaleModel)
   const model = catalogue.models.find(({ name }) => name === settings.model)
   const groups = modelsByCategory(catalogue.models)
   const recent = recentModels(recentNames, catalogue)

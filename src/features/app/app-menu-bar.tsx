@@ -16,7 +16,7 @@ import {
   ActionMenuItem,
 } from '@/features/keybindings/action-menu-items'
 import { useActionContext } from '@/features/keybindings/use-action-context'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 const rootRoute = getRouteApi('__root__')
 
@@ -30,6 +30,8 @@ const PANEL_ITEMS: ReadonlyArray<{ actionId: string; label: string }> = [
 interface AppMenuBarProps {
   /** The document the edit and panel items act on; none on pages without one. */
   documentId?: string
+  /** The workflow whose page this is: its Edit history can be undone and redone, but nothing to edit as a document is offered. */
+  workflowId?: string
 }
 
 /**
@@ -38,17 +40,20 @@ interface AppMenuBarProps {
  * own and the image can fill the space. Each item does an action through the
  * same code as its key, and shows the key the User has for it.
  */
-export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
+export function AppMenuBar({
+  documentId,
+  workflowId,
+}: AppMenuBarProps): React.JSX.Element {
   const router = useRouter()
   const navigate = useNavigate()
   const { actor } = rootRoute.useRouteContext()
-  const context = useActionContext(documentId)
-  const showOriginal = useAppStore((state) =>
+  const context = useActionContext(documentId ?? workflowId)
+  const showOriginal = useUiStore((state) =>
     documentId === undefined
       ? false
       : (state.showOriginal[documentId] ?? false),
   )
-  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const sidebarOpen = useUiStore((state) => state.sidebarOpen)
 
   const handleSignOut = useCallback((): void => {
     void (async () => {
@@ -96,16 +101,26 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
           <MenubarContent>
             <ActionMenuItem actionId="edit.undo" context={context} />
             <ActionMenuItem actionId="edit.redo" context={context} />
-            <MenubarSeparator />
-            <ActionMenuItem actionId="edit.addImageLayer" context={context} />
-            <ActionMenuItem actionId="edit.insertImage" context={context} />
-            <ActionMenuItem actionId="edit.replaceImage" context={context} />
-            <MenubarSeparator />
-            <ActionCheckboxItem
-              actionId="edit.showOriginal"
-              context={context}
-              checked={showOriginal}
-            />
+            {workflowId === undefined && (
+              <>
+                <MenubarSeparator />
+                <ActionMenuItem
+                  actionId="edit.addImageLayer"
+                  context={context}
+                />
+                <ActionMenuItem actionId="edit.insertImage" context={context} />
+                <ActionMenuItem
+                  actionId="edit.replaceImage"
+                  context={context}
+                />
+                <MenubarSeparator />
+                <ActionCheckboxItem
+                  actionId="edit.showOriginal"
+                  context={context}
+                  checked={showOriginal}
+                />
+              </>
+            )}
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>

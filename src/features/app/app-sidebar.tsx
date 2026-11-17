@@ -16,6 +16,12 @@ import {
 } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
+import {
+  deleteWorkflow,
+  renameWorkflow,
+} from '@/features/workflows/workflow-functions'
+import type { WorkflowView } from '@/server/services/workflow-service'
+import { forgetItem } from '@/store/forget-item'
 import { AddWorkflowDialog } from '@/features/workflows/add-workflow-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,7 +55,12 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { SidebarTab, useAppStore } from '@/store/app-store'
+import { SidebarTab, useUiStore } from '@/store/ui-store'
+import {
+  documentSession,
+  usePipelineStore,
+  workflowSession,
+} from '@/store/pipeline-store'
 
 const rootRoute = getRouteApi('__root__')
 const DELETE_FAILED = 'The image could not be deleted.'
@@ -97,12 +108,11 @@ function DocumentItem({
 }: DocumentItemProps): React.JSX.Element {
   const navigate = useNavigate()
   const router = useRouter()
-  const expanded = useAppStore(
-    (state) => state.expandedDocuments[document.id] ?? false,
+  const expanded = useUiStore(
+    (state) => state.expandedItems[document.id] ?? false,
   )
-  const setExpanded = useAppStore((state) => state.setDocumentExpanded)
-  const forgetDocument = useAppStore((state) => state.forgetDocument)
-  const confirmDocument = useAppStore((state) => state.confirmDocument)
+  const setExpanded = useUiStore((state) => state.setItemExpanded)
+  const confirmDocument = usePipelineStore((state) => state.confirmDocument)
   const [error, setError] = useState<string | null>(null)
   const [renaming, setRenaming] = useState(false)
   const [stepOver, setStepOver] = useState(false)
@@ -188,7 +198,7 @@ function DocumentItem({
     setRenaming(false)
     try {
       await renameDocument({ data: { id: document.id, name } })
-      const session = useAppStore.getState().documents[document.id]
+      const session = documentSession(usePipelineStore.getState(), document.id)
       if (session) confirmDocument({ ...session.confirmed, name }, false)
       await router.invalidate()
     } catch (caught) {
@@ -200,7 +210,7 @@ function DocumentItem({
     setError(null)
     try {
       await deleteDocument({ data: { id: document.id } })
-      forgetDocument(document.id)
+      forgetItem(document.id)
       await router.invalidate()
       if (active) await navigate({ to: '/' })
     } catch (caught) {
@@ -430,6 +440,112 @@ function EditorTab(): React.JSX.Element {
   )
 }
 
+const WORKFLOW_DELETE_FAILED = 'The workflow could not be deleted.'
+const WORKFLOW_RENAME_FAILED = 'The workflow could not be renamed.'
+
+interface WorkflowItemProps {
+  workflow: WorkflowView
+  active: boolean
+}
+
+function WorkflowItem({
+  workflow,
+  active,
+}: WorkflowItemProps): React.JSX.Element {
+  const navigate = useNavigate()
+  const router = useRouter()
+  const confirmWorkflow = usePipelineStore((state) => state.confirmWorkflow)
+  const [error, setError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
+
+  function handleStartRename(): void {
+    setError(null)
+    setRenaming(true)
+  }
+
+  function handleKey(event: React.KeyboardEvent<HTMLElement>): void {
+    if (event.key !== 'F2') return
+    event.preventDefault()
+    handleStartRename()
+  }
+
+  function handleCancelRename(): void {
+    setRenaming(false)
+  }
+
+  async function handleRename(name: string): Promise<void> {
+    setRenaming(false)
+    try {
+      const renamed = await renameWorkflow({ data: { id: workflow.id, name } })
+      if (workflowSession(usePipelineStore.getState(), workflow.id)) {
+        confirmWorkflow(renamed, false)
+      }
+      await router.invalidate()
+    } catch (caught) {
+      setError(errorMessage(caught, WORKFLOW_RENAME_FAILED))
+    }
+  }
+
+  async function handleDelete(): Promise<void> {
+    setError(null)
+    try {
+      await deleteWorkflow({ data: { id: workflow.id } })
+      forgetItem(workflow.id)
+      await router.invalidate()
+      if (active) await navigate({ to: '/' })
+    } catch (caught) {
+      setError(errorMessage(caught, WORKFLOW_DELETE_FAILED))
+    }
+  }
+
+  return (
+    <SidebarMenuItem>
+      <div
+        data-active={active}
+        className="group/row flex items-center gap-1 rounded-md data-[active=true]:bg-sidebar-accent"
+      >
+        {renaming ? (
+          <DocumentNameInput
+            name={workflow.name}
+            onCommit={(name) => void handleRename(name)}
+            onCancel={handleCancelRename}
+          />
+        ) : (
+          <SidebarMenuButton
+            asChild
+            isActive={active}
+            className="flex-1 text-foreground hover:text-foreground data-[active=true]:bg-transparent"
+          >
+            <Link
+              to="/workflows/$id"
+              params={{ id: workflow.id }}
+              onDoubleClick={handleStartRename}
+              onKeyDown={handleKey}
+            >
+              <RiFlowChart aria-hidden="true" />
+              <span className="truncate">{workflow.name}</span>
+            </Link>
+          </SidebarMenuButton>
+        )}
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={ROW_BUTTON_CLASS}
+          aria-label={`Delete ${workflow.name}`}
+          onClick={() => void handleDelete()}
+        >
+          <RiDeleteBinLine aria-hidden="true" />
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="px-2 text-caption text-destructive">
+          {error}
+        </p>
+      )}
+    </SidebarMenuItem>
+  )
+}
+
 function WorkflowList({ query }: { query: string }): React.JSX.Element {
   const { workflows } = rootRoute.useLoaderData()
   const { id: activeId } = useParams({ strict: false })
@@ -455,18 +571,11 @@ function WorkflowList({ query }: { query: string }): React.JSX.Element {
   return (
     <SidebarMenu aria-label="Workflows">
       {shown.map((workflow) => (
-        <SidebarMenuItem key={workflow.id}>
-          <SidebarMenuButton
-            asChild
-            isActive={workflow.id === activeId}
-            className="text-foreground hover:text-foreground"
-          >
-            <Link to="/workflows/$id" params={{ id: workflow.id }}>
-              <RiFlowChart aria-hidden="true" />
-              <span className="truncate">{workflow.name}</span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        <WorkflowItem
+          key={workflow.id}
+          workflow={workflow}
+          active={workflow.id === activeId}
+        />
       ))}
     </SidebarMenu>
   )
@@ -518,8 +627,8 @@ function SidebarEdgeToggle(): React.JSX.Element {
 }
 
 export function AppSidebar(): React.JSX.Element {
-  const tab = useAppStore((state) => state.sidebarTab)
-  const setTab = useAppStore((state) => state.setSidebarTab)
+  const tab = useUiStore((state) => state.sidebarTab)
+  const setTab = useUiStore((state) => state.setSidebarTab)
 
   function handleTabChange(value: string): void {
     if (isSidebarTab(value)) setTab(value)

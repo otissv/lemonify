@@ -2,15 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { resultDownloadUrl } from '@/features/documents/image-urls'
-import { clearUnusedResults } from '@/features/render/render-functions'
-import type { ResultUsage, ResultView } from '@/features/results/result'
-import {
-  deleteResult,
-  getResultUsage,
-  listResults,
-} from '@/features/results/result-functions'
+import type { ResultView } from '@/features/results/result'
 import { errorMessage } from '@/lib/error-message'
-import { useAppStore } from '@/store/app-store'
+import { useLibraryStore } from '@/store/library-store'
 
 interface ResultsPanelProps {
   documentId: string
@@ -36,62 +30,47 @@ function megabytes(bytes: number): string {
 export function ResultsPanel({
   documentId,
 }: ResultsPanelProps): React.JSX.Element {
-  const version = useAppStore((state) => state.resultsVersion)
-  const bumpResults = useAppStore((state) => state.bumpResults)
-  const [results, setResults] = useState<ReadonlyArray<ResultView>>([])
-  const [usage, setUsage] = useState<ResultUsage | undefined>(undefined)
-  const [loaded, setLoaded] = useState(false)
+  const results = useLibraryStore((state) => state.results[documentId])
+  const usage = useLibraryStore((state) => state.usage)
+  const loadResults = useLibraryStore((state) => state.loadResults)
+  const removeResult = useLibraryStore((state) => state.removeResult)
+  const clearUnused = useLibraryStore((state) => state.clearUnusedResults)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the version makes the list read again when a result is made or removed
   useEffect(() => {
     let current = true
-    async function load(): Promise<void> {
-      try {
-        const [found, used] = await Promise.all([
-          listResults({ data: { documentId } }),
-          getResultUsage(),
-        ])
-        if (!current) return
-        setResults(found)
-        setUsage(used)
-        setLoaded(true)
-      } catch (caught) {
-        if (current) setError(errorMessage(caught, LOAD_FAILED))
-      }
-    }
-    void load()
+    loadResults(documentId).catch((caught: unknown) => {
+      if (current) setError(errorMessage(caught, LOAD_FAILED))
+    })
     return () => {
       current = false
     }
-  }, [documentId, version])
+  }, [documentId, loadResults])
 
   const handleDelete = useCallback(
     async (id: string): Promise<void> => {
       setError(null)
       setNotice(null)
       try {
-        await deleteResult({ data: { id } })
-        bumpResults()
+        await removeResult(id)
       } catch (caught) {
         setError(errorMessage(caught, DELETE_FAILED))
       }
     },
-    [bumpResults],
+    [removeResult],
   )
 
   async function handleClear(): Promise<void> {
     setError(null)
     setNotice(null)
     try {
-      const { removed } = await clearUnusedResults({ data: { documentId } })
+      const removed = await clearUnused(documentId)
       setNotice(
         removed === 0
           ? 'No unused AI results.'
           : `Removed ${removed} unused AI ${removed === 1 ? 'result' : 'results'}.`,
       )
-      bumpResults()
     } catch (caught) {
       setError(errorMessage(caught, CLEAR_FAILED))
     }
@@ -99,13 +78,13 @@ export function ResultsPanel({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {loaded && results.length === 0 && (
+      {results !== undefined && results.length === 0 && (
         <p role="status" className="text-body-md text-muted-foreground">
           Nothing is kept for this image yet. AI steps and exports appear here.
         </p>
       )}
       <ul aria-label="Results" className="flex flex-col gap-2">
-        {results.map((result) => (
+        {(results ?? []).map((result) => (
           <li
             key={result.id}
             className="flex items-center justify-between gap-2"

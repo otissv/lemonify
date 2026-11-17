@@ -1,5 +1,9 @@
 import { rm } from 'node:fs/promises'
 
+import {
+  InvalidChangeError,
+  MAX_HISTORY_ENTRIES,
+} from '@/features/pipeline/document-change'
 import { leafSteps } from '@/features/pipeline/pipeline'
 import { pipelineOperandSourceIds } from '@/features/pipeline/image-operands'
 import {
@@ -15,11 +19,16 @@ import {
   createWorkflow,
 } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
+import {
+  applyWorkflowChange,
+  planWorkflowChange,
+} from '@/features/workflows/workflow-change'
+import type { WorkflowChange } from '@/features/workflows/workflow-change'
 
 import type { AiToolRegistry } from '../ai/ai-tool-registry.ts'
 import type { JobDao } from '../dao/job-dao.ts'
 import type { SourceDao } from '../dao/source-dao.ts'
-import { RunState } from '../dao/workflow-dao.ts'
+import { RunState, STALE_WORKFLOW_MESSAGE } from '../dao/workflow-dao.ts'
 import type {
   WorkflowDao,
   WorkflowRecord,
@@ -45,12 +54,16 @@ const DUPLICATE_NAME = 'A workflow with this name already exists.'
 const MISSING_SOURCE = 'An image in this workflow no longer exists.'
 const UNKNOWN_CANVAS_MODE =
   'Choose the canvas of the workflow, or the size of the first image.'
+const NOTHING_TO_UNDO = 'There is nothing to undo.'
+const NOTHING_TO_REDO = 'There is nothing to redo.'
 const CANCEL_PASSES = 3
 
 export type WorkflowView = WorkflowDefinition & {
   id: string
   name: string
   revision: number
+  canUndo: boolean
+  canRedo: boolean
   createdAt: string
   updatedAt: string
 }
@@ -104,15 +117,10 @@ export type WorkflowServiceDependencies = {
   changes: ChangePublisher
 }
 
-function toView(record: WorkflowRecord): WorkflowView {
-  return {
-    id: record.id,
-    name: record.name,
-    ...record.definition,
-    revision: record.revision,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  }
+function asValidation(error: unknown): unknown {
+  return error instanceof InvalidChangeError
+    ? new ValidationError(error.message, { cause: error })
+    : error
 }
 
 function normalise(name: string): string {
@@ -187,48 +195,113 @@ export class WorkflowService {
       name: cleaned,
       definition: chosen,
       revision: 0,
+      historyCursor: 0,
       createdAt: now,
       updatedAt: now,
     }
     await workflows.insert(record)
     this.#announce(actor.userId)
-    return toView(record)
+    return this.#workflowView(record)
   }
 
   async list(actor: Actor): Promise<WorkflowView[]> {
     const records = await this.#deps.workflows.listByOwner(actor.userId)
-    return records.map(toView)
+    const views: WorkflowView[] = []
+    for (const record of records) views.push(await this.#workflowView(record))
+    return views
   }
 
   async get(actor: Actor, id: string): Promise<WorkflowView> {
-    return toView(await this.#owned(actor, id))
+    return this.#workflowView(await this.#owned(actor, id))
   }
 
-  /** Saves a new name and definition; `revision` is the one the caller last saw. */
-  async update(
+  async rename(actor: Actor, id: string, name: string): Promise<WorkflowView> {
+    await this.#owned(actor, id)
+    const cleaned = cleanName(name)
+    await this.#requireFreeName(actor, cleaned, id)
+    const renamed = await this.#deps.workflows.rename(
+      id,
+      cleaned,
+      isoNow(this.#deps.clock),
+    )
+    this.#announceUpdated(actor.userId, renamed)
+    this.#announce(actor.userId)
+    return this.#workflowView(renamed)
+  }
+
+  /** Applies one edit as one Edit history entry; `revision` is the one the caller last saw. */
+  async change(
     actor: Actor,
     id: string,
     revision: number,
-    changes: { name: string; definition: WorkflowDefinition },
+    change: WorkflowChange,
   ): Promise<WorkflowView> {
-    await this.#owned(actor, id)
-    const name = cleanName(changes.name)
-    await this.#requireFreeName(actor, name, id)
-    const definition = this.#parseDefinition(changes.definition)
-    await this.#checkDefinition(actor, definition)
-    const saved = await this.#deps.workflows.update(
+    const record = await this.#current(actor, id, revision)
+    const planned = this.#plan(record.definition, change)
+    if (planned === null) return this.#workflowView(record)
+    await this.#checkDefinition(actor, planned.definition)
+    const changed = await this.#deps.workflows.applyChange({
       id,
-      revision,
-      { name, definition },
-      isoNow(this.#deps.clock),
-    )
-    this.#announce(actor.userId)
-    return toView(saved)
+      expectedRevision: revision,
+      definition: planned.definition,
+      patch: planned.patch,
+      maxEntries: MAX_HISTORY_ENTRIES,
+      now: isoNow(this.#deps.clock),
+    })
+    this.#announceUpdated(actor.userId, changed)
+    return this.#workflowView(changed)
+  }
+
+  undo(actor: Actor, id: string, revision: number): Promise<WorkflowView> {
+    return this.#step(actor, id, revision, -1)
+  }
+
+  redo(actor: Actor, id: string, revision: number): Promise<WorkflowView> {
+    return this.#step(actor, id, revision, 0)
+  }
+
+  /** Undo applies the inverse of the entry below the cursor; redo applies the forward change of the entry at the cursor. */
+  async #step(
+    actor: Actor,
+    id: string,
+    revision: number,
+    offset: -1 | 0,
+  ): Promise<WorkflowView> {
+    const { workflows, clock } = this.#deps
+    const record = await this.#current(actor, id, revision)
+    const entry = await workflows.findEntry(id, record.historyCursor + offset)
+    if (entry === null) {
+      throw new ValidationError(
+        offset === -1 ? NOTHING_TO_UNDO : NOTHING_TO_REDO,
+      )
+    }
+    const change = offset === -1 ? entry.patch.inverse : entry.patch.forward
+    let definition: WorkflowDefinition
+    try {
+      definition = applyWorkflowChange(record.definition, change)
+    } catch (error) {
+      throw asValidation(error)
+    }
+    await this.#checkDefinition(actor, definition)
+    const moved = await workflows.moveCursor({
+      id,
+      expectedRevision: revision,
+      definition,
+      cursor:
+        offset === -1 ? record.historyCursor - 1 : record.historyCursor + 1,
+      now: isoNow(clock),
+    })
+    this.#announceUpdated(actor.userId, moved)
+    return this.#workflowView(moved)
   }
 
   async delete(actor: Actor, id: string): Promise<void> {
     await this.#owned(actor, id)
     await this.#deps.workflows.delete(id)
+    this.#deps.changes.publish(actor.userId, {
+      type: 'workflow.deleted',
+      workflowId: id,
+    })
     this.#announce(actor.userId)
   }
 
@@ -365,6 +438,52 @@ export class WorkflowService {
     if (run === null) return
     await this.#view(run)
     this.#announce(job.ownerId)
+  }
+
+  #announceUpdated(userId: string, record: WorkflowRecord): void {
+    this.#deps.changes.publish(userId, {
+      type: 'workflow.updated',
+      workflowId: record.id,
+      revision: record.revision,
+      updatedAt: record.updatedAt,
+    })
+  }
+
+  async #workflowView(record: WorkflowRecord): Promise<WorkflowView> {
+    const { workflows } = this.#deps
+    const undo = await workflows.findEntry(record.id, record.historyCursor - 1)
+    const redo = await workflows.findEntry(record.id, record.historyCursor)
+    return {
+      id: record.id,
+      name: record.name,
+      ...record.definition,
+      revision: record.revision,
+      canUndo: undo !== null,
+      canRedo: redo !== null,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    }
+  }
+
+  /** The workflow, if it is still on the revision the caller saw. */
+  async #current(
+    actor: Actor,
+    id: string,
+    revision: number,
+  ): Promise<WorkflowRecord> {
+    const record = await this.#owned(actor, id)
+    if (record.revision !== revision) {
+      throw new ConflictError(STALE_WORKFLOW_MESSAGE)
+    }
+    return record
+  }
+
+  #plan(definition: WorkflowDefinition, change: WorkflowChange) {
+    try {
+      return planWorkflowChange(definition, change)
+    } catch (error) {
+      throw asValidation(error)
+    }
   }
 
   #announce(userId: string): void {

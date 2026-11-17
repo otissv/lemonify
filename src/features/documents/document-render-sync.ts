@@ -8,7 +8,8 @@ import {
 } from '@/features/render/render-functions'
 import { errorMessage } from '@/lib/error-message'
 import { JobKind, JobState } from '@/server/jobs/job-types'
-import { useAppStore } from '@/store/app-store'
+import { useLibraryStore } from '@/store/library-store'
+import { usePipelineStore } from '@/store/pipeline-store'
 
 const PREVIEW_FAILED = 'The picture could not be made.'
 const AI_FAILED = 'The AI step could not be run.'
@@ -24,7 +25,7 @@ export async function refreshPreview(
   documentId: string,
   signal: AbortSignal,
 ): Promise<void> {
-  const store = useAppStore.getState()
+  const store = usePipelineStore.getState()
   const before = store.previews[documentId]
   store.setPreview(documentId, {
     pendingStepIds: before?.pendingStepIds ?? [],
@@ -38,7 +39,7 @@ export async function refreshPreview(
     if (ended === undefined || ended.state === JobState.Cancelled) return
     const { result } = ended
     if (ended.state === JobState.Done && result?.kind === JobKind.Preview) {
-      useAppStore.getState().setPreview(documentId, {
+      usePipelineStore.getState().setPreview(documentId, {
         status: PreviewStatus.Ready,
         key: result.key,
         pendingStepIds: result.pendingStepIds,
@@ -54,7 +55,7 @@ export async function refreshPreview(
 }
 
 function failPreview(documentId: string, error: string): void {
-  const store = useAppStore.getState()
+  const store = usePipelineStore.getState()
   const before = store.previews[documentId]
   store.setPreview(documentId, {
     pendingStepIds: before?.pendingStepIds ?? [],
@@ -77,7 +78,7 @@ export async function refreshThumbnails(
     if (ended?.state !== JobState.Done || result?.kind !== JobKind.Thumbnail) {
       return
     }
-    useAppStore.getState().setThumbnails(documentId, result.thumbnails)
+    usePipelineStore.getState().setThumbnails(documentId, result.thumbnails)
   } catch {
     if (signal.aborted) return
   }
@@ -95,7 +96,7 @@ export async function runPendingAiSteps(documentId: string): Promise<void> {
   try {
     for (;;) {
       const stepId =
-        useAppStore.getState().previews[documentId]?.pendingStepIds[0]
+        usePipelineStore.getState().previews[documentId]?.pendingStepIds[0]
       if (stepId === undefined) return
       const stopped = await runOneAiStep(documentId, stepId, controller.signal)
       if (stopped) return
@@ -112,7 +113,7 @@ async function runOneAiStep(
   stepId: string,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const store = useAppStore.getState()
+  const store = usePipelineStore.getState()
   store.setAiRun(documentId, {
     jobId: null,
     stepId,
@@ -122,7 +123,7 @@ async function runOneAiStep(
   try {
     const queued = await requestAiStep({ data: { documentId, stepId } })
     const ended = await followJob(queued.id, signal, (job) => {
-      useAppStore.getState().setAiRun(documentId, {
+      usePipelineStore.getState().setAiRun(documentId, {
         jobId: job.id,
         stepId,
         state: job.state,
@@ -130,15 +131,15 @@ async function runOneAiStep(
       })
     })
     if (ended?.state === JobState.Done) {
-      useAppStore.getState().setAiRun(documentId, undefined)
-      useAppStore.getState().bumpResults()
+      usePipelineStore.getState().setAiRun(documentId, undefined)
+      void useLibraryStore.getState().refreshResults()
       return false
     }
     if (ended?.state === JobState.Failed) {
       failRun(documentId, stepId, ended.error ?? AI_FAILED)
       return true
     }
-    useAppStore.getState().setAiRun(documentId, undefined)
+    usePipelineStore.getState().setAiRun(documentId, undefined)
     return true
   } catch (error) {
     failRun(documentId, stepId, errorMessage(error, AI_FAILED))
@@ -147,7 +148,7 @@ async function runOneAiStep(
 }
 
 function failRun(documentId: string, stepId: string, error: string): void {
-  useAppStore.getState().setAiRun(documentId, {
+  usePipelineStore.getState().setAiRun(documentId, {
     jobId: null,
     stepId,
     state: JobState.Failed,
@@ -158,14 +159,14 @@ function failRun(documentId: string, stepId: string, error: string): void {
 
 /** Asks the running AI step to stop; the run ends when the server says it has. */
 export async function cancelAiRun(documentId: string): Promise<void> {
-  const jobId = useAppStore.getState().aiRuns[documentId]?.jobId
+  const jobId = usePipelineStore.getState().aiRuns[documentId]?.jobId
   if (jobId === null || jobId === undefined) return
   try {
     await cancelJob({ data: { id: jobId } })
   } catch (error) {
-    const run = useAppStore.getState().aiRuns[documentId]
+    const run = usePipelineStore.getState().aiRuns[documentId]
     if (run) {
-      useAppStore.getState().setAiRun(documentId, {
+      usePipelineStore.getState().setAiRun(documentId, {
         ...run,
         error: errorMessage(error, 'The AI step could not be cancelled.'),
       })

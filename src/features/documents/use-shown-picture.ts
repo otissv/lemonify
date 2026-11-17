@@ -1,6 +1,6 @@
 import { usePreview } from '@/features/pipeline/use-preview'
 import type { PipelinePreview } from '@/features/pipeline/use-preview'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 export interface ShownPicture {
   url: string
@@ -17,7 +17,7 @@ export function pictureUrl(
 
 /** The picture the canvas shows for a document, for anything else that shows it too. Undefined while the document loads or has no image. */
 export function useShownPicture(documentId: string): ShownPicture | undefined {
-  const showOriginal = useAppStore(
+  const showOriginal = useUiStore(
     (state) => state.showOriginal[documentId] ?? false,
   )
   const preview = usePreview(documentId)

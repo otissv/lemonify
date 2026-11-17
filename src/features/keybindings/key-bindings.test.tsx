@@ -14,15 +14,14 @@ import {
   requestThumbnails,
 } from '@/features/render/render-functions'
 import { listSources } from '@/features/sources/source-functions'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import { followJob } from '@/features/jobs/follow-job'
-import { INITIAL_APP_STATE, Tool, useAppStore } from '@/store/app-store'
+import { Tool, useUiStore } from '@/store/ui-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 import { DOCUMENT_ID, documentView } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/auth/auth-client', () => ({ signOut: vi.fn() }))
 vi.mock('@/features/documents/document-functions', () => ({
@@ -64,8 +63,8 @@ async function openDocument(): Promise<void> {
 
 describe('key bindings', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
-    useSourcesStore.setState(INITIAL_SOURCES_STATE)
+    resetStores()
+    useLibraryStore.setState(INITIAL_LIBRARY_STATE)
     vi.mocked(listWorkflows).mockResolvedValue([])
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(listSources).mockResolvedValue([])
@@ -131,7 +130,7 @@ describe('key bindings', () => {
     press('Digit5', { altKey: true })
 
     await waitFor(() => {
-      expect(useAppStore.getState().activeTool).toBe(Tool.Document)
+      expect(useUiStore.getState().activeTool).toBe(Tool.Document)
     })
   })
 
@@ -142,7 +141,8 @@ describe('key bindings', () => {
     press('KeyB')
 
     await waitFor(() => {
-      const steps = useAppStore.getState().documents[DOCUMENT_ID]?.pending ?? []
+      const steps =
+        documentSession(usePipelineStore.getState(), DOCUMENT_ID)?.pending ?? []
       expect(steps.length).toBeGreaterThan(0)
     })
   })

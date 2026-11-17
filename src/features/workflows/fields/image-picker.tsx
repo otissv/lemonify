@@ -3,10 +3,7 @@ import { useEffect, useState } from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SplitButton } from '@/components/ui/split-button'
 import type { SourceSummary } from '@/features/documents/document'
-import {
-  SourcesStatus,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { SourcesStatus, useLibraryStore } from '@/store/library-store'
 import { ImageLibraryDialog } from '@/features/library/image-library-dialog'
 import { UploadButton } from '@/features/workflows/upload-button'
 
@@ -27,9 +24,9 @@ export function ImagePicker({
   onPick,
   uploadLabel = `Upload ${label.toLowerCase()}…`,
 }: ImagePickerProps): React.JSX.Element {
-  const sources = useSourcesStore((state) => state.sources)
-  const status = useSourcesStore((state) => state.status)
-  const load = useSourcesStore((state) => state.load)
+  const sources = useLibraryStore((state) => state.sources)
+  const status = useLibraryStore((state) => state.status)
+  const load = useLibraryStore((state) => state.load)
   const [libraryOpen, setLibraryOpen] = useState(false)
 
   useEffect(() => {

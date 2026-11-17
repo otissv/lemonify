@@ -5,19 +5,23 @@ import {
   applyEdit,
   redoEdit,
   undoEdit,
-} from '@/features/documents/document-sync'
+} from '@/features/pipeline/pipeline-sync'
 import { canRunAction, runAction } from '@/features/keybindings/action-runner'
 import type { ActionContext } from '@/features/keybindings/action-runner'
 import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
-import { Tool, INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { Tool, useUiStore } from '@/store/ui-store'
 import {
   AI_CATALOGUES,
   DOCUMENT_ID,
   documentView,
   loadDocumentIntoEditor,
 } from '@/test/document-fixtures'
+import { usePipelineStore } from '@/store/pipeline-store'
+import { resetStores } from '@/store/reset-stores'
+import type { WorkflowView } from '@/server/services/workflow-service'
+import { workflowView } from '@/test/workflow-fixtures'
 
-vi.mock('@/features/documents/document-sync', () => ({
+vi.mock('@/features/pipeline/pipeline-sync', () => ({
   applyEdit: vi.fn().mockResolvedValue(undefined),
   loadDocument: vi.fn().mockResolvedValue(undefined),
   undoEdit: vi.fn().mockResolvedValue(undefined),
@@ -55,7 +59,7 @@ beforeEach(() => {
   vi.mocked(applyEdit).mockClear()
   vi.mocked(undoEdit).mockClear()
   vi.mocked(redoEdit).mockClear()
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
 })
 
 describe('actions on a page with no document', () => {
@@ -68,13 +72,13 @@ describe('actions on a page with no document', () => {
     expect(page.opener.openLibraryImage).toHaveBeenCalled()
     expect(page.opener.importDocument).toHaveBeenCalled()
 
-    expect(useAppStore.getState().sidebarOpen).toBe(true)
+    expect(useUiStore.getState().sidebarOpen).toBe(true)
     runAction('view.sidebar', page)
-    expect(useAppStore.getState().sidebarOpen).toBe(false)
+    expect(useUiStore.getState().sidebarOpen).toBe(false)
     runAction('help.shortcuts', page)
-    expect(useAppStore.getState().shortcutsOpen).toBe(true)
+    expect(useUiStore.getState().shortcutsOpen).toBe(true)
     runAction('help.shortcuts', page)
-    expect(useAppStore.getState().shortcutsOpen).toBe(false)
+    expect(useUiStore.getState().shortcutsOpen).toBe(false)
   })
 
   it('open the New document dialog, with or without a document open', () => {
@@ -82,12 +86,12 @@ describe('actions on a page with no document', () => {
     expect(canRunAction('file.newDocument', page)).toBe(true)
 
     expect(runAction('file.newDocument', page)).toBe(true)
-    expect(useAppStore.getState().newDocumentOpen).toBe(true)
+    expect(useUiStore.getState().newDocumentOpen).toBe(true)
 
-    useAppStore.getState().setNewDocumentOpen(false)
+    useUiStore.getState().setNewDocumentOpen(false)
     loadDocumentIntoEditor(documentView())
     expect(runAction('file.newDocument', context())).toBe(true)
-    expect(useAppStore.getState().newDocumentOpen).toBe(true)
+    expect(useUiStore.getState().newDocumentOpen).toBe(true)
   })
 
   it('do nothing that needs a document', () => {
@@ -138,9 +142,9 @@ describe('edit actions', () => {
     expect(runAction('edit.showOriginal', context())).toBe(false)
     loadDocumentIntoEditor(documentView([blur]))
     expect(runAction('edit.showOriginal', context())).toBe(true)
-    expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(true)
+    expect(useUiStore.getState().showOriginal[DOCUMENT_ID]).toBe(true)
     runAction('edit.showOriginal', context())
-    expect(useAppStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
+    expect(useUiStore.getState().showOriginal[DOCUMENT_ID]).toBe(false)
   })
 
   it('add an empty image layer for the document', () => {
@@ -166,6 +170,56 @@ describe('edit actions', () => {
   })
 })
 
+describe('actions on a workflow, which is a pipeline with an Edit history', () => {
+  const WORKFLOW_ID = 'w1'
+
+  function openWorkflow(canUndo = false, canRedo = false): WorkflowView {
+    const view = { ...workflowView(WORKFLOW_ID), canUndo, canRedo }
+    usePipelineStore.getState().confirmWorkflow(view, true)
+    return view
+  }
+
+  it('undo and redo only when its Edit history has something to undo or redo', () => {
+    openWorkflow(true, false)
+    const workflow = context({ documentId: WORKFLOW_ID })
+
+    expect(canRunAction('edit.undo', workflow)).toBe(true)
+    expect(canRunAction('edit.redo', workflow)).toBe(false)
+
+    runAction('edit.undo', workflow)
+
+    expect(undoEdit).toHaveBeenCalledWith(WORKFLOW_ID)
+  })
+
+  it('edit its steps with the same keys as a document’s', () => {
+    const [layer] = openWorkflow().pipeline.steps
+    useUiStore.getState().selectStep(WORKFLOW_ID, layer?.id)
+    const workflow = context({ documentId: WORKFLOW_ID })
+
+    expect(canRunAction('step.delete', workflow)).toBe(true)
+    runAction('step.delete', workflow)
+
+    expect(applyEdit).toHaveBeenCalledWith(WORKFLOW_ID, {
+      type: 'remove-step',
+      stepId: layer?.id,
+    })
+  })
+
+  it('do not export, replace an image or show an original, which are about a document', () => {
+    openWorkflow()
+    const workflow = context({ documentId: WORKFLOW_ID })
+
+    for (const id of [
+      'file.exportImage',
+      'file.exportDocument',
+      'edit.replaceImage',
+      'edit.showOriginal',
+    ]) {
+      expect(canRunAction(id, workflow), id).toBe(false)
+    }
+  })
+})
+
 describe('file and panel actions', () => {
   it('export, close and show panels for the document', () => {
     loadDocumentIntoEditor(documentView())
@@ -175,17 +229,17 @@ describe('file and panel actions', () => {
     runAction('file.close', page)
     expect(page.closeDocument).toHaveBeenCalledWith(DOCUMENT_ID)
     runAction('file.exportImage', page)
-    expect(useAppStore.getState().activeTool).toBe(Tool.Export)
+    expect(useUiStore.getState().activeTool).toBe(Tool.Export)
     runAction('panel.navigator', page)
-    expect(useAppStore.getState().activeTool).toBe(Tool.Navigator)
+    expect(useUiStore.getState().activeTool).toBe(Tool.Navigator)
     runAction('panel.results', page)
-    expect(useAppStore.getState().activeTool).toBe(Tool.Results)
+    expect(useUiStore.getState().activeTool).toBe(Tool.Results)
   })
 })
 
 describe('step actions', () => {
   function select(id: string | undefined): void {
-    useAppStore.getState().selectStep(DOCUMENT_ID, id)
+    useUiStore.getState().selectStep(DOCUMENT_ID, id)
   }
 
   beforeEach(() => {
@@ -236,23 +290,23 @@ describe('step actions', () => {
 
   it('move the selection up and down the listed steps, starting from either end', () => {
     expect(runAction('step.selectDown', context())).toBe(true)
-    const first = useAppStore.getState().selectedSteps[DOCUMENT_ID]
+    const first = useUiStore.getState().selectedSteps[DOCUMENT_ID]
     select(undefined)
     runAction('step.selectUp', context())
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(rotate.id)
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(rotate.id)
     runAction('step.selectUp', context())
-    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(flip.id)
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(flip.id)
     expect(first).toBeDefined()
   })
 
   it('group the picked steps, and say why when they cannot be grouped', () => {
-    useAppStore.getState().markSteps(DOCUMENT_ID, [blur.id, flip.id])
+    useUiStore.getState().markSteps(DOCUMENT_ID, [blur.id, flip.id])
     expect(runAction('step.group', context())).toBe(true)
     expect(applyEdit).toHaveBeenLastCalledWith(
       DOCUMENT_ID,
       expect.objectContaining({ type: 'group-steps' }),
     )
-    useAppStore.getState().markSteps(DOCUMENT_ID, [blur.id, rotate.id])
+    useUiStore.getState().markSteps(DOCUMENT_ID, [blur.id, rotate.id])
     expect(runAction('step.group', context())).toBe(false)
   })
 
@@ -298,37 +352,37 @@ describe('view actions', () => {
   it('wait until the picture has been measured', () => {
     loadDocumentIntoEditor(documentView())
     expect(runAction('view.zoomIn', context())).toBe(false)
-    useAppStore.getState().setViewFrame(DOCUMENT_ID, {
+    useUiStore.getState().setViewFrame(DOCUMENT_ID, {
       viewWidth: 400,
       viewHeight: 300,
       ratio: 1,
       naturalWidth: 1000,
     })
     expect(runAction('view.zoomIn', context())).toBe(true)
-    expect(useAppStore.getState().viewports[DOCUMENT_ID]?.zoom).toBeGreaterThan(
+    expect(useUiStore.getState().viewports[DOCUMENT_ID]?.zoom).toBeGreaterThan(
       1,
     )
   })
 
   it('pan further for the far keys', () => {
     loadDocumentIntoEditor(documentView())
-    useAppStore.getState().setViewFrame(DOCUMENT_ID, {
+    useUiStore.getState().setViewFrame(DOCUMENT_ID, {
       viewWidth: 400,
       viewHeight: 300,
       ratio: 1,
       naturalWidth: 1000,
     })
     for (let step = 0; step < 4; step += 1) runAction('view.zoomIn', context())
-    const start = useAppStore.getState().viewports[DOCUMENT_ID]
+    const start = useUiStore.getState().viewports[DOCUMENT_ID]
     if (start === undefined) throw new Error('no viewport')
     runAction('view.panLeft', context())
     const near = Math.abs(
-      (useAppStore.getState().viewports[DOCUMENT_ID]?.x ?? 0) - start.x,
+      (useUiStore.getState().viewports[DOCUMENT_ID]?.x ?? 0) - start.x,
     )
-    useAppStore.getState().setViewport(DOCUMENT_ID, start)
+    useUiStore.getState().setViewport(DOCUMENT_ID, start)
     runAction('view.panLeftFar', context())
     const far = Math.abs(
-      (useAppStore.getState().viewports[DOCUMENT_ID]?.x ?? 0) - start.x,
+      (useUiStore.getState().viewports[DOCUMENT_ID]?.x ?? 0) - start.x,
     )
     expect(near).toBeGreaterThan(0)
     expect(far).toBeGreaterThan(near)

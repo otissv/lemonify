@@ -11,11 +11,10 @@ import {
 } from '@/features/render/render-functions'
 import { JobKind, JobState } from '@/server/jobs/job-types'
 import type { JobView } from '@/server/services/job-service'
-import {
-  INITIAL_APP_STATE,
-  PreviewStatus,
-  useAppStore,
-} from '@/store/app-store'
+import { useLibraryStore } from '@/store/library-store'
+import { usePipelineStore } from '@/store/pipeline-store'
+import { PreviewStatus } from '@/features/documents/document-render'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/render/render-functions', () => ({
   requestPreview: vi.fn(),
@@ -50,7 +49,7 @@ const SIGNAL = new AbortController().signal
 
 describe('refreshPreview', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.resetAllMocks()
     vi.mocked(requestPreview).mockResolvedValue(
       job(JobKind.Preview, JobState.Waiting),
@@ -67,7 +66,7 @@ describe('refreshPreview', () => {
       }),
     )
     await refreshPreview('d1', SIGNAL)
-    expect(useAppStore.getState().previews.d1).toEqual({
+    expect(usePipelineStore.getState().previews.d1).toEqual({
       status: PreviewStatus.Ready,
       key: 'k1',
       pendingStepIds: ['s2'],
@@ -76,7 +75,7 @@ describe('refreshPreview', () => {
   })
 
   it('keeps the last picture and says why when the preview fails', async () => {
-    useAppStore.getState().setPreview('d1', {
+    usePipelineStore.getState().setPreview('d1', {
       status: PreviewStatus.Ready,
       key: 'old',
       pendingStepIds: [],
@@ -86,7 +85,7 @@ describe('refreshPreview', () => {
       job(JobKind.Preview, JobState.Failed, null, 'The image is damaged.'),
     )
     await refreshPreview('d1', SIGNAL)
-    expect(useAppStore.getState().previews.d1).toMatchObject({
+    expect(usePipelineStore.getState().previews.d1).toMatchObject({
       status: PreviewStatus.Failed,
       key: 'old',
       error: 'The image is damaged.',
@@ -98,7 +97,7 @@ describe('refreshPreview', () => {
       job(JobKind.Preview, JobState.Cancelled),
     )
     await refreshPreview('d1', SIGNAL)
-    expect(useAppStore.getState().previews.d1?.status).toBe(
+    expect(usePipelineStore.getState().previews.d1?.status).toBe(
       PreviewStatus.Rendering,
     )
   })
@@ -106,12 +105,12 @@ describe('refreshPreview', () => {
 
 describe('runPendingAiSteps', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.resetAllMocks()
   })
 
   it('runs each pending step in turn, renewing the picture between them', async () => {
-    useAppStore.getState().setPreview('d1', {
+    usePipelineStore.getState().setPreview('d1', {
       status: PreviewStatus.Ready,
       key: 'k',
       pendingStepIds: ['a', 'b'],
@@ -148,12 +147,12 @@ describe('runPendingAiSteps', () => {
       .mocked(requestAiStep)
       .mock.calls.map(([{ data }]) => data.stepId)
     expect(ran).toEqual(['a', 'b'])
-    expect(useAppStore.getState().aiRuns.d1).toBeUndefined()
-    expect(useAppStore.getState().resultsVersion).toBe(2)
+    expect(usePipelineStore.getState().aiRuns.d1).toBeUndefined()
+    expect(useLibraryStore.getState().resultsVersion).toBe(2)
   })
 
   it('stops and shows the reason when a step fails', async () => {
-    useAppStore.getState().setPreview('d1', {
+    usePipelineStore.getState().setPreview('d1', {
       status: PreviewStatus.Ready,
       key: 'k',
       pendingStepIds: ['a', 'b'],
@@ -167,7 +166,7 @@ describe('runPendingAiSteps', () => {
     )
     await runPendingAiSteps('d1')
     expect(requestAiStep).toHaveBeenCalledTimes(1)
-    expect(useAppStore.getState().aiRuns.d1).toMatchObject({
+    expect(usePipelineStore.getState().aiRuns.d1).toMatchObject({
       stepId: 'a',
       state: JobState.Failed,
       error: 'No GPU.',

@@ -382,6 +382,73 @@ describe('workflows through the CLI', () => {
     expect(changed.workflow.pipeline.steps).toHaveLength(1)
   })
 
+  it('renames a workflow, and undoes and redoes an update from its Edit history', async () => {
+    const { workflow } = await cli<{ workflow: { id: string } }>(
+      'workflow',
+      'create',
+      'Flow',
+    )
+    const renamed = await cli<{ workflow: { name: string } }>(
+      'workflow',
+      'rename',
+      workflow.id,
+      'Scaled',
+    )
+    expect(renamed.workflow.name).toBe('Scaled')
+
+    const changed = await cli<{
+      workflow: { canUndo: boolean; pipeline: { canvas: { width: number } } }
+    }>('workflow', 'update', workflow.id, '--width', '640')
+    expect(changed.workflow).toMatchObject({ canUndo: true })
+    expect(changed.workflow.pipeline.canvas.width).toBe(640)
+
+    const undone = await cli<{
+      workflow: {
+        canRedo: boolean
+        pipeline: { canvas: { width: number } }
+      }
+    }>('workflow', 'undo', workflow.id)
+    expect(undone.workflow.canRedo).toBe(true)
+    expect(undone.workflow.pipeline.canvas.width).toBe(1920)
+
+    const redone = await cli<{
+      workflow: { pipeline: { canvas: { width: number } } }
+    }>('workflow', 'redo', workflow.id)
+    expect(redone.workflow.pipeline.canvas.width).toBe(640)
+    await expect(cli('workflow', 'redo', workflow.id)).rejects.toThrow(
+      /nothing to redo/i,
+    )
+  })
+
+  it('takes images out of a workflow with --without, as one change that can be undone', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('cat.png'),
+    )
+    const { workflow } = await cli<{ workflow: { id: string } }>(
+      'workflow',
+      'create',
+      'Pair',
+      '--sources',
+      source.id,
+    )
+    const without = await cli<{ workflow: { inputs: string[] } }>(
+      'workflow',
+      'update',
+      workflow.id,
+      '--without',
+      source.id,
+    )
+    expect(without.workflow.inputs).toEqual([])
+    const undone = await cli<{ workflow: { inputs: string[] } }>(
+      'workflow',
+      'undo',
+      workflow.id,
+    )
+    expect(undone.workflow.inputs).toEqual([source.id])
+  })
+
   it('refuses --pipeline together with --steps or the canvas flags', async () => {
     await expect(
       cli(

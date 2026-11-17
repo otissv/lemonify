@@ -17,7 +17,7 @@ import { resetBindings } from '@/features/keybindings/keybinding-edit'
 import { ShortcutRow } from '@/features/keybindings/shortcut-row'
 import { useKeybindingEditor } from '@/features/keybindings/use-keybinding-editor'
 import type { EffectiveBindings } from '@/features/keybindings/keybindings-file'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 type Section = { group: string; actions: ActionDefinition[] }
 
@@ -48,8 +48,8 @@ function sectionsFor(
 
 /** Every action with its keys, to read and to change. Opened from the Help menu or by its own shortcut. */
 export function ShortcutsDialog(): React.JSX.Element {
-  const open = useAppStore((state) => state.shortcutsOpen)
-  const setOpen = useAppStore((state) => state.setShortcutsOpen)
+  const open = useUiStore((state) => state.shortcutsOpen)
+  const setOpen = useUiStore((state) => state.setShortcutsOpen)
   const editor = useKeybindingEditor()
   const [query, setQuery] = useState('')
   const [confirmingReset, setConfirmingReset] = useState(false)

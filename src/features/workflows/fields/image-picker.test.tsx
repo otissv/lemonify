@@ -5,10 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SourceSummary } from '@/features/documents/document'
 import { listSources } from '@/features/sources/source-functions'
 import { ImagePicker } from '@/features/workflows/fields/image-picker'
-import {
-  INITIAL_SOURCES_STATE,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
+import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
 
 vi.mock('@/features/sources/source-functions', () => ({
   listSources: vi.fn(),
@@ -29,7 +26,7 @@ function source(index: number): SourceSummary {
 const SEVEN = [1, 2, 3, 4, 5, 6, 7].map(source)
 
 beforeEach(() => {
-  useSourcesStore.setState(INITIAL_SOURCES_STATE)
+  useLibraryStore.setState(INITIAL_LIBRARY_STATE)
   vi.mocked(listSources).mockResolvedValue(SEVEN)
 })
 

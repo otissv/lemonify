@@ -15,7 +15,8 @@ import {
   AI_TOOLS_OFFERED,
   DOCUMENT_ID,
 } from '@/test/document-fixtures'
-import { INITIAL_APP_STATE, Tool, useAppStore } from '@/store/app-store'
+import { Tool, useUiStore } from '@/store/ui-store'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/app/app-menu-bar', () => ({
   AppMenuBar: () => <div role="menubar" aria-label="Application" />,
@@ -50,7 +51,7 @@ function panel(): HTMLElement {
 
 describe('ToolsPanel', () => {
   beforeEach(() => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
       function measure(this: HTMLElement) {
         const size = SIZES[this.dataset.slot ?? '']
@@ -197,7 +198,7 @@ describe('ToolsPanel', () => {
 
       await user.click(screen.getByRole('tab', { name: 'Navigator' }))
 
-      expect(useAppStore.getState().activeTool).toBe(Tool.Navigator)
+      expect(useUiStore.getState().activeTool).toBe(Tool.Navigator)
       expect(
         within(screen.getByRole('tabpanel')).getByRole('status'),
       ).toHaveTextContent('There is no picture to navigate.')
@@ -211,14 +212,14 @@ describe('ToolsPanel', () => {
       expect(screen.getByRole('tab', { name: 'Options' })).toBeDisabled()
 
       cleanup()
-      useAppStore.getState().selectStep(DOCUMENT_ID, 'step-1')
+      useUiStore.getState().selectStep(DOCUMENT_ID, 'step-1')
       renderPanel()
 
       expect(screen.getByRole('tab', { name: 'Options' })).toBeEnabled()
     })
 
     it('shows the Tools tab instead when its step goes away', () => {
-      useAppStore.setState({ activeTool: Tool.Options })
+      useUiStore.setState({ activeTool: Tool.Options })
       renderPanel()
 
       expect(screen.getByRole('tab', { name: 'Tools' })).toHaveAttribute(
@@ -248,16 +249,16 @@ describe('ToolsPanel', () => {
       expect(
         within(panel()).getByRole('menubar', { name: 'Application' }),
       ).toBeInTheDocument()
-      expect(useAppStore.getState().panelCollapsed).toBe(true)
+      expect(useUiStore.getState().panelCollapsed).toBe(true)
 
       await user.click(screen.getByRole('button', { name: 'Expand panel' }))
 
       expect(screen.getByRole('tablist')).toBeInTheDocument()
-      expect(useAppStore.getState().panelCollapsed).toBe(false)
+      expect(useUiStore.getState().panelCollapsed).toBe(false)
     })
 
     it('can still be dragged while collapsed', () => {
-      useAppStore.setState({ panelCollapsed: true })
+      useUiStore.setState({ panelCollapsed: true })
       renderPanel()
       const handle = screen.getByRole('button', { name: 'Move panel' })
 
@@ -272,7 +273,7 @@ describe('ToolsPanel', () => {
         pointerId: 1,
       })
 
-      expect(useAppStore.getState().panelPosition).not.toBeNull()
+      expect(useUiStore.getState().panelPosition).not.toBeNull()
     })
   })
 
@@ -293,7 +294,7 @@ describe('ToolsPanel', () => {
       })
       fireEvent.pointerUp(handle, { clientX: 400, clientY: 250, pointerId: 1 })
 
-      expect(useAppStore.getState().panelPosition).toEqual({ x: 584, y: 166 })
+      expect(useUiStore.getState().panelPosition).toEqual({ x: 584, y: 166 })
       expect(panel()).toHaveStyle({ left: '584px', top: '166px' })
     })
 
@@ -312,18 +313,18 @@ describe('ToolsPanel', () => {
         pointerId: 1,
       })
 
-      expect(useAppStore.getState().panelPosition).toEqual({ x: 700, y: 0 })
+      expect(useUiStore.getState().panelPosition).toEqual({ x: 700, y: 0 })
     })
 
     it('moves with the arrow keys on the handle', async () => {
-      useAppStore.setState({ panelPosition: { x: 100, y: 100 } })
+      useUiStore.setState({ panelPosition: { x: 100, y: 100 } })
       const user = userEvent.setup()
       renderPanel()
 
       screen.getByRole('button', { name: 'Move panel' }).focus()
       await user.keyboard('{ArrowDown}')
 
-      expect(useAppStore.getState().panelPosition).toEqual({
+      expect(useUiStore.getState().panelPosition).toEqual({
         x: 100,
         y: 100 + KEYBOARD_STEP,
       })

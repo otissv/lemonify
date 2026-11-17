@@ -27,7 +27,15 @@ export const RealtimeEventSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('document.deleted'), documentId: id }),
   /** An AI result or an export was made or removed. */
   z.strictObject({ type: z.literal('results.changed') }),
-  /** A workflow or one of its runs changed. */
+  /** A workflow's content or name is now at this revision. */
+  z.strictObject({
+    type: z.literal('workflow.updated'),
+    workflowId: id,
+    revision: z.number().int().nonnegative(),
+    updatedAt: z.iso.datetime(),
+  }),
+  z.strictObject({ type: z.literal('workflow.deleted'), workflowId: id }),
+  /** A workflow was made, removed or renamed, or one of its runs changed: the lists are out of date. */
   z.strictObject({ type: z.literal('workflows.changed') }),
   /** The person's key bindings were saved or reset. */
   z.strictObject({ type: z.literal('keybindings.changed') }),

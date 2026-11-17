@@ -13,9 +13,10 @@ import {
   requestThumbnails,
 } from '@/features/render/render-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
-import { INITIAL_APP_STATE, useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 import { DOCUMENT_ID, documentView, previewJob } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
+import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/documents/document-functions', () => ({
   listDocuments: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock('@/features/render/render-functions', () => ({
 vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
 
 beforeEach(() => {
-  useAppStore.setState(INITIAL_APP_STATE)
+  resetStores()
   vi.mocked(listWorkflows).mockResolvedValue([])
   vi.mocked(listDocuments).mockResolvedValue([])
   vi.mocked(getDocument).mockResolvedValue(documentView())
@@ -53,7 +54,7 @@ afterEach(() => {
 
 async function openDialog(): Promise<HTMLElement> {
   await renderApp('/')
-  useAppStore.getState().setNewDocumentOpen(true)
+  useUiStore.getState().setNewDocumentOpen(true)
   return screen.findByRole('dialog', { name: 'New document' })
 }
 
@@ -89,7 +90,7 @@ describe('NewDocumentDialog', () => {
       }),
     )
     await waitFor(() =>
-      expect(useAppStore.getState().newDocumentOpen).toBe(false),
+      expect(useUiStore.getState().newDocumentOpen).toBe(false),
     )
     await waitFor(() =>
       expect(getDocument).toHaveBeenCalledWith({ data: { id: DOCUMENT_ID } }),
@@ -122,6 +123,6 @@ describe('NewDocumentDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Create document' }))
 
     expect(await screen.findByText('No room.')).toBeVisible()
-    expect(useAppStore.getState().newDocumentOpen).toBe(true)
+    expect(useUiStore.getState().newDocumentOpen).toBe(true)
   })
 })

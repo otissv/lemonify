@@ -10,16 +10,12 @@ import {
   applyEdit,
   isNewer,
   loadDocument,
-  reconcileDocument,
-  settleDocument,
+  reconcilePipeline,
+  settlePipeline,
   undoEdit,
-} from '@/features/documents/document-sync'
+} from '@/features/pipeline/pipeline-sync'
 import { createSharpStep } from '@/features/pipeline/pipeline'
-import {
-  INITIAL_APP_STATE,
-  currentPipeline,
-  useAppStore,
-} from '@/store/app-store'
+import { currentPipeline, usePipelineStore } from '@/store/pipeline-store'
 
 vi.mock('@/features/documents/document-functions', () => ({
   getDocument: vi.fn(),
@@ -29,6 +25,7 @@ vi.mock('@/features/documents/document-functions', () => ({
 }))
 
 import { pipelineOf } from '@/test/pipelines'
+import { resetStores } from '@/store/reset-stores'
 
 function view(
   revision: number,
@@ -65,14 +62,14 @@ function viewAt(
 }
 
 function session() {
-  const found = useAppStore.getState().documents.d1
+  const found = usePipelineStore.getState().sessions.d1
   if (!found) throw new Error('document not loaded')
   return found
 }
 
 describe('document sync', () => {
   beforeEach(async () => {
-    useAppStore.setState(INITIAL_APP_STATE)
+    resetStores()
     vi.resetAllMocks()
     vi.mocked(getDocument).mockResolvedValue(view(0, []))
     await loadDocument('d1')
@@ -82,7 +79,9 @@ describe('document sync', () => {
     const blur = createSharpStep('blur')
     vi.mocked(changeDocument).mockResolvedValue(view(1, [blur], true))
     const done = applyEdit('d1', { type: 'add-step', step: blur, index: 0 })
-    expect(currentPipeline(useAppStore.getState(), 'd1')?.steps).toEqual([blur])
+    expect(currentPipeline(usePipelineStore.getState(), 'd1')?.steps).toEqual([
+      blur,
+    ])
     await done
     expect(changeDocument).toHaveBeenCalledWith({
       data: {
@@ -106,7 +105,7 @@ describe('document sync', () => {
     void applyEdit('d1', { type: 'add-step', step: blur, index: 0 })
 
     let settled = false
-    const waiting = settleDocument('d1').then(() => {
+    const waiting = settlePipeline('d1').then(() => {
       settled = true
     })
     await Promise.resolve()
@@ -118,7 +117,7 @@ describe('document sync', () => {
   })
 
   it('has nothing to wait for when no edit is on its way', async () => {
-    await expect(settleDocument('d1')).resolves.toBeUndefined()
+    await expect(settlePipeline('d1')).resolves.toBeUndefined()
   })
 
   it('sends queued edits one at a time, each on the revision before it', async () => {
@@ -156,7 +155,7 @@ describe('document sync', () => {
   it('undoes through the server, and only when there is something to undo', async () => {
     await undoEdit('d1')
     expect(undoDocument).not.toHaveBeenCalled()
-    useAppStore.getState().confirmDocument(view(1, [], true), true)
+    usePipelineStore.getState().confirmDocument(view(1, [], true), true)
     vi.mocked(undoDocument).mockResolvedValue(view(2, []))
     await undoEdit('d1')
     expect(undoDocument).toHaveBeenCalledWith({
@@ -193,7 +192,7 @@ describe('document sync', () => {
     it('drops an edit that no longer applies, says so, and sends the rest', async () => {
       const flip = createSharpStep('flip')
       const blur = createSharpStep('blur')
-      useAppStore.getState().confirmDocument(view(1, [flip], true), true)
+      usePipelineStore.getState().confirmDocument(view(1, [flip], true), true)
       vi.mocked(changeDocument)
         .mockRejectedValueOnce(
           new Error('This image was changed somewhere else.'),
@@ -218,7 +217,7 @@ describe('document sync', () => {
 
     it('tells the person when edits could not be kept', async () => {
       const flip = createSharpStep('flip')
-      useAppStore.getState().confirmDocument(view(1, [flip], true), true)
+      usePipelineStore.getState().confirmDocument(view(1, [flip], true), true)
       vi.mocked(changeDocument).mockRejectedValueOnce(
         new Error('This image was changed somewhere else.'),
       )
@@ -227,7 +226,7 @@ describe('document sync', () => {
       await applyEdit('d1', { type: 'remove-step', stepId: flip.id })
 
       expect(session().error).toBe(
-        'Some of your changes could not be kept, because this image was changed in another tab.',
+        'Some of your changes could not be kept, because this was changed in another tab.',
       )
       expect(session().pending).toEqual([])
       expect(session().confirmed.revision).toBe(2)
@@ -260,29 +259,29 @@ describe('document sync', () => {
     })
   })
 
-  describe('reconcileDocument', () => {
+  describe('reconcilePipeline', () => {
     const REMOTE = { revision: 1, updatedAt: '2026-01-01T00:00:00.000Z' }
 
     it('reads and shows a document another tab changed', async () => {
       const blur = createSharpStep('blur')
       vi.mocked(getDocument).mockResolvedValue(view(1, [blur], true))
 
-      await reconcileDocument('d1', REMOTE)
+      await reconcilePipeline('d1', REMOTE)
 
-      expect(currentPipeline(useAppStore.getState(), 'd1')?.steps).toEqual([
-        blur,
-      ])
+      expect(currentPipeline(usePipelineStore.getState(), 'd1')?.steps).toEqual(
+        [blur],
+      )
       expect(session().confirmed.revision).toBe(1)
     })
 
     it('reads a document that was only renamed', async () => {
-      useAppStore.getState().confirmDocument(view(1, [], true), true)
+      usePipelineStore.getState().confirmDocument(view(1, [], true), true)
       vi.mocked(getDocument).mockResolvedValue({
         ...viewAt(1, [], '2026-02-01T00:00:00.000Z'),
         name: 'Renamed',
       })
 
-      await reconcileDocument('d1', {
+      await reconcilePipeline('d1', {
         revision: 1,
         updatedAt: '2026-02-01T00:00:00.000Z',
       })
@@ -291,11 +290,11 @@ describe('document sync', () => {
     })
 
     it('does not read a document the editor already has', async () => {
-      useAppStore.getState().confirmDocument(view(1, [], true), true)
+      usePipelineStore.getState().confirmDocument(view(1, [], true), true)
       vi.mocked(getDocument).mockClear()
 
-      await reconcileDocument('d1', REMOTE)
-      await reconcileDocument('d1', { ...REMOTE, revision: 0 })
+      await reconcilePipeline('d1', REMOTE)
+      await reconcilePipeline('d1', { ...REMOTE, revision: 0 })
 
       expect(getDocument).not.toHaveBeenCalled()
     })
@@ -303,16 +302,16 @@ describe('document sync', () => {
     it('leaves a document that is not open here alone', async () => {
       vi.mocked(getDocument).mockClear()
 
-      await reconcileDocument('elsewhere', REMOTE)
+      await reconcilePipeline('elsewhere', REMOTE)
 
       expect(getDocument).not.toHaveBeenCalled()
     })
 
     it('does not take a state older than the one it has', async () => {
-      useAppStore.getState().confirmDocument(view(5, [], true), true)
+      usePipelineStore.getState().confirmDocument(view(5, [], true), true)
       vi.mocked(getDocument).mockResolvedValue(view(3, [], true))
 
-      await reconcileDocument('d1', { ...REMOTE, revision: 9 })
+      await reconcilePipeline('d1', { ...REMOTE, revision: 9 })
 
       expect(session().confirmed.revision).toBe(5)
     })
@@ -328,7 +327,7 @@ describe('document sync', () => {
       vi.mocked(getDocument).mockClear()
       void applyEdit('d1', { type: 'add-step', step: blur, index: 0 })
 
-      const reconciled = reconcileDocument('d1', {
+      const reconciled = reconcilePipeline('d1', {
         revision: 1,
         updatedAt: '2026-01-01T00:00:00.000Z',
       })
@@ -349,7 +348,7 @@ describe('document sync', () => {
       vi.mocked(getDocument).mockResolvedValue(view(2, [blur, flip], true))
 
       await applyEdit('d1', { type: 'add-step', step: blur, index: 0 })
-      await reconcileDocument('d1', {
+      await reconcilePipeline('d1', {
         revision: 2,
         updatedAt: '2026-01-01T00:00:00.000Z',
       })

@@ -8,7 +8,7 @@ import {
 } from '@/features/tools/panel-position'
 import type { PanelPosition, Size } from '@/features/tools/panel-position'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store/app-store'
+import { useUiStore } from '@/store/ui-store'
 
 interface FloatingPanelProps {
   label: string
@@ -43,10 +43,10 @@ export function FloatingPanel({
   const panelRef = useRef<HTMLElement>(null)
   const dragStart = useRef<DragStart | null>(null)
   const hintId = useId()
-  const position = useAppStore((state) => state.panelPosition)
-  const setPosition = useAppStore((state) => state.setPanelPosition)
-  const collapsed = useAppStore((state) => state.panelCollapsed)
-  const setCollapsed = useAppStore((state) => state.setPanelCollapsed)
+  const position = useUiStore((state) => state.panelPosition)
+  const setPosition = useUiStore((state) => state.setPanelPosition)
+  const collapsed = useUiStore((state) => state.panelCollapsed)
+  const setCollapsed = useUiStore((state) => state.setPanelCollapsed)
   const showBody = children !== undefined && !collapsed
 
   function measure(): { panel: Size; container: Size } {

@@ -8,16 +8,17 @@ import { useImageOpener } from '@/features/app/image-opener'
 import { useActionHint } from '@/features/keybindings/use-action-hint'
 import { groupableSteps } from '@/features/pipeline/pipeline'
 import { groupSteps } from '@/features/pipeline/pipeline-actions'
-import { shownPipeline } from '@/features/documents/document-session'
-import { useAppStore } from '@/store/app-store'
+import { shownPipeline } from '@/features/pipeline/pipeline-session'
+import { useUiStore } from '@/store/ui-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 
 /** Whether the steps picked in the sidebar can be put in a group. */
 function useCanGroup(documentId: string | undefined): boolean {
-  const marked = useAppStore((state) =>
+  const marked = useUiStore((state) =>
     documentId === undefined ? undefined : state.markedSteps[documentId],
   )
-  const session = useAppStore((state) =>
-    documentId === undefined ? undefined : state.documents[documentId],
+  const session = usePipelineStore((state) =>
+    documentId === undefined ? undefined : documentSession(state, documentId),
   )
   return useMemo(() => {
     if (session === undefined || marked === undefined) return false
@@ -30,7 +31,7 @@ export function SidebarToolbar(): React.JSX.Element {
   const { id: documentId } = useParams({ strict: false })
   const opener = useImageOpener()
   const canGroup = useCanGroup(documentId)
-  const marked = useAppStore((state) =>
+  const marked = useUiStore((state) =>
     documentId === undefined ? undefined : state.markedSteps[documentId],
   )
   const [error, setError] = useState<string | undefined>(undefined)

@@ -48,6 +48,10 @@ The pipeline is cut into segments at every enabled AI step: a draw segment (laye
 
 The Composite tool is not offered in workflows, as in documents: an image layer does what it did. Image layers do not cover generated inputs (`create`, `text`), the `tile` option and the Porter-Duff blend modes of Composite. The `sharp` command keeps Composite for one-off work on files.
 
+On the website a workflow is drawn as a diagram in the middle of the page: the canvas, the input images, the steps in order and the output form the main line, and the steps of a group hang under it as a branch that joins the line again. The layout is worked out from the pipeline (`workflow-graph-layout.ts`), so nothing about it is stored. Selecting a node shows its options in the floating panel, the same panel a document has, with the tabs that apply to a workflow (Tools, Options, Run); a document's panel has none of the workflow's tabs and the other way round. Steps are added from the Tools tab, after the selected node or into a selected group.
+
+A workflow has an Edit history exactly as a document has: each change on the page (a step, a layer, the canvas, the input images, the output settings) is one entry that can be undone and redone from the Run tab, the Edit menu or the keys, and a workflow is held in the client like a document (see the plan's "Client state"). A rename is not an edit.
+
 Workflows saved before this model stored a graph of nodes and edges. They are not converted: they fail to read and must be deleted.
 
 ## Layer settings
@@ -94,16 +98,18 @@ Existing documents are migrated in two steps. `20260101000500-layers` made extra
 
 ## Where it lives
 
-| Concern                                           | Place                                                                                                          |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Step schemas and constraints, groups, `planSteps` | `src/features/pipeline/pipeline.ts`                                                                            |
-| The canvas (schema, identity, limits)             | `src/features/pipeline/canvas.ts`                                                                              |
-| Changes and undo                                  | `src/features/pipeline/document-change.ts`                                                                     |
-| Placement maths (pure)                            | `src/server/render/layer-geometry.ts`                                                                          |
-| Compositing, sub-document pictures                | `src/server/tools/layer-compositor.ts`, called by `image-engine.ts`                                            |
-| Planning and render keys                          | `src/server/render/plan-pipeline.ts`, `render-key.ts`                                                          |
-| The layer-kind registry                           | `src/features/pipeline/layer-kinds.ts`                                                                         |
-| Workflows: slots, canvas mode, segments           | `src/features/workflows/segments.ts`, `workflow.ts`, `src/server/jobs/handlers/run-item-handler.ts`            |
-| Migrations                                        | `migrations/20260101000500-layers.ts`, `20260101000600-layers-only.ts`, `20260101000900-workflow-pipelines.ts` |
-| Sidebar (rows, groups, toolbar), options, canvas  | `src/features/documents/`, `src/features/app/sidebar-toolbar.tsx`, `src/features/tools/step-options.tsx`       |
-| CLI                                               | `scripts/images/commands/document-step.ts`                                                                     |
+| Concern                                           | Place                                                                                                                                                |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step schemas and constraints, groups, `planSteps` | `src/features/pipeline/pipeline.ts`                                                                                                                  |
+| The canvas (schema, identity, limits)             | `src/features/pipeline/canvas.ts`                                                                                                                    |
+| Changes and undo                                  | `src/features/pipeline/document-change.ts`                                                                                                           |
+| Placement maths (pure)                            | `src/server/render/layer-geometry.ts`                                                                                                                |
+| Compositing, sub-document pictures                | `src/server/tools/layer-compositor.ts`, called by `image-engine.ts`                                                                                  |
+| Planning and render keys                          | `src/server/render/plan-pipeline.ts`, `render-key.ts`                                                                                                |
+| The layer-kind registry                           | `src/features/pipeline/layer-kinds.ts`                                                                                                               |
+| Workflow diagram, panel and options               | `src/features/workflows/workflow-canvas.tsx`, `workflow-graph-layout.ts`, `workflow-panel.tsx`, `src/features/tools/tool-tabs.tsx`                   |
+| Workflow Edit history and client state            | `src/features/workflows/workflow-change.ts`, `src/features/pipeline/pipeline-session.ts`, `pipeline-sync.ts`, `src/store/`                           |
+| Workflows: slots, canvas mode, segments           | `src/features/workflows/segments.ts`, `workflow.ts`, `src/server/jobs/handlers/run-item-handler.ts`                                                  |
+| Migrations                                        | `migrations/20260101000500-layers.ts`, `20260101000600-layers-only.ts`, `20260101000900-workflow-pipelines.ts`, `20260101001000-workflow-history.ts` |
+| Sidebar (rows, groups, toolbar), options, canvas  | `src/features/documents/`, `src/features/app/sidebar-toolbar.tsx`, `src/features/tools/step-options.tsx`                                             |
+| CLI                                               | `scripts/images/commands/document-step.ts`                                                                                                           |

@@ -3,9 +3,9 @@ import { z } from 'zod'
 
 import {
   RunCanvasModeSchema,
-  WorkflowDefinitionSchema,
   WorkflowNameSchema,
 } from '@/features/workflows/workflow'
+import { WorkflowChangeSchema } from '@/features/workflows/workflow-change'
 import { PROTECTED_CHAIN, protectedChain } from '@/server/http/chains'
 import { appFor } from '@/server/http/server-fn-context'
 
@@ -36,22 +36,41 @@ export const createWorkflowFn = createServerFn({ method: 'POST' })
     return app.workflows.create(actor, data.name)
   })
 
-/** Saves a workflow's name and definition; `revision` is the one the editor last saw. */
-export const updateWorkflow = createServerFn({ method: 'POST' })
+const RevisionSchema = IdSchema.extend({
+  revision: z.number().int().nonnegative(),
+})
+
+/** Applies one edit as one Edit history entry; `revision` is the one the page last saw. */
+export const changeWorkflow = createServerFn({ method: 'POST' })
   .middleware(PROTECTED_CHAIN)
-  .validator(
-    IdSchema.extend({
-      revision: z.number().int().nonnegative(),
-      name: WorkflowNameSchema,
-      definition: WorkflowDefinitionSchema,
-    }),
-  )
+  .validator(RevisionSchema.extend({ change: WorkflowChangeSchema }))
   .handler(async ({ context, data }): Promise<WorkflowView> => {
     const { app, actor } = await appFor(context)
-    return app.workflows.update(actor, data.id, data.revision, {
-      name: data.name,
-      definition: data.definition,
-    })
+    return app.workflows.change(actor, data.id, data.revision, data.change)
+  })
+
+export const undoWorkflow = createServerFn({ method: 'POST' })
+  .middleware(PROTECTED_CHAIN)
+  .validator(RevisionSchema)
+  .handler(async ({ context, data }): Promise<WorkflowView> => {
+    const { app, actor } = await appFor(context)
+    return app.workflows.undo(actor, data.id, data.revision)
+  })
+
+export const redoWorkflow = createServerFn({ method: 'POST' })
+  .middleware(PROTECTED_CHAIN)
+  .validator(RevisionSchema)
+  .handler(async ({ context, data }): Promise<WorkflowView> => {
+    const { app, actor } = await appFor(context)
+    return app.workflows.redo(actor, data.id, data.revision)
+  })
+
+export const renameWorkflow = createServerFn({ method: 'POST' })
+  .middleware(PROTECTED_CHAIN)
+  .validator(IdSchema.extend({ name: WorkflowNameSchema }))
+  .handler(async ({ context, data }): Promise<WorkflowView> => {
+    const { app, actor } = await appFor(context)
+    return app.workflows.rename(actor, data.id, data.name)
   })
 
 export const deleteWorkflow = createServerFn({ method: 'POST' })

@@ -1,49 +1,38 @@
-import { RiPlayLine } from '@remixicon/react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
-import { Button } from '@/components/ui/button'
+import { MenuPanel } from '@/features/app/menu-panel'
+import type { AiCatalogues } from '@/features/ai/ai-defaults'
+import { KeyBindings } from '@/features/keybindings/key-bindings'
 import type { DocumentChange } from '@/features/pipeline/document-change'
-import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
+import { shownWorkflow } from '@/features/pipeline/pipeline-session'
 import {
-  createAiStep,
-  createGroupStep,
-  createSharpStep,
-} from '@/features/pipeline/pipeline'
-import type { PipelineStep } from '@/features/pipeline/pipeline'
-import { defaultAiContent } from '@/features/workflows/ai-tool-entries'
+  applyEdit,
+  applyWorkflowEdit,
+  settlePipeline,
+} from '@/features/pipeline/pipeline-sync'
 import type { AiToolEntry } from '@/features/workflows/ai-tool-entries'
+import { newWorkflowStep } from '@/features/workflows/new-workflow-step'
+import type { NewStepChoice } from '@/features/workflows/new-workflow-step'
 import type { OutputSettings } from '@/features/workflows/output-settings'
-import { RunCanvasSelect } from '@/features/workflows/run-canvas-select'
-import { RunsPanel } from '@/features/workflows/runs-panel'
-import {
-  sourceFileName,
-  useSourcesStore,
-} from '@/features/workflows/sources-store'
-import { StepInspector } from '@/features/workflows/step-inspector'
-import { StepPalette } from '@/features/workflows/step-palette'
-import type { PaletteChoice } from '@/features/workflows/step-palette'
-import {
-  EditorStatus,
-  SaveStatus,
-  useWorkflowEditor,
-} from '@/features/workflows/use-workflow-editor'
-import { useWorkflowRuns } from '@/features/workflows/use-workflow-runs'
+import { useRunPolling } from '@/features/workflows/use-run-polling'
+import { useWorkflow } from '@/features/workflows/use-workflow'
 import { RunCanvasMode } from '@/features/workflows/workflow'
+import type { Workflow } from '@/features/workflows/workflow'
+import { WorkflowCanvas } from '@/features/workflows/workflow-canvas'
 import {
-  addInputs,
-  addStepAfter,
-  changePipeline,
-  moveStepBy,
-  removeInput,
-  withOutput,
+  addInputsChange,
+  addStepChange,
+  moveStepChange,
+  removeInputChange,
 } from '@/features/workflows/workflow-edit'
+import { WorkflowPanel } from '@/features/workflows/workflow-panel'
 import {
   NO_SELECTION,
-  selectedStepId,
   stepSelection,
 } from '@/features/workflows/workflow-selection'
 import type { Selection } from '@/features/workflows/workflow-selection'
-import { WorkflowStepList } from '@/features/workflows/workflow-step-list'
+import { sourceFileName, useLibraryStore } from '@/store/library-store'
+import { Tool, useUiStore } from '@/store/ui-store'
 
 interface WorkflowPageProps {
   id: string
@@ -52,201 +41,189 @@ interface WorkflowPageProps {
 
 const SAMPLE_NAME = 'photo.jpg'
 
-function saveMessage(save: SaveStatus, error: string | null): string {
-  switch (save) {
-    case SaveStatus.Saving:
-      return 'Saving…'
-    case SaveStatus.Saved:
-      return 'Saved'
-    case SaveStatus.Failed:
-      return `Not saved: ${error ?? 'unknown error'}`
-  }
+function cataloguesOf(aiTools: ReadonlyArray<AiToolEntry>): AiCatalogues {
+  return aiTools.map(({ tool, catalogue }) => ({ tool: tool.id, catalogue }))
 }
 
-function newStep(
-  choice: PaletteChoice,
-  aiTools: ReadonlyArray<AiToolEntry>,
-): PipelineStep | undefined {
-  switch (choice.kind) {
-    case 'sharp':
-      return createSharpStep(choice.op)
-    case 'image-layer':
-      return createImageLayerStep()
-    case 'group':
-      return createGroupStep([])
-    case 'ai': {
-      const entry = aiTools.find(({ tool }) => tool.id === choice.tool)
-      return entry && createAiStep(defaultAiContent(entry))
-    }
-  }
+function PageMessage({
+  role,
+  children,
+}: {
+  role: 'status' | 'alert'
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div data-slot="tools-panel-bounds" className="relative size-full">
+      <p role={role} className="p-6 text-body-md text-muted-foreground">
+        {children}
+      </p>
+      <MenuPanel />
+    </div>
+  )
 }
 
-/** Builds a workflow like a document: a canvas, image layers and steps in order, where an image layer with no image is where each input image goes. Runs it on the chosen images and offers the results. Every change is saved automatically. */
+/** A workflow as a diagram in the middle of the page, and the same floating panel a document has. Selecting a node shows its options in the panel, and tools are added there. It is held and edited in the store like a document: every change is one entry in its Edit history, shown at once and saved in order. */
 export function WorkflowPage({
   id,
   aiTools,
 }: WorkflowPageProps): React.JSX.Element {
-  const editor = useWorkflowEditor(id)
-  const runs = useWorkflowRuns(id)
-  const sources = useSourcesStore((state) => state.sources)
-  const [selection, setSelection] = useState<Selection>(NO_SELECTION)
-  const [canvasMode, setCanvasMode] = useState<RunCanvasMode>(
-    RunCanvasMode.Workflow,
+  const { session, loadError } = useWorkflow(id)
+  useRunPolling(id)
+  const sources = useLibraryStore((state) => state.sources)
+  const startRun = useLibraryStore((state) => state.startRun)
+  const stepId = useUiStore((state) => state.selectedSteps[id])
+  const focus = useUiStore((state) => state.workflowFocus[id])
+  const canvasMode = useUiStore(
+    (state) => state.runCanvasModes[id] ?? RunCanvasMode.Workflow,
   )
-  const { update, settle, reload, workflow } = editor
-  const selectedId = selectedStepId(selection)
+  const setActiveTool = useUiStore((state) => state.setActiveTool)
+  const selectInWorkflow = useUiStore((state) => state.selectInWorkflow)
+  const setRunCanvasMode = useUiStore((state) => state.setRunCanvasMode)
+  const visitItem = useUiStore((state) => state.visitItem)
+  const catalogues = useMemo(() => cataloguesOf(aiTools), [aiTools])
+
+  useEffect(() => {
+    visitItem(id)
+  }, [id, visitItem])
+
+  const workflow = useMemo<Workflow | undefined>(
+    () =>
+      session === undefined
+        ? undefined
+        : { id, name: session.confirmed.name, ...shownWorkflow(session) },
+    [session, id],
+  )
+  const selection = useMemo<Selection>(() => {
+    if (focus !== undefined) return { kind: focus }
+    return stepId === undefined ? NO_SELECTION : stepSelection(stepId)
+  }, [focus, stepId])
 
   const imageName = useCallback(
     (sourceId: string): string => sourceFileName(sources, sourceId),
     [sources],
   )
 
-  const handleAdd = useCallback(
-    (choice: PaletteChoice): void => {
-      const step = newStep(choice, aiTools)
-      if (step === undefined) return
-      update((current) => addStepAfter(current, step, selectedId))
-      setSelection(stepSelection(step.id))
+  const handleSelect = useCallback(
+    (next: Selection): void => {
+      selectInWorkflow(id, next)
+      if (next.kind !== 'none') setActiveTool(Tool.Options)
     },
-    [aiTools, selectedId, update],
+    [id, selectInWorkflow, setActiveTool],
+  )
+
+  const handleAddStep = useCallback(
+    (choice: NewStepChoice): string | undefined => {
+      if (workflow === undefined) return undefined
+      const made = newWorkflowStep(choice, catalogues)
+      if ('problem' in made) return made.problem
+      void applyEdit(id, addStepChange(workflow, made.step, stepId ?? null))
+      handleSelect(stepSelection(made.step.id))
+      return undefined
+    },
+    [id, workflow, catalogues, stepId, handleSelect],
   )
 
   const handleChange = useCallback(
     (change: DocumentChange): void => {
-      update((current) => changePipeline(current, change))
+      void applyEdit(id, change)
     },
-    [update],
-  )
-
-  const handleEnabledChange = useCallback(
-    (stepId: string, enabled: boolean): void => {
-      handleChange({ type: 'set-enabled', stepId, enabled })
-    },
-    [handleChange],
+    [id],
   )
 
   const handleMove = useCallback(
-    (stepId: string, delta: -1 | 1): void => {
-      update((current) => moveStepBy(current, stepId, delta))
+    (movedId: string, delta: -1 | 1): void => {
+      if (workflow === undefined) return
+      const change = moveStepChange(workflow, movedId, delta)
+      if (change !== undefined) void applyEdit(id, change)
     },
-    [update],
+    [id, workflow],
   )
 
   const handleAddSources = useCallback(
     (sourceIds: ReadonlyArray<string>): void => {
-      update((current) => addInputs(current, sourceIds))
+      if (workflow === undefined) return
+      const change = addInputsChange(workflow, sourceIds)
+      if (change !== undefined) void applyWorkflowEdit(id, change)
     },
-    [update],
+    [id, workflow],
   )
 
   const handleRemoveSource = useCallback(
     (sourceId: string): void => {
-      update((current) => removeInput(current, sourceId))
+      if (workflow === undefined) return
+      const change = removeInputChange(workflow, sourceId)
+      if (change !== undefined) void applyWorkflowEdit(id, change)
     },
-    [update],
+    [id, workflow],
   )
 
   const handleOutputChange = useCallback(
-    (settings: OutputSettings): void => {
-      update((current) => withOutput(current, settings))
+    (output: OutputSettings): void => {
+      void applyWorkflowEdit(id, { type: 'set-output', output })
     },
-    [update],
+    [id],
   )
 
   const handleRemove = useCallback(
-    (stepId: string): void => {
-      handleChange({ type: 'remove-step', stepId })
-      setSelection(NO_SELECTION)
+    (removedId: string): void => {
+      void applyEdit(id, { type: 'remove-step', stepId: removedId })
+      selectInWorkflow(id, NO_SELECTION)
     },
-    [handleChange],
+    [id, selectInWorkflow],
   )
 
-  const handleRun = useCallback(async (): Promise<void> => {
-    await settle()
-    await runs.start(canvasMode)
-  }, [settle, runs.start, canvasMode])
+  const handleCanvasModeChange = useCallback(
+    (mode: RunCanvasMode): void => {
+      setRunCanvasMode(id, mode)
+    },
+    [id, setRunCanvasMode],
+  )
 
-  const handleReload = useCallback((): void => {
-    void reload()
-  }, [reload])
+  const handleRun = useCallback((): void => {
+    void (async () => {
+      await settlePipeline(id)
+      await startRun(id, canvasMode)
+    })()
+  }, [id, startRun, canvasMode])
 
-  if (editor.status === EditorStatus.Loading) {
-    return (
-      <p role="status" className="p-6 text-body-md text-muted-foreground">
-        Loading…
-      </p>
-    )
-  }
-  if (editor.status === EditorStatus.Failed || workflow === null) {
-    return (
-      <p role="alert" className="p-6 text-body-md text-muted-foreground">
-        {editor.loadError ?? 'This workflow does not exist.'}
-      </p>
+  if (workflow === undefined) {
+    return loadError === undefined ? (
+      <PageMessage role="status">Loading…</PageMessage>
+    ) : (
+      <PageMessage role="alert">{loadError}</PageMessage>
     )
   }
 
   const [firstSource] = workflow.inputs
   const sampleName =
     firstSource === undefined ? SAMPLE_NAME : imageName(firstSource)
-  const failed = editor.save === SaveStatus.Failed
 
   return (
-    <div className="flex size-full min-h-0 flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
-        <h1 className="truncate text-title-md">{workflow.name}</h1>
-        <div className="flex items-center gap-3">
-          <p
-            role="status"
-            className={
-              failed
-                ? 'text-caption text-destructive'
-                : 'text-caption text-muted-foreground'
-            }
-          >
-            {saveMessage(editor.save, editor.saveError)}
-          </p>
-          {failed && (
-            <Button variant="secondary" size="sm" onClick={handleReload}>
-              Reload
-            </Button>
-          )}
-          <RunCanvasSelect value={canvasMode} onChange={setCanvasMode} />
-          <Button size="sm" disabled={failed} onClick={() => void handleRun()}>
-            <RiPlayLine aria-hidden="true" />
-            Run
-          </Button>
-        </div>
-      </header>
-      <div className="flex min-h-0 flex-1">
-        <StepPalette
-          aiTools={aiTools.map(({ tool }) => tool)}
-          onAdd={handleAdd}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <WorkflowStepList
-            workflow={workflow}
-            selection={selection}
-            onSelect={setSelection}
-            onEnabledChange={handleEnabledChange}
-            onMove={handleMove}
-            onRemove={handleRemove}
-            imageName={imageName}
-          />
-          <RunsPanel runs={runs} />
-        </div>
-        <StepInspector
-          workflow={workflow}
-          selection={selection}
-          aiTools={aiTools}
-          onChange={handleChange}
-          onRemove={handleRemove}
-          onAddSources={handleAddSources}
-          onRemoveSource={handleRemoveSource}
-          onOutputChange={handleOutputChange}
-          imageName={imageName}
-          sampleName={sampleName}
-        />
-      </div>
+    <div data-slot="tools-panel-bounds" className="relative size-full">
+      <WorkflowCanvas
+        workflow={workflow}
+        selection={selection}
+        onSelect={handleSelect}
+        imageName={imageName}
+      />
+      <KeyBindings documentId={id} catalogues={catalogues} />
+      <WorkflowPanel
+        workflow={workflow}
+        selection={selection}
+        aiTools={aiTools}
+        canvasMode={canvasMode}
+        imageName={imageName}
+        sampleName={sampleName}
+        onAddStep={handleAddStep}
+        onChange={handleChange}
+        onRemove={handleRemove}
+        onMove={handleMove}
+        onAddSources={handleAddSources}
+        onRemoveSource={handleRemoveSource}
+        onOutputChange={handleOutputChange}
+        onCanvasModeChange={handleCanvasModeChange}
+        onRun={handleRun}
+      />
     </div>
   )
 }

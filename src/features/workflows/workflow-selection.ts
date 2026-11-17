@@ -1,10 +1,11 @@
+/** The parts of a workflow, other than its steps, that the options panel can show. */
+export type WorkflowFocus = 'canvas' | 'inputs' | 'output'
+
 /** What the options panel shows: a step, or one of the workflow's own settings. */
 export type Selection =
   | { kind: 'none' }
   | { kind: 'step'; id: string }
-  | { kind: 'canvas' }
-  | { kind: 'inputs' }
-  | { kind: 'output' }
+  | { kind: WorkflowFocus }
 
 export const NO_SELECTION: Selection = { kind: 'none' }
 export const CANVAS_SELECTION: Selection = { kind: 'canvas' }
