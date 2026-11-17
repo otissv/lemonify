@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { DocumentChangeSchema } from '../../../src/features/pipeline/document-change.ts'
 import { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
 import { DocumentService } from '../../../src/server/services/document-service.ts'
+import { KeybindingService } from '../../../src/server/services/keybinding-service.ts'
 import { JobService } from '../../../src/server/services/job-service.ts'
 import { RenderService } from '../../../src/server/services/render-service.ts'
 import { ResultService } from '../../../src/server/services/result-service.ts'
@@ -15,6 +16,7 @@ import {
   DOCUMENT_CHANGE_COMMANDS,
   DOCUMENT_COMMANDS,
   JOB_COMMANDS,
+  KEYBINDING_COMMANDS,
   RENDER_COMMANDS,
   RESULT_COMMANDS,
   SOURCE_COMMANDS,
@@ -47,6 +49,7 @@ const SERVICES: ReadonlyArray<
   ['ResultService', ResultService, RESULT_COMMANDS],
   ['JobService', JobService, JOB_COMMANDS],
   ['WorkflowService', WorkflowService, WORKFLOW_COMMANDS],
+  ['KeybindingService', KeybindingService, KEYBINDING_COMMANDS],
   ['RenderService', RenderService, RENDER_COMMANDS],
   ['DocumentBundleService', DocumentBundleService, BUNDLE_COMMANDS],
 ]

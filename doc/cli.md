@@ -275,6 +275,10 @@ pnpm images upscale photo.jpg ./out --model-path ./my-models --model-name my-mod
 | `--install <name>`  | Download and verify a model; repeat for several              |
 | `--install-all`     | Download and verify every model (about 1.4 GB)               |
 
+### `keys`: key bindings
+
+`keys list`, `set`, `unset`, `reset`, `export` and `import` show and change the keys that do things in the editor, as the signed-in user (see `--user`). They reach the same feature as the Keyboard shortcuts dialog on the website: the defaults come from the repository, your changes are kept on the server, and the keys are written as `mod+shift+z` (`mod` is Ctrl, or Cmd on a Mac). A key the browser keeps, such as `mod+w`, or one another action already has is refused and the other action is named. The full guide is in [docs/keybindings.md](../docs/keybindings.md).
+
 ### `formats` and `schema`
 
 `formats` lists every format the installed Sharp build knows about, whether it can read and write it, and the file extensions it recognises, together with the Sharp and libvips versions. `schema` prints the JSON Schema of the options each command accepts, which is described in the next section.

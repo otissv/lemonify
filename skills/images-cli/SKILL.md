@@ -28,7 +28,7 @@ description: Process images with the `lemonify` CLI, which runs Sharp (resize, c
 | `formats` | List the formats this Sharp build reads and writes                       |
 | `schema`  | Print a command's JSON Schema                                            |
 
-The stateful commands below (`source`, `document`, `export`, `workflow`, `result`, `job`, `worker`, `user list`) act as a user on the app's own database; use them for editable documents with undo, reusable workflows and kept results. Use `sharp` and `upscale` for one-off work on paths.
+The stateful commands below (`source`, `document`, `export`, `workflow`, `result`, `job`, `worker`, `keys`, `user list`) act as a user on the app's own database; use them for editable documents with undo, reusable workflows and kept results. Use `sharp` and `upscale` for one-off work on paths.
 
 ## Sharp jobs
 

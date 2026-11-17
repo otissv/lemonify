@@ -8,6 +8,11 @@ export type ToolEntry =
   | { kind: 'sharp'; value: string; label: string }
   | { kind: 'ai'; value: AiToolId; label: string }
 
+/** Which tool to add: a Sharp operation by name, or an AI tool by id. */
+export type ToolChoice =
+  | { kind: 'sharp'; value: string }
+  | { kind: 'ai'; value: AiToolId }
+
 export interface ToolGroup {
   label: string
   tools: ReadonlyArray<ToolEntry>

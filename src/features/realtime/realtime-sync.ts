@@ -70,6 +70,7 @@ export function createRealtimeSync(options: RealtimeSyncOptions): RealtimeSync {
       switch (event.type) {
         case 'documents.changed':
         case 'workflows.changed':
+        case 'keybindings.changed':
           void lists.request()
           return
         case 'document.updated':

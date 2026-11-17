@@ -1,6 +1,6 @@
 # Live updates
 
-Tabs of the same account stay in step. When one tab saves, undoes, redoes, renames, deletes, reorders or adds a document, or an AI job, result or workflow changes, every other tab of that person updates without a reload.
+Tabs of the same account stay in step. When one tab saves, undoes, redoes, renames, deletes, reorders or adds a document, or an AI job, result, workflow or the person's key bindings change, every other tab of that person updates without a reload.
 
 ## How it works
 

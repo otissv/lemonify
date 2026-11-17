@@ -170,30 +170,6 @@ describe('Canvas zoom and pan', () => {
     expect(viewport().zoom).toBe(1)
   })
 
-  it('zooms and pans with the keys when it has focus', () => {
-    const window = show()
-
-    fireEvent.keyDown(window, { key: '+' })
-    expect(viewport().zoom).toBe(1.25)
-    fireEvent.keyDown(window, { key: 'ArrowRight' })
-    expect(viewport().x).toBeGreaterThan(0.5)
-    fireEvent.keyDown(window, { key: '1' })
-    expect(percent()).toBe(100)
-    fireEvent.keyDown(window, { key: '0' })
-    expect(viewport()).toEqual({ zoom: 1, x: 0.5, y: 0.5 })
-  })
-
-  it('leaves keys alone that are not its own, and ones held with Ctrl', () => {
-    const window = show()
-
-    const letter = fireEvent.keyDown(window, { key: 'a' })
-    const browserZoom = fireEvent.keyDown(window, { key: '+', ctrlKey: true })
-
-    expect(letter).toBe(true)
-    expect(browserZoom).toBe(true)
-    expect(viewport().zoom).toBe(1)
-  })
-
   it('moves and scales the picture to match the view', () => {
     show()
     setView(4, 0.25, 0.5)

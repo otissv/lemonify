@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
+import { useActionHint } from '@/features/keybindings/use-action-hint'
 import { useViewport } from '@/features/viewport/use-viewport'
 import {
   formatPercent,
@@ -56,6 +57,9 @@ export function ZoomControl({
     if (event.key === 'Escape') setDraft(undefined)
   }
 
+  const zoomOutHint = useActionHint('view.zoomOut')
+  const zoomInHint = useActionHint('view.zoomIn')
+
   function handleSlide(values: number[]): void {
     const [next] = values
     if (next !== undefined) view.zoomToPosition(next)
@@ -82,6 +86,8 @@ export function ZoomControl({
         variant="ghost"
         size="icon-xs"
         aria-label="Zoom out"
+        title={zoomOutHint.titled('Zoom out')}
+        aria-keyshortcuts={zoomOutHint.aria}
         disabled={disabled}
         onClick={view.zoomOut}
       >
@@ -101,6 +107,8 @@ export function ZoomControl({
         variant="ghost"
         size="icon-xs"
         aria-label="Zoom in"
+        title={zoomInHint.titled('Zoom in')}
+        aria-keyshortcuts={zoomInHint.aria}
         disabled={disabled}
         onClick={view.zoomIn}
       >

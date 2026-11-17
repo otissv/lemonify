@@ -1,6 +1,7 @@
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
 import type { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
 import type { DocumentService } from '../../../src/server/services/document-service.ts'
+import type { KeybindingService } from '../../../src/server/services/keybinding-service.ts'
 import type { JobService } from '../../../src/server/services/job-service.ts'
 import type { RenderService } from '../../../src/server/services/render-service.ts'
 import type { ResultService } from '../../../src/server/services/result-service.ts'
@@ -33,6 +34,14 @@ import {
   documentStepSetCommand,
 } from './document-step.ts'
 import { exportCommand } from './export.ts'
+import {
+  keysExportCommand,
+  keysImportCommand,
+  keysListCommand,
+  keysResetCommand,
+  keysSetCommand,
+  keysUnsetCommand,
+} from './keys.ts'
 import { jobCancelCommand, jobListCommand, jobShowCommand } from './job.ts'
 import {
   resultClearUnusedCommand,
@@ -183,3 +192,10 @@ export const BUNDLE_COMMANDS = {
   fileNameFor: { internal: 'names the file an export is saved as' },
   resolveDestination: { internal: 'works out where the command writes' },
 } as const satisfies Record<keyof DocumentBundleService, Coverage>
+
+export const KEYBINDING_COMMANDS = {
+  get: [keysListCommand, keysExportCommand],
+  save: [keysImportCommand],
+  set: [keysSetCommand, keysUnsetCommand],
+  reset: [keysResetCommand],
+} as const satisfies Record<keyof KeybindingService, Coverage>

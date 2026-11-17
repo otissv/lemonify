@@ -70,6 +70,7 @@ The stateless commands work on any image with no database or sign-in. The statef
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `sharp`, `info`, `upscale`, `models`, `formats`, `schema`                                                                                                                               | Process, inspect and upscale images; list models and formats; print a command's JSON Schema    |
 | `user list`                                                                                                                                                                             | List the users                                                                                 |
+| `keys list`, `set`, `unset`, `reset`, `export`, `import`                                                                                                                                | Show and change your key bindings                                                              |
 | `source add`, `list`, `delete`                                                                                                                                                          | Upload images as sources, list or delete them                                                  |
 | `document create`, `list`, `show`, `preview`, `rename`, `move`, `delete`, `undo`, `redo`, `step add`, `remove`, `move`, `set`, `rename`, `enable`, `disable`, `group`, `ungroup`, `run` | Create and edit documents: a pipeline of steps, in groups and sub-documents, with undo history |
 | `export <documentId> --out <path>`                                                                                                                                                      | Render a document at full size and write it                                                    |
@@ -105,19 +106,19 @@ Linting and formatting use [Biome](https://biomejs.dev/), configured in `biome.j
 
 ## Project layout
 
-| Path                 | Holds                                                                                                             |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `scripts/images/`    | The image CLI                                                                                                     |
-| `src/lib/images/`    | The image logic (Sharp and Upscayl), shared by the CLI and the app                                                |
-| `src/server/`        | The services, DAOs, tools, job scheduler, composition file and HTTP middleware the CLI and the API both use       |
-| `src/features/`      | The web editor by feature: documents, pipeline, tools, export, results, AI tools, workflows and more              |
-| `src/routes/`        | TanStack Router file-based routes, including the API routes (`/api/sources`, `/api/results`, renders)             |
-| `migrations/`        | Knex migrations for the SQLite database                                                                           |
-| `src/components/ui/` | Shared UI components ([shadcn/ui](https://ui.shadcn.com/)); add one with `pnpm dlx shadcn@latest add <component>` |
-| `src/store/`         | Client state (Zustand)                                                                                            |
-| `skills/images-cli/` | The agent skill for the CLI                                                                                       |
-| `doc/`               | CLI documentation, including the generated Sharp job reference                                                    |
-| `docs/`              | Project design: the [glossary](docs/glossary.md) and the [editor and server plan](docs/editor-pipeline-plan.md)   |
-| `.data/`             | The SQLite database, uploaded sources, results, the render cache and work folders (not committed)                 |
+| Path                 | Holds                                                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/images/`    | The image CLI                                                                                                                                        |
+| `src/lib/images/`    | The image logic (Sharp and Upscayl), shared by the CLI and the app                                                                                   |
+| `src/server/`        | The services, DAOs, tools, job scheduler, composition file and HTTP middleware the CLI and the API both use                                          |
+| `src/features/`      | The web editor by feature: documents, pipeline, tools, export, results, AI tools, workflows and more                                                 |
+| `src/routes/`        | TanStack Router file-based routes, including the API routes (`/api/sources`, `/api/results`, renders)                                                |
+| `migrations/`        | Knex migrations for the SQLite database                                                                                                              |
+| `src/components/ui/` | Shared UI components ([shadcn/ui](https://ui.shadcn.com/)); add one with `pnpm dlx shadcn@latest add <component>`                                    |
+| `src/store/`         | Client state (Zustand)                                                                                                                               |
+| `skills/images-cli/` | The agent skill for the CLI                                                                                                                          |
+| `doc/`               | CLI documentation, including the generated Sharp job reference                                                                                       |
+| `docs/`              | Project design: the [glossary](docs/glossary.md), the [editor and server plan](docs/editor-pipeline-plan.md) and [key bindings](docs/keybindings.md) |
+| `.data/`             | The SQLite database, uploaded sources, results, the render cache and work folders (not committed)                                                    |
 
 The web editor is built with TanStack Start, React 19 and TypeScript. Its visual design is described in [DESIGN.md](DESIGN.md).

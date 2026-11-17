@@ -2,6 +2,17 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
 
+/** Every screen reads the User's key bindings with the rest of the app's data; tests that do not care get the defaults. */
+vi.mock('@/features/keybindings/keybinding-functions', async () => {
+  const { defaultKeybindingsView } = await import(
+    '@/features/keybindings/keybindings-view'
+  )
+  return {
+    getKeybindings: vi.fn(async () => defaultKeybindingsView()),
+    saveKeybindings: vi.fn(async () => defaultKeybindingsView()),
+  }
+})
+
 /** Parallel test files share the CPU, so a screen can take longer than the 1 s default to settle. */
 configure({ asyncUtilTimeout: 5000 })
 

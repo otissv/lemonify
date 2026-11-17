@@ -925,3 +925,75 @@ describe('looking at part of a document through the CLI', () => {
     ).rejects.toThrow(/inside the picture/)
   })
 })
+
+describe('keys', () => {
+  type Keys = {
+    keybindings: {
+      overrides: { bindings: Record<string, string[]> }
+      effective: Record<string, string[]>
+    }
+  }
+
+  it('lists the defaults, then shows a change, then goes back', async () => {
+    const first = await cli<Keys>('keys', 'list')
+    expect(first.keybindings.effective['edit.undo']).toEqual(['mod+z'])
+    expect(first.keybindings.overrides.bindings).toEqual({})
+
+    const set = await cli<Keys>('keys', 'set', 'view.fit', 'alt+z,alt+shift+z')
+    expect(set.keybindings.effective['view.fit']).toEqual([
+      'alt+z',
+      'alt+shift+z',
+    ])
+
+    const unset = await cli<Keys>('keys', 'unset', 'edit.redo')
+    expect(unset.keybindings.effective['edit.redo']).toEqual([])
+
+    const one = await cli<Keys>('keys', 'reset', 'edit.redo')
+    expect(one.keybindings.effective['edit.redo']).toEqual([
+      'mod+shift+z',
+      'mod+y',
+    ])
+    expect(one.keybindings.effective['view.fit']).toEqual([
+      'alt+z',
+      'alt+shift+z',
+    ])
+
+    const all = await cli<Keys>('keys', 'reset')
+    expect(all.keybindings.overrides.bindings).toEqual({})
+  })
+
+  it('exports what was changed so it can be imported again', async () => {
+    await cli('keys', 'set', 'view.fit', 'alt+z')
+    const file = await cli<{
+      version: number
+      bindings: Record<string, string[]>
+    }>('keys', 'export')
+    expect(file).toEqual({ version: 1, bindings: { 'view.fit': ['alt+z'] } })
+
+    await cli('keys', 'reset')
+    const imported = await cli<Keys>(
+      'keys',
+      'import',
+      '--bindings',
+      JSON.stringify(file),
+    )
+    expect(imported.keybindings.effective['view.fit']).toEqual(['alt+z'])
+  })
+
+  it('refuses a key the browser keeps, a key another action has and an unknown action', async () => {
+    await expect(cli('keys', 'set', 'view.fit', 'mod+w')).rejects.toThrow(
+      /browser/,
+    )
+    await expect(cli('keys', 'set', 'view.fit', 'mod+z')).rejects.toThrow(
+      /Undo/,
+    )
+    await expect(cli('keys', 'set', 'view.nope', 'alt+z')).rejects.toThrow(
+      /no action "view.nope"/,
+    )
+    await expect(
+      cli('keys', 'import', '--bindings', '{"version":2}'),
+    ).rejects.toThrow()
+    const after = await cli<Keys>('keys', 'list')
+    expect(after.keybindings.overrides.bindings).toEqual({})
+  })
+})

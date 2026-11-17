@@ -3,6 +3,9 @@ import { useEffect } from 'react'
 
 import { AppSidebar } from '@/features/app/app-sidebar'
 import { ImageOpenerProvider } from '@/features/app/image-opener'
+import { KeybindingsProvider } from '@/features/keybindings/keybindings-context'
+import { KeyBindings } from '@/features/keybindings/key-bindings'
+import { ShortcutsDialog } from '@/features/keybindings/shortcuts-dialog'
 import { MenuPanel } from '@/features/app/menu-panel'
 import { LiveStatus } from '@/features/realtime/live-status'
 import { useRealtime } from '@/features/realtime/use-realtime'
@@ -30,17 +33,21 @@ export function AppLayout(): React.JSX.Element {
   }, [])
 
   return (
-    <ImageOpenerProvider>
-      <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SidebarInset className="h-svh">
-          <main className="relative min-h-0 flex-1 overflow-hidden">
-            <Outlet />
-            {onDocument ? null : <MenuPanel />}
-            <LiveStatus />
-          </main>
-        </SidebarInset>
-        <AppSidebar />
-      </SidebarProvider>
-    </ImageOpenerProvider>
+    <KeybindingsProvider>
+      <ImageOpenerProvider>
+        <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SidebarInset className="h-svh">
+            <main className="relative min-h-0 flex-1 overflow-hidden">
+              <Outlet />
+              {onDocument ? null : <MenuPanel />}
+              {onDocument ? null : <KeyBindings />}
+              <LiveStatus />
+            </main>
+          </SidebarInset>
+          <AppSidebar />
+          <ShortcutsDialog />
+        </SidebarProvider>
+      </ImageOpenerProvider>
+    </KeybindingsProvider>
   )
 }

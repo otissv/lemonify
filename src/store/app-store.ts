@@ -84,6 +84,8 @@ interface AppStateData {
   realtime: RealtimeStatus
   /** Something the person should know about a change made elsewhere, until they dismiss it. */
   liveNotice: string | undefined
+  /** Whether the keyboard shortcuts dialog is showing. */
+  shortcutsOpen: boolean
   nextOperationId: number
 }
 
@@ -106,6 +108,7 @@ interface AppStateActions {
   bumpResults: () => void
   setRealtime: (status: RealtimeStatus) => void
   setLiveNotice: (notice: string | undefined) => void
+  setShortcutsOpen: (open: boolean) => void
   /** Replaces what the server confirmed; waiting operations are dropped when `reset`. */
   confirmDocument: (view: DocumentView, reset: boolean) => void
   /** Takes a newer state from the server and keeps `pending`, the waiting operations made again on top of it. */
@@ -154,6 +157,7 @@ export const INITIAL_APP_STATE: Readonly<AppStateData> = {
   resultsVersion: 0,
   realtime: RealtimeStatus.Stopped,
   liveNotice: undefined,
+  shortcutsOpen: false,
   nextOperationId: 1,
 }
 
@@ -281,6 +285,9 @@ export const useAppStore = create<AppState>()(
       },
       setLiveNotice: (liveNotice) => {
         set({ liveNotice })
+      },
+      setShortcutsOpen: (shortcutsOpen) => {
+        set({ shortcutsOpen })
       },
       bumpResults: () => {
         set(({ resultsVersion }) => ({ resultsVersion: resultsVersion + 1 }))

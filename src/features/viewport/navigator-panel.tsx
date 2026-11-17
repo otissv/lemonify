@@ -2,7 +2,6 @@ import { useRef } from 'react'
 
 import { useShownPicture } from '@/features/documents/use-shown-picture'
 import { useViewport } from '@/features/viewport/use-viewport'
-import { handleViewportKey } from '@/features/viewport/viewport-keys'
 import { visibleRect } from '@/features/viewport/viewport'
 import type { Point } from '@/features/viewport/viewport'
 import { ZoomControl } from '@/features/viewport/zoom-control'
@@ -79,10 +78,6 @@ export function NavigatorPanel({
     grab.current = null
   }
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLElement>): void {
-    if (handleViewportKey(event, view)) event.preventDefault()
-  }
-
   return (
     <div data-slot="navigator" className="flex flex-col gap-3 p-3">
       <div className="@container flex h-44 items-center justify-center">
@@ -92,7 +87,7 @@ export function NavigatorPanel({
           // biome-ignore lint/a11y/noNoninteractiveTabindex: the preview is a draggable surface with its own keys
           tabIndex={0}
           aria-label="Navigator preview"
-          aria-description="Drag to move the canvas. Arrow keys move it, plus and minus zoom."
+          aria-description="Drag to move the canvas. The arrow, plus and minus keys move and zoom it, unless you changed them."
           data-slot="navigator-preview"
           className="relative aspect-(--ratio) w-[min(100cqw,calc(100cqh*var(--ratio)))] cursor-grab touch-none bg-checkerboard outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
           style={{ '--ratio': frame?.ratio ?? FULL } as React.CSSProperties}
@@ -100,7 +95,6 @@ export function NavigatorPanel({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
-          onKeyDown={handleKeyDown}
         >
           <img
             src={picture.url}

@@ -159,17 +159,6 @@ describe('NavigatorPanel', () => {
     expect(viewport().y).toBeCloseTo(0.125, 8)
   })
 
-  it('moves and zooms with the same keys as the canvas', () => {
-    show()
-
-    fireEvent.keyDown(preview(), { key: '+' })
-    expect(viewport().zoom).toBe(1.25)
-    fireEvent.keyDown(preview(), { key: 'ArrowUp' })
-    expect(viewport().y).toBeLessThan(0.5)
-    fireEvent.keyDown(preview(), { key: '0' })
-    expect(viewport()).toEqual({ zoom: 1, x: 0.5, y: 0.5 })
-  })
-
   it('zooms the canvas from its zoom control', () => {
     show()
 

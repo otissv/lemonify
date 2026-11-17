@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { SidebarFooter } from '@/components/ui/sidebar'
 import { useImageOpener } from '@/features/app/image-opener'
+import { useActionHint } from '@/features/keybindings/use-action-hint'
 import { groupableSteps } from '@/features/pipeline/pipeline'
 import { groupSteps } from '@/features/pipeline/pipeline-actions'
 import { shownPipeline } from '@/features/documents/document-session'
@@ -33,6 +34,9 @@ export function SidebarToolbar(): React.JSX.Element {
     documentId === undefined ? undefined : state.markedSteps[documentId],
   )
   const [error, setError] = useState<string | undefined>(undefined)
+  const openHint = useActionHint('file.openImage')
+  const libraryHint = useActionHint('file.openLibrary')
+  const groupHint = useActionHint('step.group')
 
   function handleOpen(): void {
     opener.openImage()
@@ -57,7 +61,8 @@ export function SidebarToolbar(): React.JSX.Element {
           variant="ghost"
           size="icon-sm"
           aria-label="Open image"
-          title="Open an image from this computer"
+          title={openHint.titled('Open an image from this computer')}
+          aria-keyshortcuts={openHint.aria}
           disabled={opener.opening}
           onClick={handleOpen}
         >
@@ -67,7 +72,8 @@ export function SidebarToolbar(): React.JSX.Element {
           variant="ghost"
           size="icon-sm"
           aria-label="Open image library"
-          title="Open image library"
+          title={libraryHint.titled('Open image library')}
+          aria-keyshortcuts={libraryHint.aria}
           onClick={handleLibrary}
         >
           <RiImageAddLine aria-hidden="true" className="size-4" />
@@ -76,7 +82,10 @@ export function SidebarToolbar(): React.JSX.Element {
           variant="ghost"
           size="icon-sm"
           aria-label="Group selected steps"
-          title="Group selected steps (pick steps with ctrl or shift)"
+          title={groupHint.titled(
+            'Group selected steps (pick steps with ctrl or shift)',
+          )}
+          aria-keyshortcuts={groupHint.aria}
           disabled={!canGroup}
           onClick={handleGroup}
         >

@@ -19,6 +19,7 @@ The words below have one meaning each, in code, docs and conversation. "File" is
 | **Workflow**      | A reusable canvas of Steps that runs on many Sources.                                                                                                                                                                                       | SQLite                                                                  |
 | **Run**           | One start of a Workflow over its Sources, made of one Job per Source per Segment. Kept until the User deletes it; its Results go with it.                                                                                                   | SQLite                                                                  |
 | **Segment**       | A run of consecutive Sharp Steps (applied in one pass), or a single AI Step: the unit one Job of a Run executes. The last Segment also encodes the Output.                                                                                  | Worked out from the Pipeline or Workflow graph                          |
+| **Key binding**   | The keys that do an action, written as text such as `mod+shift+z`. Everyone starts with the defaults; a User's changes are kept on the server and hold only what differs. See [key bindings](keybindings.md).                               | `default-bindings.json`; SQLite (`keybindings`)                         |
 
 ## Rules
 

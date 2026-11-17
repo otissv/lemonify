@@ -29,6 +29,8 @@ export const RealtimeEventSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('results.changed') }),
   /** A workflow or one of its runs changed. */
   z.strictObject({ type: z.literal('workflows.changed') }),
+  /** The person's key bindings were saved or reset. */
+  z.strictObject({ type: z.literal('keybindings.changed') }),
   /** Sent now and then, so a tab can tell a quiet connection from a dead one. */
   z.strictObject({ type: z.literal('heartbeat') }),
 ])

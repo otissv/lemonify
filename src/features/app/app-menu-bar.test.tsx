@@ -108,7 +108,7 @@ describe('AppMenuBar', () => {
         within(panel)
           .getAllByRole('menuitem')
           .map((item) => item.textContent),
-      ).toEqual(['File', 'Edit', 'View', 'Account'])
+      ).toEqual(['File', 'Edit', 'View', 'Help', 'Account'])
     })
 
     it('draws no line under the menu, since nothing is below it, and adds no padding', async () => {
@@ -496,10 +496,10 @@ describe('AppMenuBar', () => {
       const file = await openMenu(user, 'File')
       const children = [...file.children]
       const exportIndex = children.findIndex(
-        (child) => child.textContent === 'Export image',
+        (child) => child.textContent?.startsWith('Export image') === true,
       )
       const closeIndex = children.findIndex(
-        (child) => child.textContent === 'Close document',
+        (child) => child.textContent?.startsWith('Close document') === true,
       )
 
       expect(closeIndex).toBeGreaterThan(exportIndex)

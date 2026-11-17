@@ -22,6 +22,7 @@ import { SqliteDocumentDao } from './dao/sqlite/document-dao.ts'
 import { SqliteJobDao } from './dao/sqlite/job-dao.ts'
 import { SqliteResultDao } from './dao/sqlite/result-dao.ts'
 import { SqliteSourceDao } from './dao/sqlite/source-dao.ts'
+import { SqliteKeybindingDao } from './dao/sqlite/keybinding-dao.ts'
 import { SqliteUserDao } from './dao/sqlite/user-dao.ts'
 import { SqliteWorkflowDao } from './dao/sqlite/workflow-dao.ts'
 import { openDatabase } from './database/connection.ts'
@@ -50,6 +51,7 @@ import { DocumentBundleService } from './services/document-bundle-service.ts'
 import { RenderService } from './services/render-service.ts'
 import { ResultService } from './services/result-service.ts'
 import { SourceService } from './services/source-service.ts'
+import { KeybindingService } from './services/keybinding-service.ts'
 import { UserService } from './services/user-service.ts'
 import { WorkflowService } from './services/workflow-service.ts'
 import { SharpImageEngine } from './tools/image-engine.ts'
@@ -92,6 +94,7 @@ export type App = {
   bundles: DocumentBundleService
   jobs: JobService
   workflows: WorkflowService
+  keybindings: KeybindingService
   aiTools: AiToolRegistry
   /** The open tabs, which the realtime server connects and the services tell about changes. */
   realtime: RealtimeHub
@@ -257,6 +260,11 @@ export async function createApp(
     results,
     changes,
   })
+  const keybindings = new KeybindingService({
+    keybindings: new SqliteKeybindingDao(database),
+    clock,
+    changes,
+  })
   const renders = new RenderService({
     documents: documentDao,
     planner,
@@ -344,6 +352,7 @@ export async function createApp(
     bundles,
     jobs,
     workflows,
+    keybindings,
     aiTools,
     realtime,
     scheduler: running,

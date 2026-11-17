@@ -3,16 +3,14 @@ import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { catalogueFor, createAiStepFor } from '@/features/ai/ai-defaults'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import type { AiToolSummary } from '@/features/ai/ai-tools'
-import { createSharpStep } from '@/features/pipeline/pipeline'
-import { addStepAfter } from '@/features/pipeline/pipeline-actions'
+import { toolActionId } from '@/features/keybindings/actions'
+import { useActionHint } from '@/features/keybindings/use-action-hint'
+import { addTool } from '@/features/tools/add-tool'
 import { searchTools, toolGroups } from '@/features/tools/tool-catalogue'
 import type { ToolEntry } from '@/features/tools/tool-catalogue'
-import { errorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store/app-store'
 
 interface ToolsBrowserProps {
   documentId: string
@@ -28,7 +26,40 @@ interface ToolGroupProps {
   onAdd: (tool: ToolEntry) => void
 }
 
-const NO_CATALOGUE = 'That AI tool is not available right now.'
+interface ToolRowProps {
+  tool: ToolEntry
+  onAdd: (tool: ToolEntry) => void
+}
+
+function ToolRow({ tool, onAdd }: ToolRowProps): React.JSX.Element {
+  const hint = useActionHint(toolActionId(tool.kind, tool.value))
+
+  function handleClick(): void {
+    onAdd(tool)
+  }
+
+  return (
+    <li>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={`Add ${tool.label}`}
+        aria-keyshortcuts={hint.aria}
+        title={hint.titled(`Add ${tool.label}`)}
+        className="w-full justify-start gap-2 px-2"
+        onClick={handleClick}
+      >
+        <RiAddLine aria-hidden="true" />
+        {tool.label}
+        {hint.shown !== undefined && (
+          <kbd className="ml-auto font-mono text-caption text-muted-foreground">
+            {hint.shown}
+          </kbd>
+        )}
+      </Button>
+    </li>
+  )
+}
 
 function ToolGroupList({
   label,
@@ -62,20 +93,7 @@ function ToolGroupList({
       </h3>
       <ul id={listId} hidden={!open} className="flex flex-col">
         {tools.map((tool) => (
-          <li key={tool.value}>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Add ${tool.label}`}
-              className="w-full justify-start gap-2 px-2"
-              onClick={() => {
-                onAdd(tool)
-              }}
-            >
-              <RiAddLine aria-hidden="true" />
-              {tool.label}
-            </Button>
-          </li>
+          <ToolRow key={tool.value} tool={tool} onAdd={onAdd} />
         ))}
       </ul>
     </div>
@@ -108,22 +126,7 @@ export function ToolsBrowser({
   }
 
   function handleAdd(tool: ToolEntry): void {
-    setError(null)
-    const afterId = useAppStore.getState().selectedSteps[documentId]
-    if (tool.kind === 'sharp') {
-      addStepAfter(documentId, createSharpStep(tool.value), afterId)
-      return
-    }
-    const catalogue = catalogueFor(catalogues, tool.value)
-    if (catalogue === undefined) {
-      setError(NO_CATALOGUE)
-      return
-    }
-    try {
-      addStepAfter(documentId, createAiStepFor(tool.value, catalogue), afterId)
-    } catch (caught) {
-      setError(errorMessage(caught, NO_CATALOGUE))
-    }
+    setError(addTool(documentId, tool, catalogues) ?? null)
   }
 
   return (

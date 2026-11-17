@@ -4,6 +4,7 @@ import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import type { AiToolSummary } from '@/features/ai/ai-tools'
 import { DocumentView } from '@/features/documents/document-view'
 import { DocumentNotices } from '@/features/documents/document-notices'
+import { KeyBindings } from '@/features/keybindings/key-bindings'
 import { MenuPanel } from '@/features/app/menu-panel'
 import { usePreviewLoading } from '@/features/pipeline/use-preview'
 import { ToolsPanel } from '@/features/tools/tools-panel'
@@ -31,6 +32,7 @@ export function DocumentPage({
   return (
     <div data-slot="tools-panel-bounds" className="relative size-full">
       <DocumentView id={id} />
+      <KeyBindings documentId={id} catalogues={catalogues} />
       {loaded ? (
         <>
           <DocumentNotices documentId={id} />

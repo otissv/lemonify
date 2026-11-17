@@ -2,7 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
-import { loadAppData } from '@/features/app/load-app-data'
+import { emptyAppData, loadAppData } from '@/features/app/load-app-data'
 import { RootLayout } from '@/features/app/root-layout'
 import { guardSession } from '@/features/app/session-guard'
 import { getSessionFn } from '@/features/auth/session-functions'
@@ -36,7 +36,7 @@ export const Route = createRootRoute({
     return { actor }
   },
   loader: ({ context }) =>
-    context.actor === null ? { documents: [], workflows: [] } : loadAppData(),
+    context.actor === null ? emptyAppData() : loadAppData(),
   shellComponent: RootDocument,
   component: RootLayout,
 })

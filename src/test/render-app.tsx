@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-router'
 import type { AnyRouter } from '@tanstack/react-router'
 
-import { loadAppData } from '@/features/app/load-app-data'
+import { emptyAppData, loadAppData } from '@/features/app/load-app-data'
 import { RootLayout } from '@/features/app/root-layout'
 import { guardSession } from '@/features/app/session-guard'
 import { DocumentPage } from '@/features/documents/document-page'
@@ -27,7 +27,7 @@ const rootRoute = createRootRoute({
     return { actor: sessionActor }
   },
   loader: ({ context }) =>
-    context.actor === null ? { documents: [], workflows: [] } : loadAppData(),
+    context.actor === null ? emptyAppData() : loadAppData(),
   component: RootLayout,
 })
 

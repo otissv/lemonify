@@ -74,66 +74,66 @@ function change(documentId: string, update: Change): void {
   state.setViewport(documentId, next)
 }
 
+/** What changes the view of a document, built on the store alone so keys and gestures reach it the same way. */
+export function viewportActionsFor(documentId: string): ViewportActions {
+  const zoom = (factor: number, anchor?: Point): void => {
+    change(documentId, (viewport, frame) =>
+      zoomBy(viewport, frame, factor, anchor),
+    )
+  }
+  const toPercent = (percent: number): void => {
+    change(documentId, (viewport, frame) =>
+      zoomToPercent(viewport, frame, percent),
+    )
+  }
+  return {
+    zoomBy: zoom,
+    zoomIn: () => {
+      zoom(ZOOM_STEP)
+    },
+    zoomOut: () => {
+      zoom(1 / ZOOM_STEP)
+    },
+    zoomToPercent: toPercent,
+    zoomToPosition: (position) => {
+      change(documentId, (viewport, frame) =>
+        zoomBy(
+          viewport,
+          frame,
+          zoomForPosition(position, zoomLimits(frame)) / viewport.zoom,
+        ),
+      )
+    },
+    fit: () => {
+      change(documentId, () => FIT_VIEWPORT)
+    },
+    actualSize: () => {
+      toPercent(ACTUAL_SIZE_PERCENT)
+    },
+    toggleActualSize: (anchor) => {
+      change(documentId, (viewport, frame) => {
+        if (
+          Math.abs(percentOf(viewport.zoom, frame) - ACTUAL_SIZE_PERCENT) < NEAR
+        ) {
+          return FIT_VIEWPORT
+        }
+        const factor =
+          zoomForPercent(ACTUAL_SIZE_PERCENT, frame) / viewport.zoom
+        return zoomBy(viewport, frame, factor, anchor)
+      })
+    },
+    panBy: (dx, dy) => {
+      change(documentId, (viewport, frame) => panBy(viewport, frame, dx, dy))
+    },
+    centreOn: (point) => {
+      change(documentId, (viewport, frame) => centreOn(viewport, frame, point))
+    },
+  }
+}
+
 /** The actions alone, which do not change, so a gesture does not render again for each move of the pointer. */
 export function useViewportActions(documentId: string): ViewportActions {
-  return useMemo<ViewportActions>(() => {
-    const zoom = (factor: number, anchor?: Point): void => {
-      change(documentId, (viewport, frame) =>
-        zoomBy(viewport, frame, factor, anchor),
-      )
-    }
-    const toPercent = (percent: number): void => {
-      change(documentId, (viewport, frame) =>
-        zoomToPercent(viewport, frame, percent),
-      )
-    }
-    return {
-      zoomBy: zoom,
-      zoomIn: () => {
-        zoom(ZOOM_STEP)
-      },
-      zoomOut: () => {
-        zoom(1 / ZOOM_STEP)
-      },
-      zoomToPercent: toPercent,
-      zoomToPosition: (position) => {
-        change(documentId, (viewport, frame) =>
-          zoomBy(
-            viewport,
-            frame,
-            zoomForPosition(position, zoomLimits(frame)) / viewport.zoom,
-          ),
-        )
-      },
-      fit: () => {
-        change(documentId, () => FIT_VIEWPORT)
-      },
-      actualSize: () => {
-        toPercent(ACTUAL_SIZE_PERCENT)
-      },
-      toggleActualSize: (anchor) => {
-        change(documentId, (viewport, frame) => {
-          if (
-            Math.abs(percentOf(viewport.zoom, frame) - ACTUAL_SIZE_PERCENT) <
-            NEAR
-          ) {
-            return FIT_VIEWPORT
-          }
-          const factor =
-            zoomForPercent(ACTUAL_SIZE_PERCENT, frame) / viewport.zoom
-          return zoomBy(viewport, frame, factor, anchor)
-        })
-      },
-      panBy: (dx, dy) => {
-        change(documentId, (viewport, frame) => panBy(viewport, frame, dx, dy))
-      },
-      centreOn: (point) => {
-        change(documentId, (viewport, frame) =>
-          centreOn(viewport, frame, point),
-        )
-      },
-    }
-  }, [documentId])
+  return useMemo(() => viewportActionsFor(documentId), [documentId])
 }
 
 /** The view of a document, kept inside what its window allows, with the actions that change it. */

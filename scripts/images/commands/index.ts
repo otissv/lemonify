@@ -45,6 +45,14 @@ import {
   sourceDeleteCommand,
   sourceListCommand,
 } from './source.ts'
+import {
+  keysExportCommand,
+  keysImportCommand,
+  keysListCommand,
+  keysResetCommand,
+  keysSetCommand,
+  keysUnsetCommand,
+} from './keys.ts'
 import { workerCommand } from './worker.ts'
 import {
   workflowCancelCommand,
@@ -69,6 +77,12 @@ export const COMMANDS: readonly ImageCommand[] = [
   formatsCommand,
   schemaCommand,
   userListCommand,
+  keysListCommand,
+  keysSetCommand,
+  keysUnsetCommand,
+  keysResetCommand,
+  keysExportCommand,
+  keysImportCommand,
   sourceAddCommand,
   sourceListCommand,
   sourceDeleteCommand,

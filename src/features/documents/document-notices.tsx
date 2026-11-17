@@ -1,5 +1,4 @@
 import { EditsNotices } from '@/features/documents/edits-notices'
-import { useUndoShortcuts } from '@/features/documents/use-undo-shortcuts'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { useAppStore } from '@/store/app-store'
 
@@ -7,13 +6,12 @@ interface DocumentNoticesProps {
   documentId: string
 }
 
-/** What about a document's edits needs attention, and the undo and redo keys; the commands themselves are in the menu. */
+/** What about a document's edits needs attention; the commands themselves are in the menu and on the keys. */
 export function DocumentNotices({
   documentId,
 }: DocumentNoticesProps): React.JSX.Element | null {
   const session = useAppStore((state) => state.documents[documentId])
   const preview = usePreview(documentId)
-  useUndoShortcuts(documentId)
 
   if (!session || !preview) return null
 

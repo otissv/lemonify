@@ -9,6 +9,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ALIAS = '@/'
+const EXACT_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.json'])
 const SOURCE_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../src',
@@ -16,7 +17,7 @@ const SOURCE_ROOT = path.resolve(
 
 function candidatesFor(specifier: string): string[] {
   const base = path.join(SOURCE_ROOT, specifier.slice(ALIAS.length))
-  if (path.extname(base) === '.ts') return [base]
+  if (EXACT_EXTENSIONS.has(path.extname(base))) return [base]
   return [`${base}.ts`, path.join(base, 'index.ts')]
 }
 

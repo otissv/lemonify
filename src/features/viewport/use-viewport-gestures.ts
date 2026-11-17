@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { KeyboardEvent, PointerEvent, RefObject } from 'react'
+import type { PointerEvent, RefObject } from 'react'
 
 import { useViewportActions } from '@/features/viewport/use-viewport'
-import { handleViewportKey } from '@/features/viewport/viewport-keys'
 import type { Point } from '@/features/viewport/viewport'
 
 /** How much one unit of wheel travel zooms; a pinch on a trackpad arrives as small ctrl-wheel steps. */
@@ -17,7 +16,6 @@ export interface ViewportGestureHandlers {
   onPointerUp: (event: PointerEvent<HTMLElement>) => void
   onPointerCancel: (event: PointerEvent<HTMLElement>) => void
   onDoubleClick: (event: React.MouseEvent<HTMLElement>) => void
-  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void
 }
 
 function within(
@@ -45,8 +43,7 @@ function wheelTravel(event: WheelEvent): number {
  * Zoom and pan on the canvas: the wheel scrolls the picture, and with Ctrl,
  * Cmd or Alt (or a pinch on a trackpad) it zooms about the pointer; dragging
  * moves the picture; two fingers pinch and move it; a double click swaps
- * between fit and actual size; and the keys of `handleViewportKey` work while
- * the canvas has focus. Every change goes through the same actions the
+ * between fit and actual size; the keys are the key bindings'. Every change goes through the same actions the
  * Navigator uses.
  */
 export function useViewportGestures(
@@ -137,19 +134,11 @@ export function useViewportGestures(
     [actions],
   )
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLElement>): void => {
-      if (handleViewportKey(event, actions)) event.preventDefault()
-    },
-    [actions],
-  )
-
   return {
     onPointerDown: handlePointerDown,
     onPointerMove: handlePointerMove,
     onPointerUp: handlePointerEnd,
     onPointerCancel: handlePointerEnd,
     onDoubleClick: handleDoubleClick,
-    onKeyDown: handleKeyDown,
   }
 }
