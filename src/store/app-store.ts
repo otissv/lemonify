@@ -17,7 +17,9 @@ import { shownPipeline } from '@/features/documents/document-session'
 import type {
   DocumentOperation,
   DocumentSession,
+  PendingOperation,
 } from '@/features/documents/document-session'
+import { RealtimeStatus } from '@/features/realtime/realtime-client'
 import type { ExportSettings } from '@/features/export/export-settings'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import type { PanelPosition } from '@/features/tools/panel-position'
@@ -74,6 +76,10 @@ interface AppStateData {
   exportSettings: Readonly<Record<string, ExportSettings | undefined>>
   /** Raised when a Result is made or removed, so lists of Results read again. */
   resultsVersion: number
+  /** How this tab's live connection is doing. */
+  realtime: RealtimeStatus
+  /** Something the person should know about a change made elsewhere, until they dismiss it. */
+  liveNotice: string | undefined
   nextOperationId: number
 }
 
@@ -91,8 +97,16 @@ interface AppStateActions {
   selectStep: (documentId: string, stepId: string | undefined) => void
   setExportSettings: (documentId: string, settings: ExportSettings) => void
   bumpResults: () => void
+  setRealtime: (status: RealtimeStatus) => void
+  setLiveNotice: (notice: string | undefined) => void
   /** Replaces what the server confirmed; waiting operations are dropped when `reset`. */
   confirmDocument: (view: DocumentView, reset: boolean) => void
+  /** Takes a newer state from the server and keeps `pending`, the waiting operations made again on top of it. */
+  rebaseDocument: (
+    view: DocumentView,
+    pending: ReadonlyArray<PendingOperation>,
+    error: string | undefined,
+  ) => void
   forgetDocument: (documentId: string) => void
   visitDocument: (documentId: string) => void
   closeDocumentVisit: (documentId: string) => void
@@ -129,6 +143,8 @@ export const INITIAL_APP_STATE: Readonly<AppStateData> = {
   aiRuns: {},
   exportSettings: {},
   resultsVersion: 0,
+  realtime: RealtimeStatus.Stopped,
+  liveNotice: undefined,
   nextOperationId: 1,
 }
 
@@ -237,6 +253,12 @@ export const useAppStore = create<AppState>()(
           exportSettings: { ...exportSettings, [documentId]: settings },
         }))
       },
+      setRealtime: (realtime) => {
+        set({ realtime })
+      },
+      setLiveNotice: (liveNotice) => {
+        set({ liveNotice })
+      },
       bumpResults: () => {
         set(({ resultsVersion }) => ({ resultsVersion: resultsVersion + 1 }))
       },
@@ -256,6 +278,16 @@ export const useAppStore = create<AppState>()(
             },
           }
         })
+      },
+      rebaseDocument: (view, pending, error) => {
+        set(({ documents }) =>
+          withSession(documents, view.id, (session) => ({
+            ...session,
+            confirmed: view,
+            pending,
+            error,
+          })),
+        )
       },
       visitDocument: (documentId) => {
         set(({ documentHistory }) => ({

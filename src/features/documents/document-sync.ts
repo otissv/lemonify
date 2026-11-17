@@ -6,8 +6,10 @@ import {
 } from '@/features/documents/document-functions'
 import type { DocumentView } from '@/features/documents/document'
 import {
+  DROPPED_EDITS_MESSAGE,
   canRedoNow,
   canUndoNow,
+  replayPending,
   shownPipeline,
 } from '@/features/documents/document-session'
 import type { DocumentOperation } from '@/features/documents/document-session'
@@ -38,17 +40,51 @@ function send(
   }
 }
 
-/** Puts the server's own state back after an operation it refused, keeping the reason on screen. */
-async function recover(id: string, error: unknown): Promise<void> {
+/**
+ * Takes a newer state from the server and makes the waiting operations again on
+ * top of it, dropping any that no longer apply and saying so.
+ */
+function rebase(id: string, view: DocumentView): void {
+  const store = useAppStore.getState()
+  const session = store.documents[id]
+  if (!session) return
+  const { pending, dropped } = replayPending(view, session.pending)
+  store.rebaseDocument(
+    view,
+    pending,
+    dropped > 0 ? DROPPED_EDITS_MESSAGE : undefined,
+  )
+}
+
+type Recovery = 'retry' | 'stop'
+
+/**
+ * Sorts out an operation the server refused. If the server's document has
+ * moved on since the operation was made, it was made on out-of-date state (a
+ * change from another tab landed first), so the waiting operations are made
+ * again on top of the new state and sending carries on. Otherwise the server
+ * meant it: the waiting operations are dropped and the reason stays on screen.
+ */
+async function recover(
+  id: string,
+  sentRevision: number,
+  error: unknown,
+): Promise<Recovery> {
+  let latest: DocumentView
+  try {
+    latest = await getDocument({ data: { id } })
+  } catch {
+    useAppStore.getState().failDocument(id, errorMessage(error, SAVE_FAILED))
+    return 'stop'
+  }
+  if (latest.revision > sentRevision) {
+    rebase(id, latest)
+    return 'retry'
+  }
   const store = useAppStore.getState()
   store.failDocument(id, errorMessage(error, SAVE_FAILED))
-  try {
-    useAppStore
-      .getState()
-      .confirmDocument(await getDocument({ data: { id } }), true)
-  } catch {
-    // The reason above stays; the next load of the page reads the document again.
-  }
+  store.confirmDocument(latest, true)
+  return 'stop'
 }
 
 async function drain(id: string): Promise<void> {
@@ -58,12 +94,12 @@ async function drain(id: string): Promise<void> {
       const head = session?.pending[0]
       if (!session || !head) return
       useAppStore.getState().setSyncing(id, true)
+      const sentRevision = session.confirmed.revision
       try {
-        const view = await send(id, session.confirmed.revision, head.op)
+        const view = await send(id, sentRevision, head.op)
         useAppStore.getState().settleOperation(view)
       } catch (error) {
-        await recover(id, error)
-        return
+        if ((await recover(id, sentRevision, error)) === 'stop') return
       }
     }
   } finally {
@@ -126,4 +162,38 @@ export function redoEdit(id: string): Promise<void> {
   if (!session || !canRedoNow(session)) return Promise.resolve()
   store.queueOperation(id, { kind: 'redo' })
   return pump(id)
+}
+
+/** What another tab says a document is now. */
+export type RemoteVersion = Pick<DocumentView, 'revision' | 'updatedAt'>
+
+/** Whether `remote` is a state the editor has not seen: a later revision, or the same one renamed since. */
+export function isNewer(remote: RemoteVersion, held: RemoteVersion): boolean {
+  if (remote.revision !== held.revision) return remote.revision > held.revision
+  return remote.updatedAt > held.updatedAt
+}
+
+/**
+ * Brings an open document up to date after another tab changed it. Edits made
+ * here that are still on their way finish first (the server settles which came
+ * first); then, if the server's document is still newer than the editor's, it
+ * is read and shown. With no `remote` the server is asked whatever it holds, as
+ * when a connection returns and nothing is known of what was missed. A document that is not open here is left alone: it is
+ * read fresh when it is opened.
+ */
+export async function reconcileDocument(
+  id: string,
+  remote?: RemoteVersion,
+): Promise<void> {
+  for (;;) {
+    await settleDocument(id)
+    const held = useAppStore.getState().documents[id]
+    if (!held || (remote && !isNewer(remote, held.confirmed))) return
+    const view = await getDocument({ data: { id } })
+    const now = useAppStore.getState().documents[id]
+    if (!now) return
+    if (running.has(id)) continue
+    if (isNewer(view, now.confirmed)) rebase(id, view)
+    return
+  }
 }

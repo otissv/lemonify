@@ -2,10 +2,15 @@ import { readFileSync } from 'node:fs'
 
 import { expect, test } from '@playwright/test'
 
-import { MANIFEST_FILE } from './global-setup.ts'
+import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 import type { Manifest } from './seed.ts'
 
-const manifest: Manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'))
+const ACCOUNT = SCRATCH_ACCOUNTS.copy
+const manifest: Manifest = JSON.parse(
+  readFileSync(ACCOUNT.manifestFile, 'utf8'),
+)
+
+test.use({ storageState: ACCOUNT.authFile })
 const SOURCE_NAME = 'blur-default'
 
 test('dragging a step onto another document copies it there', async ({

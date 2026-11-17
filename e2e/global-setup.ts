@@ -10,6 +10,41 @@ export const RUN_DIR = path.resolve('e2e/.run')
 export const AUTH_FILE = path.join(RUN_DIR, 'auth.json')
 export const MANIFEST_FILE = path.join(RUN_DIR, 'manifest.json')
 
+export type ScratchAccount = {
+  user: { name: string; email: string; password: string }
+  authFile: string
+  manifestFile: string
+  cases: ReadonlyArray<string>
+}
+
+function scratchAccount(
+  key: string,
+  cases: ReadonlyArray<string>,
+): ScratchAccount {
+  return {
+    user: {
+      name: `Scratch ${key}`,
+      email: `${key}@example.test`,
+      password: `${key}-password-123`,
+    },
+    authFile: path.join(RUN_DIR, `auth-${key}.json`),
+    manifestFile: path.join(RUN_DIR, `manifest-${key}.json`),
+    cases,
+  }
+}
+
+/**
+ * Specs that change documents (reorder them, copy steps into them, rename them)
+ * or watch another tab change them each get an account of their own with a few
+ * documents. Everything else shares the main account, whose documents the
+ * snapshot specs compare, so nothing may edit those.
+ */
+export const SCRATCH_ACCOUNTS = {
+  live: scratchAccount('live', ['blur-default', 'scale-50', 'scale-150']),
+  order: scratchAccount('order', ['blur-default', 'scale-50', 'scale-150']),
+  copy: scratchAccount('copy', ['blur-default', 'scale-50']),
+} as const
+
 export const E2E_USER = {
   name: 'End to end',
   email: 'e2e@example.test',
@@ -18,11 +53,11 @@ export const E2E_USER = {
 
 const SIGN_UP = `${E2E_ORIGIN}/api/auth/sign-up/email`
 
-async function signUp(): Promise<string> {
+async function signUp(user: typeof E2E_USER): Promise<string> {
   const response = await fetch(SIGN_UP, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: E2E_ORIGIN },
-    body: JSON.stringify(E2E_USER),
+    body: JSON.stringify(user),
   })
   if (!response.ok) {
     throw new Error(
@@ -33,7 +68,7 @@ async function signUp(): Promise<string> {
   return cookies.map((cookie) => cookie.split(';')[0]).join('; ')
 }
 
-function writeAuthState(cookieHeader: string): void {
+function writeAuthState(file: string, cookieHeader: string): void {
   const { hostname } = new URL(E2E_ORIGIN)
   const cookies = cookieHeader.split('; ').map((pair) => {
     const separator = pair.indexOf('=')
@@ -48,7 +83,7 @@ function writeAuthState(cookieHeader: string): void {
       sameSite: 'Lax' as const,
     }
   })
-  writeFileSync(AUTH_FILE, JSON.stringify({ cookies, origins: [] }))
+  writeFileSync(file, JSON.stringify({ cookies, origins: [] }))
 }
 
 /**
@@ -58,13 +93,20 @@ function writeAuthState(cookieHeader: string): void {
  */
 export default async function globalSetup(): Promise<void> {
   mkdirSync(RUN_DIR, { recursive: true })
-  writeAuthState(await signUp())
+  writeAuthState(AUTH_FILE, await signUp(E2E_USER))
+  for (const account of Object.values(SCRATCH_ACCOUNTS)) {
+    writeAuthState(account.authFile, await signUp(account.user))
+  }
 
   const config = loadConfig({ ...process.env, LEMONIFY_DATA_DIR: E2E_DATA_DIR })
   const app = await createApp(config)
   try {
     const manifest = await seedDocuments(app, E2E_USER.name)
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2))
+    for (const account of Object.values(SCRATCH_ACCOUNTS)) {
+      const seeded = await seedDocuments(app, account.user.name, account.cases)
+      writeFileSync(account.manifestFile, JSON.stringify(seeded, null, 2))
+    }
   } finally {
     await app.close()
   }

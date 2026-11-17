@@ -29,6 +29,9 @@ import { migrateToLatest } from './database/migrate.ts'
 import { systemClock, uuidGenerator } from './domain/clock.ts'
 import type { Clock, IdGenerator } from './domain/clock.ts'
 import { consoleLogger } from './http/logger.ts'
+import type { ChangePublisher } from './realtime/change-publisher.ts'
+import { RealtimeHub } from './realtime/hub.ts'
+import type { HubLimits } from './realtime/hub.ts'
 import type { Logger } from './http/logger.ts'
 import { AiStepHandler } from './jobs/handlers/ai-step-handler.ts'
 import { ExportHandler } from './jobs/handlers/export-handler.ts'
@@ -61,6 +64,17 @@ const ORPHAN_GRACE_MS = 60 * 60 * 1000
 /** Work folders of a run or batch that never finished (its process died) are removed after this long. */
 const WORK_FOLDER_MAX_AGE_MS = MILLISECONDS_PER_DAY
 
+/**
+ * How many tabs the realtime server holds: a person may have this many open,
+ * and the server this many in all. A tab that falls this far behind in what it
+ * was sent is dropped and reconnects.
+ */
+const REALTIME_LIMITS: HubLimits = {
+  maxConnectionsPerUser: 20,
+  maxConnections: 2000,
+  maxBufferedBytes: 1024 * 1024,
+}
+
 /** Everything the front doors (the API and the CLI) call, built once. */
 export type App = {
   config: Config
@@ -75,6 +89,8 @@ export type App = {
   jobs: JobService
   workflows: WorkflowService
   aiTools: AiToolRegistry
+  /** The open tabs, which the realtime server connects and the services tell about changes. */
+  realtime: RealtimeHub
   /** Takes Jobs from the shared queue. Not running until `startBackground` is called. */
   scheduler: Scheduler
   /** Starts the scheduler and the daily cleanup, after running the cleanup once. */
@@ -92,6 +108,8 @@ export type AppOverrides = {
   clock?: Clock
   ids?: IdGenerator
   logger?: Logger
+  /** Where the services say what changed; the realtime hub unless a test listens instead. */
+  changes?: ChangePublisher
 }
 
 function prepareDataDirectories(config: Config): void {
@@ -134,6 +152,8 @@ export async function createApp(
   const logger = overrides.logger ?? consoleLogger
   const auth = overrides.auth ?? buildAuth(config, file)
   const users = new UserService({ users: new SqliteUserDao(database), auth })
+  const realtime = new RealtimeHub(REALTIME_LIMITS, logger)
+  const changes = overrides.changes ?? realtime
 
   const sourceDao = new SqliteSourceDao(database)
   const documentDao = new SqliteDocumentDao(database)
@@ -153,6 +173,7 @@ export async function createApp(
     clock,
     ids,
     maxBytesPerUser: config.maxResultBytesPerUser,
+    changes,
   })
   const inspector = new SharpImageInspector()
   const sources = new SourceService({
@@ -169,6 +190,7 @@ export async function createApp(
     clock,
     ids,
     cleanup: results,
+    changes,
   })
 
   const imageEngine = overrides.imageEngine ?? new SharpImageEngine()
@@ -214,6 +236,7 @@ export async function createApp(
     ids,
     workRoot: workDir(config),
     results,
+    changes,
   })
   const renders = new RenderService({
     documents: documentDao,
@@ -302,6 +325,7 @@ export async function createApp(
     jobs,
     workflows,
     aiTools,
+    realtime,
     scheduler: running,
     runMaintenance,
     async startBackground() {

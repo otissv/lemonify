@@ -31,6 +31,11 @@ describe('loadConfig', () => {
       rateLimitMultiplier: 1,
       baseUrl: 'http://localhost:3100',
       trustedOrigins: ['http://localhost:3100'],
+      realtime: {
+        host: '127.0.0.1',
+        port: 3101,
+        url: 'ws://localhost:3101/realtime',
+      },
     })
     expect(config.authSecret).toBeUndefined()
   })
@@ -43,6 +48,90 @@ describe('loadConfig', () => {
     expect(() =>
       loadConfig({ LEMONIFY_RATE_LIMIT_MULTIPLIER: '0' }, 8, '/work'),
     ).toThrow(ValidationError)
+  })
+
+  describe('realtime', () => {
+    it('listens on its own port and says where tabs reach it, from the site address', () => {
+      expect(
+        loadConfig(
+          {
+            LEMONIFY_BASE_URL: 'http://localhost:3200',
+            LEMONIFY_REALTIME_PORT: '3201',
+          },
+          8,
+          '/work',
+        ).realtime,
+      ).toEqual({
+        host: '127.0.0.1',
+        port: 3201,
+        url: 'ws://localhost:3201/realtime',
+      })
+    })
+
+    it('uses a secure address when the site is served securely', () => {
+      expect(
+        loadConfig(
+          { LEMONIFY_BASE_URL: 'https://lemon.example.com' },
+          8,
+          '/work',
+        ).realtime.url,
+      ).toBe('wss://lemon.example.com:3101/realtime')
+    })
+
+    it('takes the address tabs reach it at, as when a proxy serves it on the site’s own port', () => {
+      expect(
+        loadConfig(
+          {
+            LEMONIFY_BASE_URL: 'https://lemon.example.com',
+            LEMONIFY_REALTIME_URL: 'wss://lemon.example.com/realtime',
+            LEMONIFY_REALTIME_HOST: '0.0.0.0',
+          },
+          8,
+          '/work',
+        ).realtime,
+      ).toEqual({
+        host: '0.0.0.0',
+        port: 3101,
+        url: 'wss://lemon.example.com/realtime',
+      })
+    })
+
+    it('refuses an address that is not a websocket one', () => {
+      expect(() =>
+        loadConfig(
+          { LEMONIFY_REALTIME_URL: 'http://localhost:3101/realtime' },
+          8,
+          '/work',
+        ),
+      ).toThrow(/LEMONIFY_REALTIME_URL/)
+    })
+
+    it('refuses an unencrypted address for a site served securely', () => {
+      expect(() =>
+        loadConfig(
+          {
+            LEMONIFY_BASE_URL: 'https://lemon.example.com',
+            LEMONIFY_REALTIME_URL: 'ws://lemon.example.com/realtime',
+          },
+          8,
+          '/work',
+        ),
+      ).toThrow(/wss/)
+    })
+
+    it('refuses the site’s own port, which the website already listens on', () => {
+      expect(() =>
+        loadConfig({ LEMONIFY_REALTIME_PORT: '3100' }, 8, '/work'),
+      ).toThrow(/LEMONIFY_REALTIME_PORT/)
+    })
+
+    it('refuses a port that is not one', () => {
+      for (const port of ['0', '70000', 'abc']) {
+        expect(() =>
+          loadConfig({ LEMONIFY_REALTIME_PORT: port }, 8, '/work'),
+        ).toThrow(ValidationError)
+      }
+    })
   })
 
   it('sizes the CPU pool from the CPU count, between 1 and 4', () => {

@@ -4,6 +4,8 @@ import { useEffect } from 'react'
 import { AppSidebar } from '@/features/app/app-sidebar'
 import { ImageOpenerProvider } from '@/features/app/image-opener'
 import { MenuPanel } from '@/features/app/menu-panel'
+import { LiveStatus } from '@/features/realtime/live-status'
+import { useRealtime } from '@/features/realtime/use-realtime'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { useAppStore } from '@/store/app-store'
 
@@ -21,6 +23,8 @@ export function AppLayout(): React.JSX.Element {
     select: (state) => state.location.pathname.startsWith(DOCUMENT_PATH),
   })
 
+  useRealtime()
+
   useEffect(() => {
     void useAppStore.persist.rehydrate()
   }, [])
@@ -32,6 +36,7 @@ export function AppLayout(): React.JSX.Element {
           <main className="relative min-h-0 flex-1 overflow-hidden">
             <Outlet />
             {onDocument ? null : <MenuPanel />}
+            <LiveStatus />
           </main>
         </SidebarInset>
         <AppSidebar />

@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 
 import type { AiCatalogue, AiToolId } from '@/features/ai/ai-tools'
+import type { RealtimeEvent } from '@/features/realtime/realtime-events'
 
 import { AiCancelledError, AiEngineError } from '../ai/ai-engine.ts'
 import type {
@@ -12,6 +13,7 @@ import type {
   RunningAi,
 } from '../ai/ai-engine.ts'
 import type { Clock, IdGenerator } from '../domain/clock.ts'
+import type { ChangePublisher } from '../realtime/change-publisher.ts'
 import { ValidationError } from '../errors.ts'
 import type {
   EngineOutput,
@@ -22,6 +24,26 @@ import type { ImageInfo, ImageInspector } from '../tools/image-inspector.ts'
 import { LimitError } from '../errors.ts'
 import type { ResultStore } from '../tools/result-store.ts'
 import type { SourceStore, StagedUpload } from '../tools/source-store.ts'
+
+/** Remembers what a service announced, so a test can say what a person's tabs would have been told. */
+export class RecordingPublisher implements ChangePublisher {
+  readonly sent: Array<{ userId: string; event: RealtimeEvent }> = []
+
+  publish(userId: string, event: RealtimeEvent): void {
+    this.sent.push({ userId, event })
+  }
+
+  /** The events sent to one person, oldest first. */
+  eventsFor(userId: string): RealtimeEvent[] {
+    return this.sent
+      .filter((entry) => entry.userId === userId)
+      .map((entry) => entry.event)
+  }
+
+  clear(): void {
+    this.sent.length = 0
+  }
+}
 
 export class FixedClock implements Clock {
   #time: number

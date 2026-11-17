@@ -8,6 +8,8 @@ export const RATE_LIMITS = {
   default: { limit: 300, windowMs: 60_000 },
   queue: { limit: 120, windowMs: 60_000 },
   upload: { limit: 30, windowMs: 60_000 },
+  /** Opening the connection that tells a tab about changes; a tab reconnects on its own, so this is far looser than it looks. */
+  realtime: { limit: 60, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimit>
 
 export type RateLimitKind = keyof typeof RATE_LIMITS

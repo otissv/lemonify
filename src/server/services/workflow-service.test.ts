@@ -449,3 +449,70 @@ describe('running a workflow', () => {
     ).toHaveLength(1)
   })
 })
+
+describe('telling the person’s tabs', () => {
+  it('says the workflows changed when one is made, saved or deleted', async () => {
+    const workflow = await t.app.workflows.create(t.ann, 'Flow')
+    await t.app.workflows.update(t.ann, workflow.id, workflow.revision, {
+      name: 'Renamed',
+      graph: { nodes: workflow.nodes, edges: workflow.edges },
+    })
+    await t.app.workflows.delete(t.ann, workflow.id)
+
+    expect(t.changes.eventsFor('ann')).toEqual([
+      { type: 'workflows.changed' },
+      { type: 'workflows.changed' },
+      { type: 'workflows.changed' },
+    ])
+  })
+
+  it('says so when a run starts and when it finishes', async () => {
+    const source = await t.uploadImage(t.ann)
+    const { run } = await startRun(graphOf([source.id]))
+    t.changes.clear()
+
+    await runFinished(run.id)
+
+    await vi.waitFor(() => {
+      expect(t.changes.eventsFor('ann')).toContainEqual({
+        type: 'workflows.changed',
+      })
+    })
+  })
+
+  it('says so when a run is stopped or deleted', async () => {
+    const source = await t.uploadImage(t.ann)
+    const workflow = await t.app.workflows.create(
+      t.ann,
+      'Flow',
+      graphOf([source.id]),
+    )
+    const run = await t.app.workflows.run(t.ann, workflow.id)
+    t.changes.clear()
+
+    await t.app.workflows.cancelRun(t.ann, run.id)
+    await t.app.scheduler.start()
+    await runFinished(run.id)
+    t.changes.clear()
+    await t.app.workflows.deleteRun(t.ann, run.id)
+
+    expect(t.changes.eventsFor('ann')).toEqual([{ type: 'workflows.changed' }])
+  })
+
+  it('says nothing when a change is refused, and tells only the owner', async () => {
+    const workflow = await t.app.workflows.create(t.ann, 'Flow')
+    t.changes.clear()
+
+    await expect(
+      t.app.workflows.update(t.bob, workflow.id, workflow.revision, {
+        name: 'Stolen',
+        graph: { nodes: workflow.nodes, edges: workflow.edges },
+      }),
+    ).rejects.toThrow(NotFoundError)
+    await expect(t.app.workflows.delete(t.bob, workflow.id)).rejects.toThrow(
+      NotFoundError,
+    )
+
+    expect(t.changes.sent).toEqual([])
+  })
+})

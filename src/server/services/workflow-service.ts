@@ -36,6 +36,7 @@ import { JobKind, JobState, isTerminal } from '../jobs/job-types.ts'
 import type { JobRecord } from '../jobs/job-types.ts'
 import { runWorkDirectory, segmentJobSpec } from '../workflows/run-jobs.ts'
 import type { SourceSummary } from '@/features/documents/document'
+import type { ChangePublisher } from '../realtime/change-publisher.ts'
 import type { JobService } from './job-service.ts'
 import type { ResultService } from './result-service.ts'
 import { toSourceSummary } from './source-service.ts'
@@ -100,6 +101,8 @@ export type WorkflowServiceDependencies = {
   ids: IdGenerator
   workRoot: string
   results: ResultService
+  /** Tells the person's open tabs what changed. */
+  changes: ChangePublisher
 }
 
 function toView(record: WorkflowRecord): WorkflowView {
@@ -198,6 +201,7 @@ export class WorkflowService {
       updatedAt: now,
     }
     await workflows.insert(record)
+    this.#announce(actor.userId)
     return toView(record)
   }
 
@@ -228,12 +232,14 @@ export class WorkflowService {
       { name, graph },
       isoNow(this.#deps.clock),
     )
+    this.#announce(actor.userId)
     return toView(saved)
   }
 
   async delete(actor: Actor, id: string): Promise<void> {
     await this.#owned(actor, id)
     await this.#deps.workflows.delete(id)
+    this.#announce(actor.userId)
   }
 
   /** Starts a run: one Job per Source for the first segment. Everything that can be checked is checked first, so a run never starts half-valid. */
@@ -280,6 +286,7 @@ export class WorkflowService {
       await workflows.deleteRun(run.id)
       throw error
     }
+    this.#announce(actor.userId)
     return this.#view(run)
   }
 
@@ -304,6 +311,7 @@ export class WorkflowService {
       for (const job of active)
         await jobDao.requestCancel(job.id, isoNow(clock))
     }
+    this.#announce(actor.userId)
     return this.#view(run)
   }
 
@@ -315,6 +323,7 @@ export class WorkflowService {
       throw new ConflictError('Cancel the run before deleting it.')
     }
     await this.#deps.workflows.deleteRun(run.id)
+    this.#announce(actor.userId)
   }
 
   /** What a run made, grouped by the Source each image came from; only finished items appear. */
@@ -355,7 +364,13 @@ export class WorkflowService {
   async onJobFinished(job: JobRecord): Promise<void> {
     if (job.workflowRunId === null) return
     const run = await this.#deps.workflows.findRun(job.workflowRunId)
-    if (run !== null) await this.#view(run)
+    if (run === null) return
+    await this.#view(run)
+    this.#announce(job.ownerId)
+  }
+
+  #announce(userId: string): void {
+    this.#deps.changes.publish(userId, { type: 'workflows.changed' })
   }
 
   async #view(run: WorkflowRunRecord): Promise<RunView> {

@@ -1,9 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const PORT = 3200
+const REALTIME_PORT = 3201
 const ORIGIN = `http://localhost:${PORT}`
 
 export const E2E_ORIGIN = ORIGIN
+export const E2E_REALTIME_URL = `ws://localhost:${REALTIME_PORT}/realtime`
 export const E2E_DATA_DIR = 'e2e/.data'
 
 /**
@@ -42,6 +44,7 @@ export default defineConfig({
     env: {
       LEMONIFY_DATA_DIR: E2E_DATA_DIR,
       LEMONIFY_BASE_URL: ORIGIN,
+      LEMONIFY_REALTIME_PORT: String(REALTIME_PORT),
       LEMONIFY_RATE_LIMIT_MULTIPLIER: '100',
       LEMONIFY_AUTH_SECRET: 'e2e-secret-e2e-secret-e2e-secret-0123456789',
     },

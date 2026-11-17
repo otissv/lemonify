@@ -12,6 +12,7 @@ import { isoNow } from '../domain/clock.ts'
 import type { Clock, IdGenerator } from '../domain/clock.ts'
 import { requireOwned } from '../domain/ownership.ts'
 import { LimitError } from '../errors.ts'
+import type { ChangePublisher } from '../realtime/change-publisher.ts'
 import type { ResultStore } from '../tools/result-store.ts'
 import type { DocumentCleanup } from './document-service.ts'
 
@@ -25,6 +26,8 @@ export type ResultServiceDependencies = {
   clock: Clock
   ids: IdGenerator
   maxBytesPerUser: number
+  /** Tells the person's open tabs what changed. */
+  changes: ChangePublisher
 }
 
 export type NewResult = {
@@ -87,6 +90,7 @@ export class ResultService implements DocumentCleanup {
     }
     await results.insert(record)
     await store.keep(input.file, key)
+    this.#announce(actor.userId)
     return record
   }
 
@@ -132,11 +136,17 @@ export class ResultService implements DocumentCleanup {
   async delete(actor: Actor, id: string): Promise<void> {
     await this.get(actor, id)
     await this.#deps.results.delete(id)
+    this.#announce(actor.userId)
   }
 
   /** Part of deleting a Document: its Results go too. */
-  async onDocumentDeleted(_actor: Actor, documentId: string): Promise<void> {
+  async onDocumentDeleted(actor: Actor, documentId: string): Promise<void> {
     await this.#deps.results.deleteForDocument(documentId)
+    this.#announce(actor.userId)
+  }
+
+  #announce(userId: string): void {
+    this.#deps.changes.publish(userId, { type: 'results.changed' })
   }
 
   /** Removes stored files that no Result points at and that are older than the grace period. */

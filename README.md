@@ -84,7 +84,7 @@ A command that waits for its jobs (`export`, `workflow run --follow`) does the w
 
 ## Configuration
 
-Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `LEMONIFY_BASE_URL` and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
+Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `LEMONIFY_BASE_URL`, `LEMONIFY_REALTIME_PORT`, `LEMONIFY_REALTIME_HOST`, `LEMONIFY_REALTIME_URL` (see [live updates](docs/live-updates.md)) and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
 
 ## Scripts
 

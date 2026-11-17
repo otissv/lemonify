@@ -8,7 +8,7 @@ import { MemoryDocumentDao } from '../dao/memory/document-dao'
 import { MemorySourceDao } from '../dao/memory/source-dao'
 import { MemoryStore } from '../dao/memory/store'
 import { ConflictError, NotFoundError, ValidationError } from '../errors'
-import { FixedClock, SequenceIds } from '../testing/fakes'
+import { FixedClock, RecordingPublisher, SequenceIds } from '../testing/fakes'
 import { DocumentService } from './document-service'
 import type { DocumentCleanup } from './document-service'
 
@@ -20,6 +20,7 @@ let sourceDao: MemorySourceDao
 let cleanups: string[]
 let clock: FixedClock
 let service: DocumentService
+let publisher: RecordingPublisher
 
 async function addSource(
   id: string,
@@ -68,12 +69,14 @@ beforeEach(async () => {
       cleanups.push(id)
     },
   }
+  publisher = new RecordingPublisher()
   service = new DocumentService({
     documents: new MemoryDocumentDao(store),
     sources: sourceDao,
     clock,
     ids: new SequenceIds('doc'),
     cleanup,
+    changes: publisher,
   })
   await addSource('src-1')
 })
@@ -482,5 +485,134 @@ describe('layers', () => {
     expect(emptied.source).toBeNull()
     expect(emptied.sources).toEqual([])
     expect((await service.list(ANN))[0]?.source).toBeNull()
+  })
+})
+
+describe('telling the person’s tabs', () => {
+  it('says the list changed when a document is made', async () => {
+    await service.create(ANN, 'src-1')
+
+    expect(publisher.eventsFor('ann')).toEqual([{ type: 'documents.changed' }])
+  })
+
+  it('says the list changed when a document is made from a pipeline', async () => {
+    await service.createFromPipeline(ANN, 'Made', {
+      steps: [createLayerStep('src-1')],
+    })
+
+    expect(publisher.eventsFor('ann')).toEqual([{ type: 'documents.changed' }])
+  })
+
+  it('says the document and the list changed when it is renamed', async () => {
+    const view = await service.create(ANN, 'src-1')
+    publisher.clear()
+    clock.advance(1000)
+
+    const renamed = await service.rename(ANN, view.id, 'New name')
+
+    expect(publisher.eventsFor('ann')).toEqual([
+      {
+        type: 'document.updated',
+        documentId: view.id,
+        revision: renamed.revision,
+        updatedAt: renamed.updatedAt,
+      },
+      { type: 'documents.changed' },
+    ])
+  })
+
+  it('says the list changed when a document is moved', async () => {
+    const view = await service.create(ANN, 'src-1')
+    publisher.clear()
+
+    await service.move(ANN, view.id, 0)
+
+    expect(publisher.eventsFor('ann')).toEqual([{ type: 'documents.changed' }])
+  })
+
+  it('says the document is gone, and the list changed, when it is deleted', async () => {
+    const view = await service.create(ANN, 'src-1')
+    publisher.clear()
+
+    await service.delete(ANN, view.id)
+
+    expect(publisher.eventsFor('ann')).toEqual([
+      { type: 'document.deleted', documentId: view.id },
+      { type: 'documents.changed' },
+    ])
+  })
+
+  it('says the document is at its new revision after an edit, an undo and a redo', async () => {
+    const view = await service.create(ANN, 'src-1')
+    publisher.clear()
+    clock.advance(1000)
+
+    const edited = await service.change(ANN, view.id, 0, addBlur(STEP_A))
+    const undone = await service.undo(ANN, view.id, edited.revision)
+    const redone = await service.redo(ANN, view.id, undone.revision)
+
+    expect(publisher.eventsFor('ann')).toEqual(
+      [edited, undone, redone].map((after) => ({
+        type: 'document.updated',
+        documentId: view.id,
+        revision: after.revision,
+        updatedAt: after.updatedAt,
+      })),
+    )
+  })
+
+  it('also says the list changed when an edit changes the image the document shows', async () => {
+    await addSource('src-2')
+    const view = await service.create(ANN, 'src-1')
+    publisher.clear()
+
+    await service.change(ANN, view.id, 0, {
+      type: 'set-source',
+      stepId: view.pipeline.steps[0]?.id ?? '',
+      sourceId: 'src-2',
+    })
+
+    expect(publisher.eventsFor('ann').map((event) => event.type)).toEqual([
+      'document.updated',
+      'documents.changed',
+    ])
+  })
+
+  it('says nothing when an edit changes nothing', async () => {
+    const view = await service.create(ANN, 'src-1')
+    const edited = await service.change(ANN, view.id, 0, addBlur(STEP_A))
+    publisher.clear()
+
+    await service.change(ANN, view.id, edited.revision, {
+      type: 'set-enabled',
+      stepId: STEP_A,
+      enabled: true,
+    })
+
+    expect(publisher.sent).toEqual([])
+  })
+
+  it('says nothing when the change is refused', async () => {
+    const view = await service.create(ANN, 'src-1')
+    publisher.clear()
+
+    await expect(
+      service.change(ANN, view.id, 5, addBlur(STEP_A)),
+    ).rejects.toThrow(ConflictError)
+    await expect(service.undo(ANN, view.id, 0)).rejects.toThrow(ValidationError)
+    await expect(service.rename(ANN, view.id, '  ')).rejects.toThrow(
+      ValidationError,
+    )
+    await expect(service.delete(BEA, view.id)).rejects.toThrow(NotFoundError)
+
+    expect(publisher.sent).toEqual([])
+  })
+
+  it('tells only the owner', async () => {
+    await addSource('src-b', 'bea')
+    await service.create(BEA, 'src-b')
+
+    expect(publisher.eventsFor('ann')).toEqual([])
+    expect(publisher.eventsFor('bea')).toEqual([{ type: 'documents.changed' }])
   })
 })

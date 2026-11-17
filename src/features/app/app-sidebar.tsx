@@ -216,6 +216,7 @@ function DocumentItem({
       onDrop={handleDrop}
     >
       {/* Only the row is dragged, not the whole item: the steps listed under it are draggable themselves, and the browser would drag the item instead of the step. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: a drag source only; the keyboard reorders with Alt and the arrow keys */}
       <div
         data-active={active}
         draggable={position !== undefined}

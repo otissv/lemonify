@@ -97,6 +97,7 @@ async function buildDocument(
 export async function seedDocuments(
   app: App,
   userName: string,
+  only?: ReadonlyArray<string>,
 ): Promise<Manifest> {
   const actor = await app.users.resolveActor(userName)
   const images = await makeImages()
@@ -106,6 +107,7 @@ export async function seedDocuments(
   }
   const manifest: Manifest = {}
   for (const testCase of CASES) {
+    if (only && !only.includes(testCase.id)) continue
     manifest[testCase.id] = await buildDocument(app, actor, testCase, sources)
   }
   return manifest

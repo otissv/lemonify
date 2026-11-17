@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { z } from 'zod'
 
+import { REALTIME_PATH } from '@/features/realtime/realtime-events'
 import { ValidationError } from '../errors.ts'
 
 const MAX_DEFAULT_CPU_WORKERS = 4
@@ -37,6 +38,9 @@ const EnvironmentSchema = z.object({
   LEMONIFY_AUTH_SECRET: z.string().min(32).optional(),
   LEMONIFY_BASE_URL: z.url().default('http://localhost:3100'),
   LEMONIFY_TRUSTED_ORIGINS: z.string().default(''),
+  LEMONIFY_REALTIME_PORT: positiveInteger(65_535).default(3101),
+  LEMONIFY_REALTIME_HOST: z.string().min(1).default('127.0.0.1'),
+  LEMONIFY_REALTIME_URL: z.url().optional(),
 })
 
 export type Config = {
@@ -57,6 +61,16 @@ export type Config = {
   authSecret: string | undefined
   baseUrl: string
   trustedOrigins: string[]
+  /** The server that tells open tabs when something changed. */
+  realtime: RealtimeConfig
+}
+
+export type RealtimeConfig = {
+  /** The address it listens on. The default keeps it to this machine, for a proxy to forward to. */
+  host: string
+  port: number
+  /** The websocket address a browser connects to. */
+  url: string
 }
 
 export function defaultCpuWorkers(cpuCount: number): number {
@@ -71,6 +85,39 @@ function parseOrigins(baseUrl: string, list: string): string[] {
     origins.add(new URL(trimmed).origin)
   }
   return [...origins]
+}
+
+function realtimeConfig(
+  env: z.output<typeof EnvironmentSchema>,
+): RealtimeConfig {
+  const site = new URL(env.LEMONIFY_BASE_URL)
+  const secure = site.protocol === 'https:'
+  if (String(env.LEMONIFY_REALTIME_PORT) === site.port) {
+    throw new ValidationError(
+      'The configuration is not valid. LEMONIFY_REALTIME_PORT: it is the port the website listens on, so it needs a port of its own.',
+    )
+  }
+  const url = env.LEMONIFY_REALTIME_URL
+  if (url !== undefined) {
+    const { protocol } = new URL(url)
+    if (protocol !== 'ws:' && protocol !== 'wss:') {
+      throw new ValidationError(
+        'The configuration is not valid. LEMONIFY_REALTIME_URL: it must start with ws:// or wss://.',
+      )
+    }
+    if (secure && protocol !== 'wss:') {
+      throw new ValidationError(
+        'The configuration is not valid. LEMONIFY_REALTIME_URL: a site served over https needs a wss:// address.',
+      )
+    }
+  }
+  return {
+    host: env.LEMONIFY_REALTIME_HOST,
+    port: env.LEMONIFY_REALTIME_PORT,
+    url:
+      url ??
+      `${secure ? 'wss' : 'ws'}://${site.hostname}:${env.LEMONIFY_REALTIME_PORT}${REALTIME_PATH}`,
+  }
 }
 
 /**
@@ -113,6 +160,7 @@ export function loadConfig(
       env.LEMONIFY_BASE_URL,
       env.LEMONIFY_TRUSTED_ORIGINS,
     ),
+    realtime: realtimeConfig(env),
   }
 }
 

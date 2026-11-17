@@ -13,7 +13,7 @@ import type { Actor } from '../domain/actor.ts'
 import type { AuthGateway } from '../auth/auth-gateway.ts'
 import { MemoryLogger } from '../http/logger.ts'
 import { insertTestUser } from './test-database.ts'
-import { FakeAiEngine, FakeImageEngine } from './fakes.ts'
+import { FakeAiEngine, FakeImageEngine, RecordingPublisher } from './fakes.ts'
 
 /** An auth system that is never asked anything; tests act as an Actor directly. */
 const NO_AUTH: AuthGateway = {
@@ -31,6 +31,8 @@ export type TestApp = {
   imageEngine: FakeImageEngine
   aiEngine: FakeAiEngine
   logger: MemoryLogger
+  /** What the services told people's tabs. */
+  changes: RecordingPublisher
   ann: Actor
   bob: Actor
   /** Uploads a small real PNG for the actor; the colour makes the bytes (and so the Source) differ. */
@@ -67,11 +69,13 @@ export async function createTestApp(
   const imageEngine = new FakeImageEngine()
   const aiEngine = new FakeAiEngine()
   const logger = new MemoryLogger()
+  const changes = new RecordingPublisher()
   const app = await createApp(config, {
     auth: NO_AUTH,
     imageEngine,
     aiEngine,
     logger,
+    changes,
   })
   await insertTestUser(app.database, 'ann', 'Ann')
   await insertTestUser(app.database, 'bob', 'Bob')
@@ -83,6 +87,7 @@ export async function createTestApp(
     imageEngine,
     aiEngine,
     logger,
+    changes,
     ann,
     bob,
     async uploadImage(actor, colour = '#336699', name = 'cat.png') {

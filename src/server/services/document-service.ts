@@ -27,6 +27,7 @@ import { isoNow } from '../domain/clock.ts'
 import type { Clock, IdGenerator } from '../domain/clock.ts'
 import { requireOwned } from '../domain/ownership.ts'
 import { ConflictError, ValidationError } from '../errors.ts'
+import type { ChangePublisher } from '../realtime/change-publisher.ts'
 import { toSourceSummary } from './source-service.ts'
 
 const MISSING_IMAGE = 'That image does not exist.'
@@ -45,6 +46,8 @@ export type DocumentServiceDependencies = {
   clock: Clock
   ids: IdGenerator
   cleanup: DocumentCleanup
+  /** Tells the person's open tabs what changed. */
+  changes: ChangePublisher
 }
 
 function cleanName(raw: string): string {
@@ -100,6 +103,7 @@ export class DocumentService {
       updatedAt: now,
     }
     await documents.insert(record, [source.id])
+    this.#announceList(actor)
     return this.#view(record)
   }
 
@@ -131,6 +135,7 @@ export class DocumentService {
       updatedAt: now,
     }
     await this.#deps.documents.insert(record, operandSourceIds)
+    this.#announceList(actor)
     return this.#view(record)
   }
 
@@ -161,6 +166,8 @@ export class DocumentService {
       cleanName(name),
       isoNow(this.#deps.clock),
     )
+    this.#announceUpdated(actor, renamed)
+    this.#announceList(actor)
     return this.#view(renamed)
   }
 
@@ -168,12 +175,18 @@ export class DocumentService {
   async move(actor: Actor, id: string, index: number): Promise<void> {
     await this.#owned(actor, id)
     await this.#deps.documents.move(actor.userId, id, index)
+    this.#announceList(actor)
   }
 
   async delete(actor: Actor, id: string): Promise<void> {
     await this.#owned(actor, id)
     await this.#deps.cleanup.onDocumentDeleted(actor, id)
     await this.#deps.documents.delete(id)
+    this.#deps.changes.publish(actor.userId, {
+      type: 'document.deleted',
+      documentId: id,
+    })
+    this.#announceList(actor)
   }
 
   /** Applies one edit as one History entry; `revision` is the one the caller last saw. */
@@ -196,6 +209,7 @@ export class DocumentService {
       maxEntries: MAX_HISTORY_ENTRIES,
       now: isoNow(this.#deps.clock),
     })
+    this.#announceEdit(actor, record, changed)
     return this.#view(changed)
   }
 
@@ -237,7 +251,36 @@ export class DocumentService {
         offset === -1 ? record.historyCursor - 1 : record.historyCursor + 1,
       now: isoNow(clock),
     })
+    this.#announceEdit(actor, record, moved)
     return this.#view(moved)
+  }
+
+  #announceList(actor: Actor): void {
+    this.#deps.changes.publish(actor.userId, { type: 'documents.changed' })
+  }
+
+  #announceUpdated(actor: Actor, record: DocumentRecord): void {
+    this.#deps.changes.publish(actor.userId, {
+      type: 'document.updated',
+      documentId: record.id,
+      revision: record.revision,
+      updatedAt: record.updatedAt,
+    })
+  }
+
+  /** After an edit, undo or redo: the document moved on, and the list too when it now shows another image. */
+  #announceEdit(
+    actor: Actor,
+    before: DocumentRecord,
+    after: DocumentRecord,
+  ): void {
+    this.#announceUpdated(actor, after)
+    if (
+      canvasLayer(before.pipeline)?.sourceId !==
+      canvasLayer(after.pipeline)?.sourceId
+    ) {
+      this.#announceList(actor)
+    }
   }
 
   /** The Document, if it is still on the revision the caller saw. */

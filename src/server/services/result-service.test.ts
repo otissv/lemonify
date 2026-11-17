@@ -6,7 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { MemoryResultDao } from '../dao/memory/result-dao'
 import { LimitError, NotFoundError } from '../errors'
-import { FixedClock, MemoryResultStore, SequenceIds } from '../testing/fakes'
+import {
+  FixedClock,
+  MemoryResultStore,
+  RecordingPublisher,
+  SequenceIds,
+} from '../testing/fakes'
 import { ResultService } from './result-service'
 
 const ANN = { userId: 'ann', name: 'Ann' }
@@ -18,17 +23,20 @@ let work = ''
 let store: MemoryResultStore
 let clock: FixedClock
 let service: ResultService
+let publisher: RecordingPublisher
 
 beforeEach(() => {
   work = mkdtempSync(path.join(os.tmpdir(), 'lemonify-result-svc-'))
   store = new MemoryResultStore()
   clock = new FixedClock()
+  publisher = new RecordingPublisher()
   service = new ResultService({
     results: new MemoryResultDao(),
     store,
     clock,
     ids: new SequenceIds('res'),
     maxBytesPerUser: 100,
+    changes: publisher,
   })
 })
 afterEach(() => rmSync(work, { recursive: true, force: true }))
@@ -194,5 +202,50 @@ describe('ResultService deletion', () => {
     expect(store.files.has(kept.key)).toBe(true)
     expect(store.files.has('c'.repeat(64))).toBe(false)
     expect(store.files.has('d'.repeat(64))).toBe(true)
+  })
+})
+
+describe('telling the person’s tabs', () => {
+  const RESULT = {
+    kind: 'export',
+    fileName: 'a.png',
+    mediaType: 'image/png',
+  } as const
+
+  it('says the results changed when one is recorded', async () => {
+    await service.record(ANN, { ...RESULT, file: file('a.png', 'abc') })
+
+    expect(publisher.eventsFor('ann')).toEqual([{ type: 'results.changed' }])
+  })
+
+  it('says the results changed when one is deleted', async () => {
+    const record = await service.record(ANN, {
+      ...RESULT,
+      file: file('a.png', 'abc'),
+    })
+    publisher.clear()
+
+    await service.delete(ANN, record.id)
+
+    expect(publisher.eventsFor('ann')).toEqual([{ type: 'results.changed' }])
+  })
+
+  it('says the results changed when a document’s results go with it', async () => {
+    await service.onDocumentDeleted(ANN, 'doc-1')
+
+    expect(publisher.eventsFor('ann')).toEqual([{ type: 'results.changed' }])
+  })
+
+  it('says nothing when a result is refused, and tells only its owner', async () => {
+    await expect(
+      service.record(ANN, {
+        ...RESULT,
+        file: file('big.png', 'x'.repeat(500)),
+      }),
+    ).rejects.toThrow()
+    await service.record(BEA, { ...RESULT, file: file('b.png', 'abc') })
+
+    expect(publisher.eventsFor('ann')).toEqual([])
+    expect(publisher.eventsFor('bea')).toEqual([{ type: 'results.changed' }])
   })
 })
