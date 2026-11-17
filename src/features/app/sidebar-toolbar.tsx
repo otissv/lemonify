@@ -1,4 +1,4 @@
-import { RiFolderAddLine, RiImageAddLine } from '@remixicon/react'
+import { RiFolderAddLine, RiImageAddLine, RiImageLine } from '@remixicon/react'
 import { useParams } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
@@ -34,6 +34,10 @@ export function SidebarToolbar(): React.JSX.Element {
   )
   const [error, setError] = useState<string | undefined>(undefined)
 
+  function handleOpen(): void {
+    opener.openImage()
+  }
+
   function handleLibrary(): void {
     opener.openLibraryImage()
   }
@@ -49,6 +53,16 @@ export function SidebarToolbar(): React.JSX.Element {
       className="gap-1 border-t border-sidebar-border"
     >
       <div role="toolbar" aria-label="Image tools" className="flex gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Open image"
+          title="Open an image from this computer"
+          disabled={opener.opening}
+          onClick={handleOpen}
+        >
+          <RiImageLine aria-hidden="true" className="size-4" />
+        </Button>
         <Button
           variant="ghost"
           size="icon-sm"

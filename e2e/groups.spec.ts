@@ -95,6 +95,11 @@ test('opens the image library from the toolbar', async ({ page }) => {
   if (documentId === undefined) throw new Error('No document to open.')
   await page.goto(`/documents/${documentId}`)
 
+  await expect(
+    page
+      .getByRole('toolbar', { name: 'Image tools' })
+      .getByRole('button', { name: 'Open image', exact: true }),
+  ).toBeVisible()
   await page
     .getByRole('toolbar', { name: 'Image tools' })
     .getByRole('button', { name: 'Open image library' })

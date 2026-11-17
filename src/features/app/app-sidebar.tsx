@@ -550,7 +550,7 @@ export function AppSidebar(): React.JSX.Element {
           </TabsContent>
         </SidebarContent>
       </Tabs>
-      <SidebarToolbar />
+      {tab === SidebarTab.Editor && <SidebarToolbar />}
       <SidebarEdgeToggle />
       <SidebarRail aria-hidden="true" />
     </Sidebar>
