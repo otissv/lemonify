@@ -28,6 +28,8 @@ import { openDatabase } from './database/connection.ts'
 import { migrateToLatest } from './database/migrate.ts'
 import { systemClock, uuidGenerator } from './domain/clock.ts'
 import type { Clock, IdGenerator } from './domain/clock.ts'
+import { ResendEmailSender } from './email/email-sender.ts'
+import type { EmailSender } from './email/email-sender.ts'
 import { consoleLogger } from './http/logger.ts'
 import type { ChangePublisher } from './realtime/change-publisher.ts'
 import { RealtimeHub } from './realtime/hub.ts'
@@ -80,6 +82,8 @@ export type App = {
   config: Config
   database: Knex
   auth: AuthGateway
+  /** Whether accounts are confirmed and passwords reset by email. */
+  emailEnabled: boolean
   users: UserService
   sources: SourceService
   documents: DocumentService
@@ -108,6 +112,8 @@ export type AppOverrides = {
   clock?: Clock
   ids?: IdGenerator
   logger?: Logger
+  /** Replaces Resend, for tests; unset, mail goes through Resend when it is configured. */
+  email?: EmailSender | null
   /** Where the services say what changed; the realtime hub unless a test listens instead. */
   changes?: ChangePublisher
 }
@@ -124,8 +130,15 @@ function prepareDataDirectories(config: Config): void {
   }
 }
 
-function buildAuth(config: Config, file: string): AuthGateway {
+function buildAuth(
+  config: Config,
+  file: string,
+  email: EmailSender | null,
+  logger: Logger,
+): AuthGateway {
   return new BetterAuthGateway({
+    email,
+    logger,
     databaseFile: file,
     secret: resolveAuthSecret(config.authSecret, config.dataDir),
     baseUrl: config.baseUrl,
@@ -150,7 +163,13 @@ export async function createApp(
   const clock = overrides.clock ?? systemClock
   const ids = overrides.ids ?? uuidGenerator
   const logger = overrides.logger ?? consoleLogger
-  const auth = overrides.auth ?? buildAuth(config, file)
+  const email =
+    overrides.email !== undefined
+      ? overrides.email
+      : config.email === null
+        ? null
+        : new ResendEmailSender(config.email)
+  const auth = overrides.auth ?? buildAuth(config, file, email, logger)
   const users = new UserService({ users: new SqliteUserDao(database), auth })
   const realtime = new RealtimeHub(REALTIME_LIMITS, logger)
   const changes = overrides.changes ?? realtime
@@ -316,6 +335,7 @@ export async function createApp(
     config,
     database,
     auth,
+    emailEnabled: email !== null,
     users,
     sources,
     documents,

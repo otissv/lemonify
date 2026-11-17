@@ -10,6 +10,12 @@ export const RATE_LIMITS = {
   upload: { limit: 30, windowMs: 60_000 },
   /** Opening the connection that tells a tab about changes; a tab reconnects on its own, so this is far looser than it looks. */
   realtime: { limit: 60, windowMs: 60_000 },
+  /** Every sign-in route, by address: slows password guessing without troubling a person who mistypes. */
+  auth: { limit: 30, windowMs: 60_000 },
+  /** The routes that send an email, by address. */
+  authEmail: { limit: 5, windowMs: 15 * 60_000 },
+  /** Email sent about one address, wherever the requests come from, so nobody's inbox can be flooded. */
+  authTarget: { limit: 3, windowMs: 60 * 60_000 },
 } as const satisfies Record<string, RateLimit>
 
 export type RateLimitKind = keyof typeof RATE_LIMITS

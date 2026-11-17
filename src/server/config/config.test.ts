@@ -50,6 +50,41 @@ describe('loadConfig', () => {
     ).toThrow(ValidationError)
   })
 
+  describe('email', () => {
+    it('sends none unless Resend is set up', () => {
+      expect(loadConfig({}, 8, '/work').email).toBeNull()
+      expect(
+        loadConfig(
+          { LEMONIFY_RESEND_API_KEY: ' ', LEMONIFY_EMAIL_FROM: '' },
+          8,
+          '/work',
+        ).email,
+      ).toBeNull()
+    })
+
+    it('reads the key and the sender', () => {
+      expect(
+        loadConfig(
+          {
+            LEMONIFY_RESEND_API_KEY: 're_key',
+            LEMONIFY_EMAIL_FROM: 'Lemonify <hello@example.com>',
+          },
+          8,
+          '/work',
+        ).email,
+      ).toEqual({ apiKey: 're_key', from: 'Lemonify <hello@example.com>' })
+    })
+
+    it('needs the key and the sender together', () => {
+      expect(() =>
+        loadConfig({ LEMONIFY_RESEND_API_KEY: 're_key' }, 8, '/work'),
+      ).toThrow(/go together/)
+      expect(() =>
+        loadConfig({ LEMONIFY_EMAIL_FROM: 'hello@example.com' }, 8, '/work'),
+      ).toThrow(/go together/)
+    })
+  })
+
   describe('realtime', () => {
     it('listens on its own port and says where tabs reach it, from the site address', () => {
       expect(

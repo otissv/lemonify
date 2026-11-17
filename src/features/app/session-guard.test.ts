@@ -31,6 +31,18 @@ describe('guardSession', () => {
     expect(redirectTarget(() => guardSession(ACTOR, '/sign-in'))).toBe('/')
   })
 
+  it('lets a visitor who is not signed in open the link from a reset email', () => {
+    expect(
+      redirectTarget(() => guardSession(null, '/reset-password')),
+    ).toBeNull()
+  })
+
+  it('sends a signed-in User away from the reset page too', () => {
+    expect(redirectTarget(() => guardSession(ACTOR, '/reset-password'))).toBe(
+      '/',
+    )
+  })
+
   it('lets a signed-in User see every other page', () => {
     expect(
       redirectTarget(() => guardSession(ACTOR, '/documents/abc')),

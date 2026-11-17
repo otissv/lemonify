@@ -8,6 +8,7 @@ import { openDatabase } from '../database/connection'
 import { migrateToLatest } from '../database/migrate'
 import { SqliteUserDao } from '../dao/sqlite/user-dao'
 import { ValidationError } from '../errors'
+import { MemoryLogger } from '../http/logger'
 import { BetterAuthGateway } from './better-auth-gateway'
 
 const ORIGIN = 'http://localhost:3000'
@@ -27,6 +28,8 @@ beforeEach(async () => {
     secret: 's'.repeat(32),
     baseUrl: ORIGIN,
     trustedOrigins: [ORIGIN],
+    email: null,
+    logger: new MemoryLogger(),
   })
   close = async () => {
     gateway.close()

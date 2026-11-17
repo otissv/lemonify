@@ -12,6 +12,13 @@ const GIGABYTE = 1024 * MEGABYTE
 
 const positiveInteger = (max: number) => z.coerce.number().int().min(1).max(max)
 
+/** A setting that is left blank in an env file counts as not set. */
+const blankIsUnset = (schema: z.ZodString) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() || undefined : value),
+    schema.optional(),
+  )
+
 /** The variables the app reads; every one is optional. */
 const EnvironmentSchema = z.object({
   LEMONIFY_DATA_DIR: z.string().min(1).default('.data'),
@@ -41,7 +48,15 @@ const EnvironmentSchema = z.object({
   LEMONIFY_REALTIME_PORT: positiveInteger(65_535).default(3101),
   LEMONIFY_REALTIME_HOST: z.string().min(1).default('127.0.0.1'),
   LEMONIFY_REALTIME_URL: z.url().optional(),
+  LEMONIFY_RESEND_API_KEY: blankIsUnset(z.string().min(1)),
+  LEMONIFY_EMAIL_FROM: blankIsUnset(z.string().min(3)),
 })
+
+export type EmailConfig = {
+  apiKey: string
+  /** The sender shown to the recipient; its domain must be verified in Resend. */
+  from: string
+}
 
 export type Config = {
   dataDir: string
@@ -63,6 +78,8 @@ export type Config = {
   trustedOrigins: string[]
   /** The server that tells open tabs when something changed. */
   realtime: RealtimeConfig
+  /** Where email is sent from; null when no Resend key is set, and then no email is sent or required. */
+  email: EmailConfig | null
 }
 
 export type RealtimeConfig = {
@@ -85,6 +102,20 @@ function parseOrigins(baseUrl: string, list: string): string[] {
     origins.add(new URL(trimmed).origin)
   }
   return [...origins]
+}
+
+function emailConfig(
+  env: z.output<typeof EnvironmentSchema>,
+): EmailConfig | null {
+  const apiKey = env.LEMONIFY_RESEND_API_KEY
+  const from = env.LEMONIFY_EMAIL_FROM
+  if (apiKey === undefined && from === undefined) return null
+  if (apiKey === undefined || from === undefined) {
+    throw new ValidationError(
+      'The configuration is not valid. LEMONIFY_RESEND_API_KEY and LEMONIFY_EMAIL_FROM go together: set both to send email, or neither.',
+    )
+  }
+  return { apiKey, from }
 }
 
 function realtimeConfig(
@@ -161,6 +192,7 @@ export function loadConfig(
       env.LEMONIFY_TRUSTED_ORIGINS,
     ),
     realtime: realtimeConfig(env),
+    email: emailConfig(env),
   }
 }
 
