@@ -15,6 +15,7 @@ import { pipelineOperandSourceIds } from '@/features/pipeline/image-operands'
 import {
   PipelineStepKind,
   canvasLayer,
+  leafSteps,
   createLayerStep,
 } from '@/features/pipeline/pipeline'
 import { PipelineSchema } from '@/features/pipeline/pipeline'
@@ -336,7 +337,7 @@ export class DocumentService {
   async #openedSources(pipeline: Pipeline): Promise<SourceSummary[]> {
     const summaries: SourceSummary[] = []
     const seen = new Set<string>()
-    for (const step of pipeline.steps) {
+    for (const step of leafSteps(pipeline)) {
       if (step.kind !== PipelineStepKind.Layer || seen.has(step.sourceId)) {
         continue
       }

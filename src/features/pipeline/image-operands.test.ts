@@ -5,7 +5,11 @@ import {
   remapPipelineSources,
   stepOperandSourceIds,
 } from '@/features/pipeline/image-operands'
-import { createSharpStep, createLayerStep } from '@/features/pipeline/pipeline'
+import {
+  createGroupStep,
+  createLayerStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 
 describe('stepOperandSourceIds', () => {
   it('reads the operand of a boolean step', () => {
@@ -104,5 +108,50 @@ describe('remapPipelineSources', () => {
     expect(() =>
       remapPipelineSources({ steps: [createLayerStep('zzz')] }, MAP),
     ).toThrow(/zzz/)
+  })
+})
+
+describe('operands of steps in groups', () => {
+  const inside = createLayerStep('src-1')
+  const other = createSharpStep('boolean', {
+    operand: 'src-2',
+    operator: 'and',
+  })
+  const pipeline = {
+    steps: [createLayerStep('src-0'), createGroupStep([inside, other])],
+  }
+
+  it('finds the images of steps inside a group, even a group that is off', () => {
+    expect(pipelineOperandSourceIds(pipeline)).toEqual([
+      'src-0',
+      'src-1',
+      'src-2',
+    ])
+    const off = {
+      steps: [{ ...createGroupStep([inside]), enabled: false }],
+    }
+    expect(pipelineOperandSourceIds(off)).toEqual(['src-1'])
+  })
+
+  it('renames the images of steps inside a group, and keeps the group', () => {
+    const map = new Map([
+      ['src-0', 'a'],
+      ['src-1', 'b'],
+      ['src-2', 'c'],
+    ])
+
+    const remapped = remapPipelineSources(pipeline, map)
+
+    expect(pipelineOperandSourceIds(remapped)).toEqual(['a', 'b', 'c'])
+    expect(remapped.steps[1]).toMatchObject({
+      kind: 'group',
+      id: pipeline.steps[1]?.id,
+    })
+  })
+
+  it('says which image is missing from the map when it is inside a group', () => {
+    expect(() =>
+      remapPipelineSources(pipeline, new Map([['src-0', 'a']])),
+    ).toThrow(/src-1/)
   })
 })

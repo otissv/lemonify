@@ -1,17 +1,25 @@
 import { z } from 'zod'
 
 import {
+  GroupStepSchema,
   MAX_STEP_NAME_LENGTH,
   PipelineSchema,
   PipelineStepKind,
   PipelineStepSchema,
+  findStep,
   insertStep,
   moveStep,
   removeStep,
   replaceStep,
   setStepEnabled,
 } from '@/features/pipeline/pipeline'
-import type { Pipeline, PipelineStep } from '@/features/pipeline/pipeline'
+import type {
+  GroupStep,
+  LeafStep,
+  Pipeline,
+  PipelineStep,
+  StepLocation,
+} from '@/features/pipeline/pipeline'
 import { aiToolSchema } from '@/features/ai/ai-tools'
 import {
   isDefaultBlend,
@@ -40,13 +48,20 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     type: z.literal('add-step'),
     step: PipelineStepSchema,
     index: z.number().int().nonnegative(),
+    /** The group to add it to; at the top of the pipeline when there is none. */
+    groupId: z.string().min(1).optional(),
   }),
   z.strictObject({ type: z.literal('remove-step'), stepId: z.string().min(1) }),
   z.strictObject({
     type: z.literal('move-step'),
     stepId: z.string().min(1),
     to: z.number().int().nonnegative(),
+    /** The group it goes into; the top of the pipeline when there is none. */
+    groupId: z.string().min(1).optional(),
   }),
+  /** Wraps steps that are next to each other, with this group's steps listed in order, in the group, where the first of them was. */
+  z.strictObject({ type: z.literal('group-steps'), group: GroupStepSchema }),
+  z.strictObject({ type: z.literal('ungroup'), groupId: z.string().min(1) }),
   z.strictObject({
     type: z.literal('set-options'),
     stepId: z.string().min(1),
@@ -57,6 +72,11 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     type: z.literal('set-layer'),
     stepId: z.string().min(1),
     settings: layerSettingsSchema,
+  }),
+  z.strictObject({
+    type: z.literal('set-sub-document'),
+    stepId: z.string().min(1),
+    subDocument: z.boolean(),
   }),
   z.strictObject({
     type: z.literal('set-source'),
@@ -92,20 +112,40 @@ export const HistoryPatchSchema = z.strictObject({
 
 export type HistoryPatch = z.output<typeof HistoryPatchSchema>
 
-function stepIndex(pipeline: Pipeline, stepId: string): number {
-  return pipeline.steps.findIndex((step) => step.id === stepId)
-}
-
-function requireStep(
-  pipeline: Pipeline,
-  stepId: string,
-): { step: PipelineStep; index: number } {
-  const index = stepIndex(pipeline, stepId)
-  const step = pipeline.steps[index]
-  if (step === undefined) {
+function requireStep(pipeline: Pipeline, stepId: string): StepLocation {
+  const found = findStep(pipeline, stepId)
+  if (found === undefined) {
     throw new InvalidChangeError('That step is no longer in the pipeline.')
   }
-  return { step, index }
+  return found
+}
+
+function requireGroup(
+  pipeline: Pipeline,
+  groupId: string,
+): { group: GroupStep; index: number } {
+  const found = findStep(pipeline, groupId)
+  if (
+    found === undefined ||
+    found.groupId !== undefined ||
+    found.step.kind !== PipelineStepKind.Group
+  ) {
+    throw new InvalidChangeError('That group is no longer in the pipeline.')
+  }
+  return { group: found.step, index: found.index }
+}
+
+/** Checks that `step` can go in the list `groupId` names, or at the top when that is undefined. */
+function requireDestination(
+  pipeline: Pipeline,
+  step: PipelineStep,
+  groupId: string | undefined,
+): void {
+  if (groupId === undefined) return
+  if (step.kind === PipelineStepKind.Group) {
+    throw new InvalidChangeError('A group cannot go inside another group.')
+  }
+  requireGroup(pipeline, groupId)
 }
 
 function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
@@ -113,12 +153,18 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
     case 'add-step':
       return { type: 'remove-step', stepId: change.step.id }
     case 'remove-step': {
-      const { step, index } = requireStep(pipeline, change.stepId)
-      return { type: 'add-step', step, index }
+      const { step, index, groupId } = requireStep(pipeline, change.stepId)
+      return { type: 'add-step', step, index, groupId }
     }
     case 'move-step': {
-      const { index } = requireStep(pipeline, change.stepId)
-      return { type: 'move-step', stepId: change.stepId, to: index }
+      const { index, groupId } = requireStep(pipeline, change.stepId)
+      return { type: 'move-step', stepId: change.stepId, to: index, groupId }
+    }
+    case 'group-steps':
+      return { type: 'ungroup', groupId: change.group.id }
+    case 'ungroup': {
+      const { group } = requireGroup(pipeline, change.groupId)
+      return { type: 'group-steps', group }
     }
     case 'set-options': {
       const { step } = requireStep(pipeline, change.stepId)
@@ -141,11 +187,19 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
     }
     case 'set-layer': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
+      if (!hasPlacement(step)) throw wrongKind()
       return {
         type: 'set-layer',
         stepId: change.stepId,
         settings: layerSettingsOf(step),
+      }
+    }
+    case 'set-sub-document': {
+      const { group } = requireGroup(pipeline, change.stepId)
+      return {
+        type: 'set-sub-document',
+        stepId: change.stepId,
+        subDocument: group.subDocument,
       }
     }
     case 'set-source': {
@@ -189,26 +243,82 @@ function wrongKind(): InvalidChangeError {
   return new InvalidChangeError('That step does not have those settings.')
 }
 
-function layerSettingsOf(
-  step: Extract<PipelineStep, { kind: typeof PipelineStepKind.Layer }>,
-): LayerSettings {
+type Placed =
+  | GroupStep
+  | Extract<LeafStep, { kind: typeof PipelineStepKind.Layer }>
+
+/** Layers, and groups that are sub-documents, are placed on the picture with the layer settings. */
+function hasPlacement(step: PipelineStep): step is Placed {
+  return (
+    step.kind === PipelineStepKind.Layer || step.kind === PipelineStepKind.Group
+  )
+}
+
+function layerSettingsOf(step: Placed): LayerSettings {
   const { opacity, blend, fit, scale, rotation, anchor, x, y } = step
   return { opacity, blend, fit, scale, rotation, anchor, x, y }
+}
+
+/**
+ * Wraps the top-level steps `group` lists in the group. They must be there,
+ * next to each other and in the order the pipeline has them, so the picture is
+ * made in the same order as before.
+ */
+function groupSteps(pipeline: Pipeline, group: GroupStep): Pipeline {
+  if (group.steps.length === 0) {
+    throw new InvalidChangeError('Choose at least one step to group.')
+  }
+  if (findStep(pipeline, group.id) !== undefined) {
+    throw new InvalidChangeError('That group is already in the pipeline.')
+  }
+  const places = group.steps.map((member) => {
+    const found = findStep(pipeline, member.id)
+    if (found === undefined || found.groupId !== undefined) {
+      throw new InvalidChangeError(
+        'Only steps that are not in a group can be grouped.',
+      )
+    }
+    if (found.step.kind === PipelineStepKind.Group) {
+      throw new InvalidChangeError('A group cannot go inside another group.')
+    }
+    return found.index
+  })
+  const first = places[0] ?? 0
+  const inOrder = places.every((place, position) => place === first + position)
+  if (!inOrder) {
+    throw new InvalidChangeError(
+      'Group steps that are next to each other, in the order they are in.',
+    )
+  }
+  const steps = [...pipeline.steps]
+  steps.splice(first, places.length, group)
+  return { steps }
 }
 
 function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
   switch (change.type) {
     case 'add-step':
-      if (stepIndex(pipeline, change.step.id) !== -1) {
+      if (findStep(pipeline, change.step.id) !== undefined) {
         throw new InvalidChangeError('That step is already in the pipeline.')
       }
-      return insertStep(pipeline, change.step, change.index)
+      requireDestination(pipeline, change.step, change.groupId)
+      return insertStep(pipeline, change.step, change.index, change.groupId)
     case 'remove-step':
       requireStep(pipeline, change.stepId)
       return removeStep(pipeline, change.stepId)
-    case 'move-step':
-      requireStep(pipeline, change.stepId)
-      return moveStep(pipeline, change.stepId, change.to)
+    case 'move-step': {
+      const { step } = requireStep(pipeline, change.stepId)
+      requireDestination(pipeline, step, change.groupId)
+      return moveStep(pipeline, change.stepId, change.to, change.groupId)
+    }
+    case 'group-steps':
+      return groupSteps(pipeline, change.group)
+    case 'ungroup': {
+      const { group, index } = requireGroup(pipeline, change.groupId)
+      const steps = [...pipeline.steps]
+      steps.splice(index, 1, ...group.steps)
+      return { steps }
+    }
     case 'set-options': {
       const { step } = requireStep(pipeline, change.stepId)
       if (step.kind !== PipelineStepKind.Sharp) throw wrongKind()
@@ -230,8 +340,15 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
     }
     case 'set-layer': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (step.kind !== PipelineStepKind.Layer) throw wrongKind()
+      if (!hasPlacement(step)) throw wrongKind()
       return replaceStep(pipeline, { ...step, ...change.settings })
+    }
+    case 'set-sub-document': {
+      const { group } = requireGroup(pipeline, change.stepId)
+      return replaceStep(pipeline, {
+        ...group,
+        subDocument: change.subDocument,
+      })
     }
     case 'set-source': {
       const { step } = requireStep(pipeline, change.stepId)

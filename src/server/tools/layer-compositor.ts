@@ -133,7 +133,15 @@ export async function compositeLayer(
   canvas: RawImage,
   layer: EngineLayer,
 ): Promise<RawImage> {
-  const image = await decode(layer.path)
+  return compositeImage(canvas, await decode(layer.path), layer)
+}
+
+/** The same for a picture that is already made, such as a sub-document's: put over the canvas with a layer's placement settings. */
+export async function compositeImage(
+  canvas: RawImage,
+  image: RawImage,
+  layer: LayerSettings,
+): Promise<RawImage> {
   const size = layerSize(canvas, image, layer.fit, layer.scale)
   const placed = await place(image, size.width, size.height, layer.rotation)
   const at = layerPlacement(canvas, placed, layer.anchor, layer.x, layer.y)

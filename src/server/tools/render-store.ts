@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises'
 import path from 'node:path'
@@ -30,7 +31,7 @@ export interface RenderTarget {
 export interface RenderStore {
   /** The stored render for a key, or undefined; finding it counts as using it. */
   find(kind: RenderKind, key: string): Promise<string | undefined>
-  /** Where to write a render for a key; pass the result to `commit` when done. */
+  /** Where to write a render for a key; pass the result to `commit` when done. Each call gets a file of its own, so two renders of the same key can be written at once. */
   reserve(kind: RenderKind, key: string): Promise<RenderTarget>
   /** Puts a written render in place and makes room if the cache is too big. */
   commit(target: RenderTarget): Promise<string>
@@ -86,7 +87,7 @@ export class FileRenderStore implements RenderStore {
   async reserve(kind: RenderKind, key: string): Promise<RenderTarget> {
     const final = this.#fileFor(kind, key)
     await mkdir(path.dirname(final), { recursive: true })
-    return { partial: `${final}${PARTIAL_SUFFIX}`, final }
+    return { partial: `${final}.${randomUUID()}${PARTIAL_SUFFIX}`, final }
   }
 
   async commit(target: RenderTarget): Promise<string> {

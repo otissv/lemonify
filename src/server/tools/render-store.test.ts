@@ -52,6 +52,24 @@ describe('FileRenderStore', () => {
     expect(await readdir(path.join(root, RenderKind.Preview))).toEqual([])
   })
 
+  it('lets two renders of the same key be written at once, each in a file of its own', async () => {
+    const renders = new FileRenderStore(root, 1000)
+    const first = await renders.reserve(RenderKind.Preview, KEY)
+    const second = await renders.reserve(RenderKind.Preview, KEY)
+    expect(second.partial).not.toBe(first.partial)
+    expect(second.final).toBe(first.final)
+    await writeFile(first.partial, Buffer.alloc(10))
+    await writeFile(second.partial, Buffer.alloc(10))
+
+    await renders.commit(first)
+    await renders.commit(second)
+
+    expect(await renders.find(RenderKind.Preview, KEY)).toBe(first.final)
+    expect(await readdir(path.join(root, RenderKind.Preview))).toEqual([
+      `${KEY}.webp`,
+    ])
+  })
+
   it('removes the least recently used renders when over its size', async () => {
     const renders = new FileRenderStore(root, 25)
     const first = await store(renders, KEY, 10)

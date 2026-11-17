@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream'
 
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import { PipelineStepKind, effectiveSteps } from '@/features/pipeline/pipeline'
+import type { Pipeline } from '@/features/pipeline/pipeline'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
 import type { ExportSettings } from '@/features/export/export-settings'
 
@@ -28,6 +29,15 @@ import { WorkerPool } from '@/features/ai/ai-tools'
 
 const MISSING_DOCUMENT = 'That image does not exist.'
 const MISSING_RENDER = 'That picture is not available. Request it again.'
+/** Every step that does work, and each sub-document, which has a picture of its own to show. */
+function thumbnailStepIds(pipeline: Pipeline): string[] {
+  return pipeline.steps.flatMap((step) => {
+    if (step.kind !== PipelineStepKind.Group) return [step.id]
+    const inner = step.steps.map(({ id }) => id)
+    return step.subDocument ? [step.id, ...inner] : inner
+  })
+}
+
 const NOT_AN_AI_STEP = 'That step is not an AI step that is switched on.'
 const ALREADY_RUN = 'This AI step has already been run.'
 const EARLIER_FIRST = 'Run the earlier AI steps first.'
@@ -94,7 +104,7 @@ export class RenderService {
     stepIds?: ReadonlyArray<string>,
   ): Promise<JobView> {
     const document = await this.#owned(actor, documentId)
-    const ids = stepIds ?? document.pipeline.steps.map(({ id }) => id)
+    const ids = stepIds ?? thumbnailStepIds(document.pipeline)
     return this.#latestOnly(actor, document, JobKind.Thumbnail, async () => [
       {
         kind: JobKind.Thumbnail,
@@ -118,7 +128,9 @@ export class RenderService {
     stepId: string,
   ): Promise<JobView> {
     const document = await this.#owned(actor, documentId)
-    const step = document.pipeline.steps.find(({ id }) => id === stepId)
+    const step = effectiveSteps(document.pipeline).find(
+      ({ id }) => id === stepId,
+    )
     if (step?.kind !== PipelineStepKind.Ai || !step.enabled) {
       throw new ValidationError(NOT_AN_AI_STEP)
     }
@@ -172,7 +184,7 @@ export class RenderService {
     this.#checkOptions(checked.data)
     requireCompletePlan(
       await this.#deps.planner.plan(document),
-      document.pipeline.steps,
+      document.pipeline,
     )
     await this.#deps.results.assertWithinQuota(actor)
     const [queued] = await this.#deps.jobs.enqueue(actor, [

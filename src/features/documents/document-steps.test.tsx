@@ -13,6 +13,7 @@ import { followJob } from '@/features/jobs/follow-job'
 import { cancelJob } from '@/features/jobs/job-functions'
 import {
   createAiStep,
+  createGroupStep,
   createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
@@ -292,6 +293,152 @@ describe('DocumentSteps', () => {
         'src',
         `/api/documents/${DOCUMENT_ID}/renders/thumbnail/abc`,
       )
+    })
+  })
+
+  describe('a group', () => {
+    const MEMBER_ONE = createSharpStep('blur', { sigma: 3 })
+    const MEMBER_TWO = createSharpStep('flop')
+    const GROUP = createGroupStep([MEMBER_ONE, MEMBER_TWO], 'Look')
+
+    function lastChange(): unknown {
+      const call = vi.mocked(changeDocument).mock.calls.at(-1)
+      return (call?.[0] as { data: { change: unknown } } | undefined)?.data
+        .change
+    }
+
+    it('lists its steps under it, the last on top, and says how many it holds', async () => {
+      const list = await showSteps([GROUP], userEvent.setup())
+
+      const inner = within(list).getByRole('list', { name: 'Steps in Look' })
+      const names = within(inner)
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label'))
+        .filter((name) => name === 'Blur' || name === 'Flop')
+      expect(names).toEqual(['Flop', 'Blur'])
+      expect(within(list).getByText('2 steps')).toBeVisible()
+    })
+
+    it('folds away its steps and shows them again', async () => {
+      const user = userEvent.setup()
+      const list = await showSteps([GROUP], user)
+
+      await user.click(
+        within(list).getByRole('button', { name: 'Collapse Look' }),
+      )
+      expect(
+        within(list).queryByRole('list', { name: 'Steps in Look' }),
+      ).not.toBeInTheDocument()
+
+      await user.click(
+        within(list).getByRole('button', { name: 'Expand Look' }),
+      )
+      expect(
+        within(list).getByRole('list', { name: 'Steps in Look' }),
+      ).toBeVisible()
+    })
+
+    it('is switched off with one change to the group', async () => {
+      const user = userEvent.setup()
+      await showSteps([GROUP], user)
+
+      await user.click(screen.getByRole('button', { name: 'Hide Look' }))
+
+      await waitFor(() => {
+        expect(lastChange()).toEqual({
+          type: 'set-enabled',
+          stepId: GROUP.id,
+          enabled: false,
+        })
+      })
+    })
+
+    it('is deleted with the steps in it', async () => {
+      const user = userEvent.setup()
+      await showSteps([GROUP], user)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Look' }))
+
+      await waitFor(() => {
+        expect(lastChange()).toEqual({ type: 'remove-step', stepId: GROUP.id })
+      })
+    })
+
+    it('is made from steps picked with ctrl, with the toolbar button', async () => {
+      const user = userEvent.setup()
+      await showSteps([BLUR, FLIP], user)
+      const group = screen.getByRole('button', {
+        name: 'Group selected steps',
+      })
+      expect(group).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: 'Blur' }))
+      await user.keyboard('{Control>}')
+      await user.click(screen.getByRole('button', { name: 'Flip' }))
+      await user.keyboard('{/Control}')
+      expect(group).toBeEnabled()
+      await user.click(group)
+
+      await waitFor(() => {
+        expect(lastChange()).toMatchObject({
+          type: 'group-steps',
+          group: { kind: 'group', steps: [BLUR, FLIP] },
+        })
+      })
+    })
+
+    it('cannot be made from steps that are not next to each other', async () => {
+      const user = userEvent.setup()
+      await showSteps([BLUR, FLIP], user)
+
+      await user.click(screen.getByRole('button', { name: 'Layer' }))
+      await user.keyboard('{Control>}')
+      await user.click(screen.getByRole('button', { name: 'Flip' }))
+      await user.keyboard('{/Control}')
+
+      expect(
+        screen.getByRole('button', { name: 'Group selected steps' }),
+      ).toBeDisabled()
+    })
+
+    it('says it has its own picture, and can be made one from its options', async () => {
+      const user = userEvent.setup()
+      await showSteps([GROUP], user)
+
+      await user.click(screen.getByRole('button', { name: 'Group Look' }))
+      await user.click(
+        await screen.findByRole('switch', { name: 'Own picture' }),
+      )
+
+      await waitFor(() => {
+        expect(lastChange()).toEqual({
+          type: 'set-sub-document',
+          stepId: GROUP.id,
+          subDocument: true,
+        })
+      })
+      expect(await screen.findByText('Own picture · 2 steps')).toBeVisible()
+    })
+
+    it('shows where it is placed only once it is a picture of its own', async () => {
+      const user = userEvent.setup()
+      await showSteps([{ ...GROUP, subDocument: true }], user)
+
+      await user.click(screen.getByRole('button', { name: 'Group Look' }))
+
+      expect(await screen.findByLabelText(/opacity/i)).toBeVisible()
+    })
+
+    it('can be taken apart from its options', async () => {
+      const user = userEvent.setup()
+      await showSteps([GROUP], user)
+
+      await user.click(screen.getByRole('button', { name: 'Group Look' }))
+      await user.click(await screen.findByRole('button', { name: 'Ungroup' }))
+
+      await waitFor(() => {
+        expect(lastChange()).toEqual({ type: 'ungroup', groupId: GROUP.id })
+      })
     })
   })
 

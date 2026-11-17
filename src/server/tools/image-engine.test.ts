@@ -698,6 +698,88 @@ describe('SharpImageEngine', () => {
       expect(raw[3]).toBe(0)
     })
 
+    describe('a sub-document', () => {
+      function subOf(
+        file: string,
+        steps: Parameters<typeof engine.render>[0]['steps'] = [],
+        settings = {},
+      ) {
+        return {
+          kind: 'sub-document' as const,
+          input: file,
+          steps,
+          ...DEFAULT_LAYER_SETTINGS,
+          ...settings,
+        }
+      }
+
+      it('is a picture of its own placed on the canvas like a layer', async () => {
+        const base = await colourFile('base.png', '#ff0000', 8)
+        const logo = await colourFile('logo.png', '#0000ff', 2)
+
+        const raw = await render([subOf(logo)], base)
+
+        expect(at(raw, 4, 4)).toEqual([0, 0, 255, 255])
+        expect(at(raw, 0, 0)).toEqual([255, 0, 0, 255])
+      })
+
+      it('applies its own steps to its own picture and not to the canvas', async () => {
+        const base = await colourFile('base.png', '#ff0000', 8)
+        const logo = await colourFile('logo.png', '#0000ff', 2)
+
+        const raw = await render(
+          [subOf(logo, [createSharpStep('negate', { alpha: false })])],
+          base,
+        )
+
+        expect(at(raw, 4, 4)).toEqual([255, 255, 0, 255])
+        expect(at(raw, 0, 0)).toEqual([255, 0, 0, 255])
+      })
+
+      it('is sized and placed by its own settings, measured against the canvas', async () => {
+        const base = await colourFile('base.png', '#ff0000', 8)
+        const logo = await colourFile('logo.png', '#0000ff', 4)
+
+        const raw = await render(
+          [subOf(logo, [], { fit: 'original', anchor: 'northwest' })],
+          base,
+        )
+
+        expect(at(raw, 3, 3)).toEqual([0, 0, 255, 255])
+        expect(at(raw, 4, 4)).toEqual([255, 0, 0, 255])
+      })
+
+      it('is faded and blended like a layer', async () => {
+        const base = await colourFile('base.png', '#ff0000', 8)
+        const logo = await colourFile('logo.png', '#0000ff', 8)
+
+        const raw = await render([subOf(logo, [], { opacity: 0 })], base)
+
+        expect(at(raw, 4, 4)).toEqual([255, 0, 0, 255])
+      })
+
+      it('lets steps after it act on the canvas with it in', async () => {
+        const base = await colourFile('base.png', '#ff0000', 8)
+        const logo = await colourFile('logo.png', '#0000ff', 2)
+
+        const raw = await render(
+          [subOf(logo), createSharpStep('negate', { alpha: false })],
+          base,
+        )
+
+        expect(at(raw, 4, 4)).toEqual([255, 255, 0, 255])
+        expect(at(raw, 0, 0)).toEqual([0, 255, 255, 255])
+      })
+
+      it('says plainly when its picture cannot be read', async () => {
+        const base = await colourFile('base.png', '#ff0000', 4)
+
+        await expect(
+          render([subOf(path.join(directory, 'gone.png'))], base),
+        ).rejects.toBeInstanceOf(RenderError)
+      })
+    })
+
     it('says plainly when a layer’s image cannot be read', async () => {
       const base = await colourFile('base.png', '#ff0000', 4)
 

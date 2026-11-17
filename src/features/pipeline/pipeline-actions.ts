@@ -6,10 +6,16 @@ import type { StepBlend } from '@/features/pipeline/step-blend'
 import {
   PipelineStepKind,
   canvasLayer,
+  copyStep,
+  createGroupStep,
   createLayerStep,
+  findStep,
+  groupableSteps,
+  leafSteps,
 } from '@/features/pipeline/pipeline'
 import type {
   AiStep,
+  Pipeline,
   PipelineStep,
   SharpStep,
 } from '@/features/pipeline/pipeline'
@@ -18,6 +24,8 @@ import type { AiContent } from '@/features/ai/ai-tools'
 import { errorMessage } from '@/lib/error-message'
 
 const OPEN_FAILED = 'That image could not be opened.'
+export const GROUPING_NEEDS_STEPS =
+  'Pick steps that are next to each other and not in a group.'
 
 type SharpOptions = SharpStep['options']
 
@@ -25,24 +33,47 @@ function addStepAt(
   documentId: string,
   step: PipelineStep,
   index: number,
+  groupId?: string,
 ): void {
-  void applyEdit(documentId, { type: 'add-step', step, index })
+  void applyEdit(documentId, {
+    type: 'add-step',
+    step,
+    index,
+    ...(groupId === undefined ? {} : { groupId }),
+  })
   const store = useAppStore.getState()
   store.selectStep(documentId, step.id)
   store.setDocumentExpanded(documentId, true)
   store.setActiveTool(Tool.Options)
 }
 
-/** Adds a step after `afterId` (at the end by default), selects it and shows its options, as one undoable change. */
+/** Adds a step after `afterId` (at the end by default), selects it and shows its options, as one undoable change. After a step in a group it goes in that group; after a group, after the whole group. A group cannot be added inside a group. */
 export function addStepAfter(
   documentId: string,
   step: PipelineStep,
   afterId?: string,
 ): void {
-  const steps = currentPipeline(useAppStore.getState(), documentId)?.steps
-  if (!steps) return
-  const after = steps.findIndex(({ id }) => id === afterId)
-  addStepAt(documentId, step, after === -1 ? steps.length : after + 1)
+  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  if (!pipeline) return
+  const after = afterId === undefined ? undefined : findStep(pipeline, afterId)
+  const groupId =
+    step.kind === PipelineStepKind.Group ? undefined : after?.groupId
+  const siblings =
+    groupId === undefined
+      ? pipeline.steps
+      : (findGroup(pipeline.steps, groupId)?.steps ?? [])
+  const index = after === undefined ? siblings.length : after.index + 1
+  addStepAt(documentId, step, index, groupId)
+}
+
+function findGroup(
+  steps: ReadonlyArray<PipelineStep>,
+  groupId: string,
+): Extract<PipelineStep, { kind: typeof PipelineStepKind.Group }> | undefined {
+  for (const step of steps) {
+    if (step.kind === PipelineStepKind.Group && step.id === groupId) return step
+  }
+  return undefined
 }
 
 export function deleteStep(documentId: string, stepId: string): void {
@@ -53,13 +84,45 @@ export function deleteStep(documentId: string, stepId: string): void {
   }
 }
 
-/** Moves a step to `index` in the order the steps have once it is taken out. */
+/** Moves a step to `index` in the order the steps have once it is taken out, at the top level or, with `groupId`, inside that group. */
 export function reorderStep(
   documentId: string,
   stepId: string,
   index: number,
+  groupId?: string,
 ): void {
-  void applyEdit(documentId, { type: 'move-step', stepId, to: index })
+  void applyEdit(documentId, {
+    type: 'move-step',
+    stepId,
+    to: index,
+    ...(groupId === undefined ? {} : { groupId }),
+  })
+}
+
+/** Puts the steps in a new group, as one undoable change, and selects the group. The steps must be next to each other at the top level; returns why they cannot be grouped, or nothing when the change was made. */
+export function groupSteps(
+  documentId: string,
+  stepIds: ReadonlyArray<string>,
+): string | undefined {
+  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  if (!pipeline) return undefined
+  const members = groupableSteps(pipeline, stepIds)
+  if (members === undefined) return GROUPING_NEEDS_STEPS
+  const group = createGroupStep(members)
+  void applyEdit(documentId, { type: 'group-steps', group })
+  const store = useAppStore.getState()
+  store.selectStep(documentId, group.id)
+  store.setDocumentExpanded(documentId, true)
+  return undefined
+}
+
+/** Takes the steps out of a group, leaving them where it was, as one undoable change. */
+export function ungroupSteps(documentId: string, groupId: string): void {
+  void applyEdit(documentId, { type: 'ungroup', groupId })
+  const store = useAppStore.getState()
+  if (store.selectedSteps[documentId] === groupId) {
+    store.selectStep(documentId, undefined)
+  }
 }
 
 export function setStepOn(
@@ -71,9 +134,8 @@ export function setStepOn(
 }
 
 function stepOf(documentId: string, stepId: string): PipelineStep | undefined {
-  return currentPipeline(useAppStore.getState(), documentId)?.steps.find(
-    ({ id }) => id === stepId,
-  )
+  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  return pipeline ? findStep(pipeline, stepId)?.step : undefined
 }
 
 /**
@@ -101,7 +163,7 @@ export async function copyStepToDocument(
   store.setDocumentExpanded(toId, true)
   await applyEdit(toId, {
     type: 'add-step',
-    step: { ...step, id: crypto.randomUUID() },
+    step: copyStep(step),
     index: steps.length,
   })
   return useAppStore.getState().documents[toId]?.error
@@ -118,22 +180,25 @@ export function insertImage(documentId: string, sourceId: string): void {
 
 /** The step that replacing an image changes: the selected layer, or else the layer that sets the canvas, or the first layer when all are off. */
 function replaceTarget(
-  steps: ReadonlyArray<PipelineStep>,
+  pipeline: Pipeline,
   selectedId: string | undefined,
 ): string | undefined {
-  const selected = steps.find(({ id }) => id === selectedId)
+  const selected =
+    selectedId === undefined ? undefined : findStep(pipeline, selectedId)?.step
   if (selected?.kind === PipelineStepKind.Layer) return selected.id
-  const canvas = canvasLayer({ steps })
-  return (canvas ?? steps.find((step) => step.kind === PipelineStepKind.Layer))
-    ?.id
+  const canvas = canvasLayer(pipeline)
+  return (
+    canvas ??
+    leafSteps(pipeline).find((step) => step.kind === PipelineStepKind.Layer)
+  )?.id
 }
 
 /** Makes the selected layer use `sourceId` instead, or the layer that sets the canvas when another kind of step is selected, as one undoable change. */
 export function replaceImage(documentId: string, sourceId: string): void {
-  const steps = currentPipeline(useAppStore.getState(), documentId)?.steps
-  if (!steps) return
+  const pipeline = currentPipeline(useAppStore.getState(), documentId)
+  if (!pipeline) return
   const stepId = replaceTarget(
-    steps,
+    pipeline,
     useAppStore.getState().selectedSteps[documentId],
   )
   if (stepId !== undefined) setStepSource(documentId, stepId, sourceId)
@@ -180,14 +245,25 @@ export function setStepBlend(
   void applyEdit(documentId, { type: 'set-blend', stepId, blend })
 }
 
-/** Sets how a layer is drawn, as one undoable change; nothing if the step is gone or is not a layer. */
+/** Sets how a layer, or a group that is a sub-document, is drawn on the picture, as one undoable change; nothing if the step is gone or is neither. */
 export function setLayerSettings(
   documentId: string,
   stepId: string,
   settings: LayerSettings,
 ): void {
-  if (stepOf(documentId, stepId)?.kind !== PipelineStepKind.Layer) return
+  const kind = stepOf(documentId, stepId)?.kind
+  if (kind !== PipelineStepKind.Layer && kind !== PipelineStepKind.Group) return
   void applyEdit(documentId, { type: 'set-layer', stepId, settings })
+}
+
+/** Makes a group a picture of its own, or a plain group again, as one undoable change; nothing if the step is gone or is not a group. */
+export function setSubDocument(
+  documentId: string,
+  stepId: string,
+  subDocument: boolean,
+): void {
+  if (stepOf(documentId, stepId)?.kind !== PipelineStepKind.Group) return
+  void applyEdit(documentId, { type: 'set-sub-document', stepId, subDocument })
 }
 
 /** Sets the settings of an AI step, as one undoable change; nothing if the step is gone. */

@@ -6,12 +6,14 @@ import type { SourceStore } from '../tools/source-store.ts'
 import { planPipeline } from './plan-pipeline.ts'
 import type { PipelinePlan } from './plan-pipeline.ts'
 import type { PlanLookups } from './plan-pipeline.ts'
-import type { PipelineStep } from '@/features/pipeline/pipeline'
+import { planSteps } from '@/features/pipeline/pipeline'
+import type { PlanStep } from '@/features/pipeline/pipeline'
 
 const ASSUMED = 'assumed'
 
 export type PlanOptions = {
-  steps?: ReadonlyArray<PipelineStep>
+  /** The steps to plan, as they count when the picture is made; the whole pipeline, groups that are not sub-documents opened, when not given. */
+  steps?: ReadonlyArray<PlanStep>
   assumeAiResults?: boolean
 }
 
@@ -63,7 +65,8 @@ export class DocumentPlanner {
     document: DocumentRecord,
     options: PlanOptions = {},
   ): Promise<PipelinePlan> {
-    const { steps = document.pipeline.steps, assumeAiResults = false } = options
+    const { steps = planSteps(document.pipeline), assumeAiResults = false } =
+      options
     return planPipeline(steps, this.#lookups(document.ownerId, assumeAiResults))
   }
 

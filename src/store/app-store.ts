@@ -63,6 +63,10 @@ interface AppStateData {
   expandedDocuments: Readonly<Record<string, boolean | undefined>>
   /** The step whose options are shown, by document. */
   selectedSteps: Readonly<Record<string, string | undefined>>
+  /** The steps picked together for grouping, by document; the selected step is always among them when there are any. */
+  markedSteps: Readonly<Record<string, ReadonlyArray<string> | undefined>>
+  /** Groups drawn closed in the sidebar, by group id. Only about the screen: it is not saved in the document. */
+  collapsedGroups: Readonly<Record<string, boolean | undefined>>
   documents: Readonly<Record<string, DocumentSession | undefined>>
   /** Documents shown as uploaded instead of as their edits make them. */
   showOriginal: Readonly<Record<string, boolean | undefined>>
@@ -95,6 +99,9 @@ interface AppStateActions {
   rememberUpscaleModel: (name: string) => void
   setDocumentExpanded: (documentId: string, expanded: boolean) => void
   selectStep: (documentId: string, stepId: string | undefined) => void
+  /** Replaces the steps picked together. */
+  markSteps: (documentId: string, stepIds: ReadonlyArray<string>) => void
+  setGroupCollapsed: (groupId: string, collapsed: boolean) => void
   setExportSettings: (documentId: string, settings: ExportSettings) => void
   bumpResults: () => void
   setRealtime: (status: RealtimeStatus) => void
@@ -134,6 +141,8 @@ export const INITIAL_APP_STATE: Readonly<AppStateData> = {
   documentHistory: [],
   expandedDocuments: {},
   selectedSteps: {},
+  markedSteps: {},
+  collapsedGroups: {},
   documents: {},
   showOriginal: {},
   viewports: {},
@@ -244,8 +253,22 @@ export const useAppStore = create<AppState>()(
         }))
       },
       selectStep: (documentId, stepId) => {
-        set(({ selectedSteps }) => ({
+        set(({ selectedSteps, markedSteps }) => ({
           selectedSteps: { ...selectedSteps, [documentId]: stepId },
+          markedSteps: {
+            ...markedSteps,
+            [documentId]: stepId === undefined ? [] : [stepId],
+          },
+        }))
+      },
+      markSteps: (documentId, stepIds) => {
+        set(({ markedSteps }) => ({
+          markedSteps: { ...markedSteps, [documentId]: stepIds },
+        }))
+      },
+      setGroupCollapsed: (groupId, collapsed) => {
+        set(({ collapsedGroups }) => ({
+          collapsedGroups: { ...collapsedGroups, [groupId]: collapsed },
         }))
       },
       setExportSettings: (documentId, settings) => {
@@ -309,6 +332,7 @@ export const useAppStore = create<AppState>()(
             aiRuns,
             expandedDocuments,
             selectedSteps,
+            markedSteps,
             showOriginal,
             viewports,
             viewFrames,
@@ -327,6 +351,7 @@ export const useAppStore = create<AppState>()(
               aiRuns: without(aiRuns),
               expandedDocuments: without(expandedDocuments),
               selectedSteps: without(selectedSteps),
+              markedSteps: without(markedSteps),
               showOriginal: without(showOriginal),
               viewports: without(viewports),
               viewFrames: without(viewFrames),

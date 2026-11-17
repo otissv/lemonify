@@ -371,7 +371,7 @@ describe('running a workflow', () => {
     await runFinished(run.id)
     expect(
       t.imageEngine.requests[0]?.steps.map((step) =>
-        step.kind === 'layer' ? 'layer' : step.op,
+        step.kind === 'sharp' ? step.op : step.kind,
       ),
     ).toEqual(['flip'])
   })

@@ -16,7 +16,11 @@ import { previousDocumentId } from '@/features/documents/document-history'
 import { useImageOpener } from '@/features/app/image-opener'
 import { signOut } from '@/features/auth/auth-client'
 import { canRedoNow, canUndoNow } from '@/features/documents/document-session'
-import { PipelineStepKind, hasEdits } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  hasEdits,
+  leafSteps,
+} from '@/features/pipeline/pipeline'
 import { redoEdit, undoEdit } from '@/features/documents/document-sync'
 import { Tool, useAppStore } from '@/store/app-store'
 
@@ -65,9 +69,10 @@ export function AppMenuBar({ documentId }: AppMenuBarProps): React.JSX.Element {
   )
   const hasSteps = session !== undefined && hasEdits(session.confirmed.pipeline)
   const hasLayer =
-    session?.confirmed.pipeline.steps.some(
+    session !== undefined &&
+    leafSteps(session.confirmed.pipeline).some(
       (step) => step.kind === PipelineStepKind.Layer,
-    ) ?? false
+    )
   const showOriginal = useAppStore((state) =>
     documentId === undefined
       ? false

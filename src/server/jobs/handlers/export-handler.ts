@@ -19,7 +19,8 @@ import { WrongJobKindError, runEach } from '../job-handler.ts'
 import type { JobHandler, JobItem, JobReport } from '../job-handler.ts'
 import { JobKind, JobState } from '../job-types.ts'
 import type { PipelinePlan } from '../../render/plan-pipeline.ts'
-import type { PipelineStep } from '@/features/pipeline/pipeline'
+import { findStep } from '@/features/pipeline/pipeline'
+import type { Pipeline } from '@/features/pipeline/pipeline'
 
 export type ExportHandlerDependencies = {
   planner: DocumentPlanner
@@ -34,12 +35,12 @@ const NOT_RENDERED = 'Run the AI steps before exporting.'
 /** Refuses a plan that cannot make the whole image, saying which step is the problem. */
 export function requireCompletePlan(
   plan: PipelinePlan,
-  steps: ReadonlyArray<PipelineStep>,
+  pipeline: Pipeline,
 ): void {
   if (plan.pending.length > 0) throw new ValidationError(NOT_RENDERED)
   const problem = plan.skipped.at(0)
   if (problem === undefined) return
-  const step = steps.find(({ id }) => id === problem.stepId)
+  const step = findStep(pipeline, problem.stepId)?.step
   const label = step ? pipelineStepTitle(step) : 'A step'
   throw new ValidationError(`${label}: ${problem.message}`)
 }
@@ -68,7 +69,7 @@ export class ExportHandler implements JobHandler {
           payload.revision,
         )
         const plan = await planner.plan(document)
-        requireCompletePlan(plan, document.pipeline.steps)
+        requireCompletePlan(plan, document.pipeline)
         context.setProgress(0.1)
         const resultId = await withWorkDirectory(
           workRoot,

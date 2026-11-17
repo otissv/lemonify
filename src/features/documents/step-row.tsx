@@ -18,7 +18,7 @@ import {
 import { DEFAULT_STEP_BLEND } from '@/features/pipeline/step-blend'
 import type { StepBlend } from '@/features/pipeline/step-blend'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import type { LayerStep, PipelineStep } from '@/features/pipeline/pipeline'
+import type { LayerStep, LeafStep } from '@/features/pipeline/pipeline'
 import {
   pipelineStepTitle,
   stepProblem,
@@ -28,9 +28,19 @@ import { JobState } from '@/server/jobs/job-types'
 
 const PERCENT = 100
 
+/** The keys held while a step was clicked: they extend what is picked. */
+export interface SelectModifiers {
+  toggle: boolean
+  range: boolean
+}
+
 export interface StepRowProps {
   documentId: string
-  step: PipelineStep
+  step: LeafStep
+  /** The group the step is in, when it is in one. */
+  groupId?: string
+  /** Picked together with other steps, to group them. */
+  marked?: boolean
   /** Where the step is in the pipeline: later steps are drawn on top of earlier ones. */
   position: number
   count: number
@@ -46,10 +56,10 @@ export interface StepRowProps {
   /** Why the server left this step out of the picture, if it did. */
   skipped: string | undefined
   run: AiRun | undefined
-  onSelect: (stepId: string) => void
+  onSelect: (stepId: string, modifiers: SelectModifiers) => void
   onToggle: (stepId: string, isOn: boolean) => void
   onDelete: (stepId: string) => void
-  onMove: (stepId: string, index: number) => void
+  onMove: (stepId: string, index: number, groupId?: string) => void
 }
 
 interface StepStatus {
@@ -93,7 +103,7 @@ function blendSummary(blend: StepBlend): string {
 }
 
 function statusOf(
-  step: PipelineStep,
+  step: LeafStep,
   sourceName: string | undefined,
   canvas: boolean,
   outOfDate: boolean,
@@ -128,6 +138,8 @@ function statusOf(
 export function StepRow({
   documentId,
   step,
+  groupId,
+  marked = false,
   position,
   count,
   selected,
@@ -146,8 +158,11 @@ export function StepRow({
   const label = pipelineStepTitle(step)
   const status = statusOf(step, sourceName, canvas, outOfDate, skipped, run)
 
-  function handleSelect(): void {
-    onSelect(step.id)
+  function handleSelect(event: React.MouseEvent<HTMLButtonElement>): void {
+    onSelect(step.id, {
+      toggle: event.metaKey || event.ctrlKey,
+      range: event.shiftKey,
+    })
   }
 
   function handleToggle(): void {
@@ -159,11 +174,11 @@ export function StepRow({
   }
 
   function handleMoveUp(): void {
-    onMove(step.id, position + 1)
+    onMove(step.id, position + 1, groupId)
   }
 
   function handleMoveDown(): void {
-    onMove(step.id, position - 1)
+    onMove(step.id, position - 1, groupId)
   }
 
   function handleCancel(): void {
@@ -174,7 +189,7 @@ export function StepRow({
     <div
       className={cn(
         'flex flex-col gap-1 rounded-md p-1',
-        selected && 'bg-accent',
+        (selected || marked) && 'bg-accent',
         dragging && 'opacity-50',
         !step.enabled && 'opacity-60',
       )}

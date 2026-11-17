@@ -1,8 +1,16 @@
 import { AiToolId } from '@/features/ai/ai-tools'
 import { describe, expect, it } from 'vitest'
 
-import { createSharpStep, createAiStep } from '@/features/pipeline/pipeline'
-import { stepProblem } from '@/features/pipeline/step-problems'
+import {
+  createAiStep,
+  createGroupStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
+import {
+  pipelineStepLabel,
+  pipelineStepTitle,
+  stepProblem,
+} from '@/features/pipeline/step-problems'
 
 describe('stepProblem', () => {
   it('has none for a step that is set up', () => {
@@ -37,5 +45,14 @@ describe('stepProblem', () => {
         }),
       ),
     ).toBeUndefined()
+  })
+})
+
+describe('the name of a group', () => {
+  it('is Group until it is named', () => {
+    const group = createGroupStep([createSharpStep('blur')])
+    expect(pipelineStepLabel(group)).toBe('Group')
+    expect(pipelineStepTitle(group)).toBe('Group')
+    expect(pipelineStepTitle({ ...group, name: 'Look' })).toBe('Look')
   })
 })

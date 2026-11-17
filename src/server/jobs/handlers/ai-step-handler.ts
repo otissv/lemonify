@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import type { AiToolId } from '@/features/ai/ai-tools'
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import { PipelineStepKind, effectiveSteps } from '@/features/pipeline/pipeline'
 import type { AiStep } from '@/features/pipeline/pipeline'
 
 import type { AiToolRegistry } from '../../ai/ai-tool-registry.ts'
@@ -11,6 +11,7 @@ import { actorForOwner } from '../../domain/system-actor.ts'
 import { ValidationError } from '../../errors.ts'
 import type { Logger } from '../../http/logger.ts'
 import type { DocumentPlanner } from '../../render/document-planner.ts'
+import { awaitingPlan } from '../../render/plan-pipeline.ts'
 import type { ResultService } from '../../services/result-service.ts'
 import { EngineTargetKind } from '../../tools/image-engine.ts'
 import type { ImageEngine } from '../../tools/image-engine.ts'
@@ -104,7 +105,9 @@ export class AiStepHandler implements JobHandler {
       payload.documentId,
       payload.revision,
     )
-    const step = document.pipeline.steps.find(({ id }) => id === payload.stepId)
+    const step = effectiveSteps(document.pipeline).find(
+      ({ id }) => id === payload.stepId,
+    )
     if (step?.kind !== PipelineStepKind.Ai || !step.enabled) {
       throw new ValidationError(NOT_AN_AI_STEP)
     }
@@ -116,12 +119,14 @@ export class AiStepHandler implements JobHandler {
     if (plan.pending[0]?.step.id !== step.id) {
       throw new ValidationError(EARLIER_FIRST)
     }
-    let input = plan.basePath
-    if (plan.steps.length > 0) {
+    const own = awaitingPlan(plan, step.id)
+    if (own === undefined) throw new ValidationError(NOT_AN_AI_STEP)
+    let input = own.basePath
+    if (own.steps.length > 0) {
       input = path.join(directory, `in-${job.id}.png`)
       await engine.render({
-        input: plan.basePath,
-        steps: plan.steps,
+        input: own.basePath,
+        steps: own.steps,
         target: { kind: EngineTargetKind.Intermediate },
         output: input,
       })

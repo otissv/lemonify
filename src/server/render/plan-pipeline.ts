@@ -1,9 +1,11 @@
 import { remapPipelineSources } from '@/features/pipeline/image-operands'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import type { LayerSettings } from '@/features/pipeline/layer'
 import type {
   AiStep,
+  GroupStep,
   LayerStep,
-  PipelineStep,
+  PlanStep,
   SharpStep,
 } from '@/features/pipeline/pipeline'
 import { stepProblem } from '@/features/pipeline/step-problems'
@@ -14,8 +16,8 @@ import { renderKey } from './render-key.ts'
 import type { KeyedStep } from './render-key.ts'
 import { resolveOperands } from './resolve-operands.ts'
 
-/** A step that changes the picture; the canvas layer only chooses what it starts from. */
-export type AppliedStep = SharpStep | LayerStep | AiStep
+/** A step that changes the picture; the canvas layer only chooses what it starts from. A group is a sub-document, placed on the picture like a layer. */
+export type AppliedStep = SharpStep | LayerStep | AiStep | GroupStep
 
 export interface PendingAiStep {
   step: AiStep
@@ -31,6 +33,8 @@ const NO_IMAGE =
   'There is no image to edit. Add an image as a layer, or switch one on.'
 const BEFORE_IMAGE = 'Move this step after the first layer.'
 const IMAGE_GONE = 'This image is no longer available.'
+const GROUP_NO_IMAGE =
+  'No layer in this group is on, so it has no picture. Switch one on, or add one.'
 
 /** What planning needs to know about a stored image. */
 export interface PlanSource {
@@ -60,8 +64,12 @@ export interface PipelinePlan {
   pending: ReadonlyArray<PendingAiStep>
   /** Steps left out because they are not set up. */
   skipped: ReadonlyArray<StepProblem>
-  /** The key each AI Step's Result is stored under, whether or not it exists yet. */
+  /** The key each AI Step's Result is stored under, whether or not it exists yet, including those of the steps in sub-documents. */
   aiKeys: ReadonlyMap<string, string>
+  /** The plan of each sub-document that is applied or waiting, by group id: its own picture, steps and AI steps. */
+  subPlans: ReadonlyMap<string, PipelinePlan>
+  /** Every step that can be applied, as the key sees it, whether or not it waits for an AI step before it. */
+  fullIdentity: ReadonlyArray<KeyedStep>
 }
 
 interface UsableSteps {
@@ -70,6 +78,7 @@ interface UsableSteps {
   identity: Map<string, KeyedStep>
   resolved: Map<string, EngineStep>
   skipped: Array<StepProblem>
+  subPlans: Map<string, PipelinePlan>
 }
 
 /** The step with its second images named by their content hash, which is the same wherever the image is stored. */
@@ -86,9 +95,29 @@ function engineLayer(step: LayerStep, path: string): EngineLayer {
   return { ...settings, path }
 }
 
+function placement(group: GroupStep): LayerSettings {
+  const { opacity, blend, fit, scale, rotation, anchor, x, y } = group
+  return { opacity, blend, fit, scale, rotation, anchor, x, y }
+}
+
+/** The sub-document's own plan, or why it has none: with no layer on there is no picture to make. */
+async function planSubDocument(
+  group: GroupStep,
+  lookups: PlanLookups,
+): Promise<PipelinePlan | StepProblem> {
+  try {
+    return await planPipeline(group.steps, lookups)
+  } catch (error) {
+    if (error instanceof ValidationError && error.message === NO_IMAGE) {
+      return { stepId: group.id, message: GROUP_NO_IMAGE }
+    }
+    throw error
+  }
+}
+
 /** Steps that can be applied, in order, each resolved to what the engine needs. The first layer that is switched on and still has its image is the canvas and is not applied: it is the picture the rest start from. */
 async function usableSteps(
-  steps: ReadonlyArray<PipelineStep>,
+  steps: ReadonlyArray<PlanStep>,
   lookups: PlanLookups,
 ): Promise<UsableSteps> {
   const usable: Array<AppliedStep> = []
@@ -96,6 +125,7 @@ async function usableSteps(
   const skipped: Array<StepProblem> = []
   const hashes = new Map<string, string>()
   const identity = new Map<string, KeyedStep>()
+  const subPlans = new Map<string, PipelinePlan>()
   const pathOf = async (id: string): Promise<string | undefined> => {
     const source = await lookups.source(id)
     if (source !== undefined) hashes.set(id, source.contentHash)
@@ -115,6 +145,29 @@ async function usableSteps(
     }
     if (base === undefined) {
       skipped.push({ stepId: step.id, message: BEFORE_IMAGE })
+      continue
+    }
+    if (step.kind === PipelineStepKind.Group) {
+      const inner = await planSubDocument(step, lookups)
+      if ('message' in inner) {
+        skipped.push(inner)
+        continue
+      }
+      skipped.push(...inner.skipped)
+      subPlans.set(step.id, inner)
+      resolved.set(step.id, {
+        ...placement(step),
+        kind: 'sub-document',
+        input: inner.basePath,
+        steps: inner.steps,
+      })
+      identity.set(step.id, {
+        ...placement(step),
+        kind: PipelineStepKind.Group,
+        source: inner.sourceHash,
+        steps: inner.fullIdentity,
+      })
+      usable.push(step)
       continue
     }
     const problem = stepProblem(step)
@@ -146,7 +199,7 @@ async function usableSteps(
     usable.push(step)
   }
   if (base === undefined) throw new ValidationError(NO_IMAGE)
-  return { base, usable, identity, resolved, skipped }
+  return { base, usable, identity, resolved, skipped, subPlans }
 }
 
 /**
@@ -159,22 +212,30 @@ async function usableSteps(
  * image to start from.
  */
 export async function planPipeline(
-  steps: ReadonlyArray<PipelineStep>,
+  steps: ReadonlyArray<PlanStep>,
   lookups: PlanLookups,
 ): Promise<PipelinePlan> {
-  const { base, usable, identity, resolved, skipped } = await usableSteps(
-    steps,
-    lookups,
-  )
+  const { base, usable, identity, resolved, skipped, subPlans } =
+    await usableSteps(steps, lookups)
   let basePath = base.path
   let engineSteps: Array<EngineStep> = []
   const applied: Array<AppliedStep> = []
   const appliedIdentity: Array<KeyedStep> = []
-  const identityOf = (step: AppliedStep): KeyedStep =>
-    identity.get(step.id) ?? step
+  const identityOf = (step: AppliedStep): KeyedStep => {
+    const known = identity.get(step.id)
+    if (known !== undefined) return known
+    if (step.kind === PipelineStepKind.Group) {
+      throw new Error('A sub-document was applied without being planned.')
+    }
+    return step
+  }
   const pending: Array<PendingAiStep> = []
   const aiKeys = new Map<string, string>()
   for (const [index, step] of usable.entries()) {
+    const inner = subPlans.get(step.id)
+    if (inner !== undefined) {
+      for (const [id, key] of inner.aiKeys) aiKeys.set(id, key)
+    }
     if (step.kind === PipelineStepKind.Ai) {
       aiKeys.set(
         step.id,
@@ -186,6 +247,11 @@ export async function planPipeline(
       if (step.kind === PipelineStepKind.Ai && key !== undefined) {
         pending.push({ step, key })
       }
+      if (inner !== undefined) pending.push(...inner.pending)
+      continue
+    }
+    if (inner !== undefined && inner.pending.length > 0) {
+      pending.push(...inner.pending)
       continue
     }
     if (step.kind !== PipelineStepKind.Ai) {
@@ -216,7 +282,25 @@ export async function planPipeline(
     pending,
     skipped,
     aiKeys,
+    subPlans,
+    fullIdentity: usable.map(identityOf),
   }
+}
+
+/**
+ * The plan whose picture an AI step works on when it runs: the plan of the
+ * sub-document that holds it, or `plan` itself. Undefined when the step is
+ * not waiting in `plan`.
+ */
+export function awaitingPlan(
+  plan: PipelinePlan,
+  stepId: string,
+): PipelinePlan | undefined {
+  for (const inner of plan.subPlans.values()) {
+    const found = awaitingPlan(inner, stepId)
+    if (found !== undefined) return found
+  }
+  return plan.pending.some(({ step }) => step.id === stepId) ? plan : undefined
 }
 
 /** The render key of everything a plan applies. */

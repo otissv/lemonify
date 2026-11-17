@@ -4,12 +4,13 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import {
   createAiStep,
+  createGroupStep,
   createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
-import type { LayerStep, PipelineStep } from '@/features/pipeline/pipeline'
+import type { LayerStep, LeafStep } from '@/features/pipeline/pipeline'
 
-import { planKey, planPipeline } from './plan-pipeline.ts'
+import { awaitingPlan, planKey, planPipeline } from './plan-pipeline.ts'
 import type { PlanLookups } from './plan-pipeline.ts'
 import { renderKey } from './render-key.ts'
 
@@ -109,7 +110,7 @@ describe('planPipeline', () => {
     const ai = createAiStep(UPSCALE)
     const after = createSharpStep('flop')
     const later = createAiStep(UPSCALE)
-    const steps: PipelineStep[] = [before, ai, after, later]
+    const steps: LeafStep[] = [before, ai, after, later]
     const plan = await planPipeline([IMAGE, ...steps], lookups())
     expect(plan.applied).toEqual([before])
     expect(plan.pending.map(({ step }) => step.id)).toEqual([ai.id, later.id])
@@ -300,6 +301,195 @@ describe('planPipeline', () => {
           message: expect.stringMatching(/no longer available/),
         },
       ])
+    })
+  })
+
+  describe('a sub-document', () => {
+    const subDocument = (steps: LeafStep[], settings = {}) => ({
+      ...createGroupStep(steps, 'Logo'),
+      subDocument: true,
+      ...settings,
+    })
+
+    it('is a picture of its own, made from its first layer that is on, and placed like a layer', async () => {
+      const blur = createSharpStep('blur', { sigma: 2 })
+      const group = subDocument([createLayerStep('second'), blur], {
+        opacity: 40,
+      })
+
+      const plan = await planPipeline([IMAGE, group], lookups())
+
+      expect(plan.basePath).toBe(SOURCE.path)
+      expect(plan.steps).toEqual([
+        {
+          kind: 'sub-document',
+          input: SECOND.path,
+          steps: [blur],
+          ...DEFAULT_LAYER_SETTINGS,
+          opacity: 40,
+        },
+      ])
+      expect(plan.applied).toEqual([group])
+    })
+
+    it('does not let the canvas be one of its layers', async () => {
+      const group = subDocument([createLayerStep('second')])
+
+      await expect(planPipeline([group], lookups())).rejects.toThrow(
+        /no image/i,
+      )
+      const plan = await planPipeline([group, IMAGE], lookups())
+      expect(plan.basePath).toBe(SOURCE.path)
+      expect(plan.skipped).toEqual([
+        {
+          stepId: group.id,
+          message: expect.stringMatching(/after the first layer/),
+        },
+      ])
+    })
+
+    it('says so, and is left out, when none of its layers is on', async () => {
+      const off = { ...createLayerStep('second'), enabled: false }
+      const group = subDocument([off, createSharpStep('flip')])
+      const flip = createSharpStep('flop')
+
+      const plan = await planPipeline([IMAGE, group, flip], lookups())
+      const plain = await planPipeline([IMAGE, flip], lookups())
+
+      expect(plan.skipped).toEqual([
+        { stepId: group.id, message: expect.stringMatching(/no layer .*on/i) },
+      ])
+      expect(plan.applied).toEqual([flip])
+      expect(planKey(plan)).toBe(planKey(plain))
+    })
+
+    it('says so when its image is gone', async () => {
+      const group = subDocument([createLayerStep('gone')])
+
+      const plan = await planPipeline([IMAGE, group], lookups())
+
+      expect(plan.applied).toEqual([])
+      expect(plan.skipped.map(({ stepId }) => stepId)).toContain(group.id)
+    })
+
+    it('leaves out its steps that come before its layer, with the reason', async () => {
+      const flip = createSharpStep('flip')
+      const group = subDocument([flip, createLayerStep('second')])
+
+      const plan = await planPipeline([IMAGE, group], lookups())
+
+      expect(plan.skipped).toEqual([
+        {
+          stepId: flip.id,
+          message: expect.stringMatching(/after the first layer/),
+        },
+      ])
+    })
+
+    it('has a key of its own, unlike a group that is not one', async () => {
+      const blur = createSharpStep('blur', { sigma: 2 })
+      const layer = createLayerStep('second')
+      const plain = createGroupStep([layer, blur])
+      const sub = { ...plain, subDocument: true }
+
+      const flat = await planPipeline([IMAGE, layer, blur], lookups())
+      const grouped = await planPipeline([IMAGE, ...plain.steps], lookups())
+      const separate = await planPipeline([IMAGE, sub], lookups())
+
+      expect(planKey(grouped)).toBe(planKey(flat))
+      expect(planKey(separate)).not.toBe(planKey(flat))
+    })
+
+    it('changes the key with its steps, its image and its placement, not with names or ids', async () => {
+      const make = (
+        settings = {},
+        sigma = 2,
+        image = 'second',
+        name = 'A',
+      ) => ({
+        ...subDocument(
+          [createLayerStep(image), createSharpStep('blur', { sigma })],
+          settings,
+        ),
+        name,
+      })
+      const key = async (group: ReturnType<typeof make>) =>
+        planKey(await planPipeline([IMAGE, group], lookups()))
+
+      const keys = new Set([
+        await key(make()),
+        await key(make({ opacity: 50 })),
+        await key(make({}, 3)),
+        await key(make({}, 2, 'base')),
+      ])
+      expect(keys.size).toBe(4)
+      expect(await key(make())).toBe(await key(make({}, 2, 'copy', 'B')))
+    })
+
+    describe('with an AI step in it', () => {
+      const upscale = createAiStep(UPSCALE)
+      const group = () =>
+        subDocument([
+          createLayerStep('second'),
+          createSharpStep('flip'),
+          upscale,
+        ])
+
+      it('waits for it, under a key made from its own picture, and holds what comes after', async () => {
+        const g = group()
+        const after = createAiStep(UPSCALE)
+        const flop = createSharpStep('flop')
+
+        const plan = await planPipeline([IMAGE, g, flop, after], lookups())
+
+        const key = plan.aiKeys.get(upscale.id)
+        expect(key).toBe(
+          renderKey(SECOND.contentHash, [g.steps[1] as LeafStep, upscale]),
+        )
+        expect(plan.pending.map(({ step }) => step.id)).toEqual([
+          upscale.id,
+          after.id,
+        ])
+        expect(plan.applied).toEqual([])
+        expect(awaitingPlan(plan, upscale.id)?.basePath).toBe(SECOND.path)
+        expect(awaitingPlan(plan, upscale.id)?.steps).toEqual([g.steps[1]])
+        expect(awaitingPlan(plan, after.id)).toBe(plan)
+      })
+
+      it('starts from its result once it has one, keeping the steps after it', async () => {
+        const g = subDocument([
+          createLayerStep('second'),
+          upscale,
+          createSharpStep('flop'),
+        ])
+        const waiting = await planPipeline([IMAGE, g], lookups())
+        const key = waiting.aiKeys.get(upscale.id) ?? ''
+
+        const plan = await planPipeline(
+          [IMAGE, g],
+          lookups({ [key]: '/results/logo' }),
+        )
+
+        expect(plan.pending).toEqual([])
+        expect(plan.steps).toMatchObject([
+          { kind: 'sub-document', input: '/results/logo', steps: [g.steps[2]] },
+        ])
+        expect(plan.basePath).toBe(SOURCE.path)
+      })
+
+      it('does not move the key of an AI step after it when its own result arrives', async () => {
+        const g = group()
+        const later = createAiStep(UPSCALE)
+        const waiting = await planPipeline([IMAGE, g, later], lookups())
+        const key = waiting.aiKeys.get(upscale.id) ?? ''
+
+        const done = await planPipeline(
+          [IMAGE, g, later],
+          lookups({ [key]: '/results/logo' }),
+        )
+
+        expect(done.aiKeys.get(later.id)).toBe(waiting.aiKeys.get(later.id))
+      })
     })
   })
 })

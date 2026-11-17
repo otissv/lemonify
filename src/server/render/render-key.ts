@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import type { LayerSettings } from '@/features/pipeline/layer'
 import type { AiStep, LayerStep, SharpStep } from '@/features/pipeline/pipeline'
 
 function sortKeys(value: unknown): unknown {
@@ -13,8 +14,15 @@ function sortKeys(value: unknown): unknown {
   return sorted
 }
 
+/** A sub-document as the key sees it: the content hash of its first image, the steps it applies as the key sees them, and where it is placed. */
+export interface KeyedSubDocument extends LayerSettings {
+  kind: typeof PipelineStepKind.Group
+  source: string
+  steps: ReadonlyArray<KeyedStep>
+}
+
 /** A step as the key sees it. A layer's `sourceId` must already be the image's content hash, so the key means the same wherever the image is stored. */
-export type KeyedStep = SharpStep | LayerStep | AiStep
+export type KeyedStep = SharpStep | LayerStep | AiStep | KeyedSubDocument
 
 function stepIdentity(step: KeyedStep): unknown {
   switch (step.kind) {
@@ -31,6 +39,8 @@ function stepIdentity(step: KeyedStep): unknown {
     }
     case PipelineStepKind.Ai:
       return { kind: step.kind, tool: step.tool, settings: step.settings }
+    case PipelineStepKind.Group:
+      return { ...step, steps: step.steps.map(stepIdentity) }
   }
 }
 

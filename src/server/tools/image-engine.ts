@@ -15,14 +15,29 @@ import { applySharpOps, sharpOpSchema } from '@/lib/images/sharp/ops'
 import type { SharpOp } from '@/lib/images/sharp/ops'
 import { OUTPUT_OPTION_SCHEMAS } from '@/lib/images/sharp/output-options'
 
-import { blendPictures, compositeLayer } from './layer-compositor.ts'
+import {
+  blendPictures,
+  compositeImage,
+  compositeLayer,
+} from './layer-compositor.ts'
 import type { EngineLayer, RawImage } from './layer-compositor.ts'
+import type { LayerSettings } from '@/features/pipeline/layer'
 import { RenderError, plainReason } from './render-error.ts'
 
 export type { EngineLayer } from './layer-compositor.ts'
 
-/** One thing the engine does to the picture: a Sharp step, or a layer placed over it. */
-export type EngineStep = SharpStep | EngineLayer
+/**
+ * A picture of its own, placed over the canvas like a layer: `steps` act on
+ * the image at `input` only, and the result is drawn with the layer settings.
+ */
+export interface EngineSubDocument extends LayerSettings {
+  kind: 'sub-document'
+  input: string
+  steps: ReadonlyArray<EngineStep>
+}
+
+/** One thing the engine does to the picture: a Sharp step, a layer placed over it, or a sub-document placed over it. */
+export type EngineStep = SharpStep | EngineLayer | EngineSubDocument
 
 const WHITE = '#ffffff'
 const CHANNELS = 4
@@ -174,6 +189,12 @@ async function blended(
   return fromPixels(await blendPictures(before, after, blend))
 }
 
+/** A sub-document's own picture: its image with its own steps applied, at its own size. */
+async function subPicture(step: EngineSubDocument): Promise<RawImage> {
+  const image = sharp(step.input).autoOrient()
+  return pixelsOf(await applySteps(image, step.steps))
+}
+
 /**
  * Applies the steps in order. Sharp does not run the operations of one
  * pipeline in the order they are listed (it resizes before it composites, for
@@ -189,11 +210,14 @@ async function applySteps(
   let stage: SharpOp[] = []
   const all: SharpOp[] = []
   for (const step of steps) {
-    if (step.kind === 'layer') {
+    if (step.kind === 'layer' || step.kind === 'sub-document') {
       pipeline = await applySharpOpsBlended(pipeline, stage, 'pixels')
       stage = []
+      const canvas = await pixelsOf(pipeline)
       pipeline = fromPixels(
-        await compositeLayer(await pixelsOf(pipeline), step),
+        step.kind === 'layer'
+          ? await compositeLayer(canvas, step)
+          : await compositeImage(canvas, await subPicture(step), step),
       )
       continue
     }

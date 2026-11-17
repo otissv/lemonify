@@ -1,6 +1,9 @@
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import { createLayerStep } from '@/features/pipeline/pipeline'
-import type { PipelineStep } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  createLayerStep,
+  planSteps,
+} from '@/features/pipeline/pipeline'
+import type { LeafStep, PlanStep } from '@/features/pipeline/pipeline'
 
 import type { DocumentRecord } from '../../dao/document-dao.ts'
 import { ValidationError } from '../../errors.ts'
@@ -12,9 +15,29 @@ import { ensureRender } from './preview-handler.ts'
 import type { RenderHandlerDependencies } from './preview-handler.ts'
 
 /** The steps that show only the image a layer holds: that layer alone, which then is the canvas. */
-function ownImage(step: PipelineStep): ReadonlyArray<PipelineStep> | undefined {
+function ownImage(step: PlanStep): ReadonlyArray<LeafStep> | undefined {
   if (step.kind !== PipelineStepKind.Layer) return undefined
   return [createLayerStep(step.sourceId)]
+}
+
+/** For each step in a sub-document: the steps of that sub-document up to and including it, which make its own picture at that step. */
+function stepsInSubDocuments(
+  steps: ReadonlyArray<PlanStep>,
+): Map<string, { shown: ReadonlyArray<LeafStep>; enabled: boolean }> {
+  const inside = new Map<
+    string,
+    { shown: ReadonlyArray<LeafStep>; enabled: boolean }
+  >()
+  for (const group of steps) {
+    if (group.kind !== PipelineStepKind.Group) continue
+    for (const [index, step] of group.steps.entries()) {
+      inside.set(step.id, {
+        shown: ownImage(step) ?? group.steps.slice(0, index + 1),
+        enabled: step.enabled,
+      })
+    }
+  }
+  return inside
 }
 
 /**
@@ -33,7 +56,7 @@ export class ThumbnailHandler implements JobHandler {
   /** The key of a small picture of `steps`, or null when they cannot make one. A layer shows its own image. */
   async #thumbnailKey(
     document: DocumentRecord,
-    steps: ReadonlyArray<PipelineStep>,
+    steps: ReadonlyArray<PlanStep>,
   ): Promise<string | null> {
     try {
       const plan = await this.#deps.planner.plan(document, { steps })
@@ -57,20 +80,23 @@ export class ThumbnailHandler implements JobHandler {
           payload.documentId,
           payload.revision,
         )
-        const steps = document.pipeline.steps
+        const steps = planSteps(document.pipeline)
+        const inside = stepsInSubDocuments(steps)
         const thumbnails: Array<{ stepId: string; key: string | null }> = []
         for (const [done, stepId] of payload.stepIds.entries()) {
           context.setProgress(done / payload.stepIds.length)
           const index = steps.findIndex((step) => step.id === stepId)
           const step = steps[index]
-          if (step === undefined || !step.enabled) {
-            thumbnails.push({ stepId, key: null })
-            continue
-          }
-          const key = await this.#thumbnailKey(
-            document,
-            ownImage(step) ?? steps.slice(0, index + 1),
-          )
+          const within = inside.get(stepId)
+          const shown =
+            step === undefined
+              ? within?.shown
+              : (ownImage(step) ?? steps.slice(0, index + 1))
+          const on = step === undefined ? within?.enabled : step.enabled
+          const key =
+            shown === undefined || !on
+              ? null
+              : await this.#thumbnailKey(document, shown)
           thumbnails.push({ stepId, key })
         }
         return {

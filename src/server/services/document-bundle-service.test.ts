@@ -12,6 +12,7 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
 import {
   createAiStep,
+  createGroupStep,
   createLayerStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
@@ -143,6 +144,59 @@ describe('DocumentBundleService', () => {
 
     const imported = await t.app.bundles.importDocument(t.bob, bundle)
 
+    await expect(
+      t.app.renders.requestExport(t.bob, imported.document.id, {
+        format: ExportFormat.Png,
+        options: {},
+        keepMetadata: false,
+      }),
+    ).resolves.toBeDefined()
+  })
+
+  it('carries groups, sub-documents and the AI results inside them, with their images made the new User’s', async () => {
+    const base = await t.uploadImage(t.ann, '#336699', 'base.png')
+    const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
+    const created = await t.app.documents.create(t.ann, base.id, 'Poster')
+    const upscale = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
+    const plain = createGroupStep([createSharpStep('flip')], 'Tidy')
+    const sub = {
+      ...createGroupStep([createLayerStep(logo.id), upscale], 'Logo'),
+      subDocument: true,
+      opacity: 60,
+    }
+    await change(created.id, { steps: [plain, sub] })
+    await runAiStep(created.id, upscale.id)
+    const bundle = file('poster.lemon')
+
+    const exported = await t.app.bundles.exportDocument(
+      t.ann,
+      created.id,
+      bundle,
+    )
+    const imported = await t.app.bundles.importDocument(t.bob, bundle)
+
+    expect(exported).toMatchObject({ sources: 2, results: 1 })
+    expect(imported.summary.results).toMatchObject({ imported: 1 })
+    const [, tidy, logoGroup] = imported.document.pipeline.steps
+    expect(tidy).toMatchObject({
+      kind: 'group',
+      name: 'Tidy',
+      subDocument: false,
+    })
+    expect(logoGroup).toMatchObject({
+      kind: 'group',
+      name: 'Logo',
+      subDocument: true,
+      opacity: 60,
+    })
+    const theirLogo = imported.document.sources.find(
+      ({ fileName }) => fileName === 'logo.png',
+    )
+    expect(theirLogo?.id).not.toBe(logo.id)
+    expect(logoGroup?.kind === 'group' && logoGroup.steps[0]).toMatchObject({
+      kind: 'layer',
+      sourceId: theirLogo?.id,
+    })
     await expect(
       t.app.renders.requestExport(t.bob, imported.document.id, {
         format: ExportFormat.Png,

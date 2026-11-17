@@ -1,6 +1,6 @@
 import { AI_TOOLS } from '@/features/ai/ai-tools'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
-import type { PipelineStep } from '@/features/pipeline/pipeline'
+import type { LeafStep, PipelineStep } from '@/features/pipeline/pipeline'
 import {
   missingSharpOptions,
   opLabel,
@@ -10,12 +10,13 @@ import {
 const GENERAL = '_'
 
 export const LAYER_LABEL = 'Layer'
+export const GROUP_LABEL = 'Group'
 
 /**
  * Why a step cannot be applied yet, in plain words, or undefined when it is
  * set up. Uses the image CLI's own checks, so the preview and the CLI agree.
  */
-export function stepProblem(step: PipelineStep): string | undefined {
+export function stepProblem(step: LeafStep): string | undefined {
   if (step.kind !== PipelineStepKind.Sharp) return undefined
   const missing = missingSharpOptions(step.op, step.options)
   if (missing.length > 0) return `Needs ${missing.join(', ')}.`
@@ -30,6 +31,8 @@ export function stepProblem(step: PipelineStep): string | undefined {
 /** "Blur" or "Auto orient": the name a step is shown by. */
 export function pipelineStepLabel(step: PipelineStep): string {
   switch (step.kind) {
+    case PipelineStepKind.Group:
+      return GROUP_LABEL
     case PipelineStepKind.Layer:
       return LAYER_LABEL
     case PipelineStepKind.Sharp:

@@ -26,7 +26,9 @@ import {
   documentStepEnableCommand,
   documentStepMoveCommand,
   documentStepRemoveCommand,
+  documentStepGroupCommand,
   documentStepRenameCommand,
+  documentStepUngroupCommand,
   documentStepRunCommand,
   documentStepSetCommand,
 } from './document-step.ts'
@@ -81,6 +83,8 @@ export const DOCUMENT_CHANGE_COMMANDS = {
   'add-step': [documentStepAddCommand],
   'remove-step': [documentStepRemoveCommand],
   'move-step': [documentStepMoveCommand],
+  'group-steps': [documentStepGroupCommand],
+  ungroup: [documentStepUngroupCommand],
   'rename-step': [documentStepRenameCommand],
   'set-enabled': [documentStepEnableCommand, documentStepDisableCommand],
   'set-blend': [documentStepSetCommand],
@@ -88,6 +92,7 @@ export const DOCUMENT_CHANGE_COMMANDS = {
   'set-options': [documentStepSetCommand],
   'set-settings': [documentStepSetCommand],
   'set-source': [documentStepSetCommand],
+  'set-sub-document': [documentStepSetCommand],
 } as const satisfies Record<DocumentChange['type'], ReadonlyArray<ImageCommand>>
 
 const BACKGROUND = { internal: 'runs by itself as part of the app' }

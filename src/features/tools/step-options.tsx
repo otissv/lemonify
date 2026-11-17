@@ -1,10 +1,21 @@
+import { useId } from 'react'
+
 import { AiRunControl } from '@/features/ai/ai-run-control'
 import { catalogueFor } from '@/features/ai/ai-defaults'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiCatalogue } from '@/features/ai/ai-tools'
-import { PipelineStepKind, canvasLayer } from '@/features/pipeline/pipeline'
-import type { AiStep, LayerStep, SharpStep } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  canvasLayer,
+  findStep,
+} from '@/features/pipeline/pipeline'
+import type {
+  AiStep,
+  GroupStep,
+  LayerStep,
+  SharpStep,
+} from '@/features/pipeline/pipeline'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import {
   setAiSettings,
@@ -13,6 +24,8 @@ import {
   setSharpOptions,
   setStepBlend,
   setStepSource,
+  setSubDocument,
+  ungroupSteps,
 } from '@/features/pipeline/pipeline-actions'
 import {
   DEFAULT_STEP_BLEND,
@@ -32,6 +45,9 @@ import { ImagePicker } from '@/features/workflows/fields/image-picker'
 import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
 import { sourceImageUrl } from '@/features/documents/image-urls'
 import type { SourceSummary } from '@/features/documents/document'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { useAppStore } from '@/store/app-store'
 
 interface StepOptionsProps {
@@ -225,6 +241,78 @@ function UpscaleStepOptions({
   )
 }
 
+interface GroupOptionsProps {
+  documentId: string
+  group: GroupStep
+}
+
+/** What a group offers: it has no options of its own, only the steps in it, whether it is a picture of its own and where that is placed, and it can be taken apart. */
+function GroupStepOptions({
+  documentId,
+  group,
+}: GroupOptionsProps): React.JSX.Element {
+  const switchId = useId()
+  const groupId = group.id
+  const {
+    id: _id,
+    kind: _kind,
+    enabled: _enabled,
+    name: _name,
+    subDocument: _subDocument,
+    steps: _steps,
+    ...current
+  } = group
+  const { draft, change, flush } = useStepDraft<LayerSettings>(
+    current,
+    (settings) => {
+      setLayerSettings(documentId, groupId, settings)
+    },
+  )
+
+  function handleUngroup(): void {
+    ungroupSteps(documentId, groupId)
+  }
+
+  function handleSubDocument(checked: boolean): void {
+    setSubDocument(documentId, groupId, checked)
+  }
+
+  return (
+    <div className="flex flex-col gap-3 pt-3">
+      <p className="px-4 text-caption text-muted-foreground">
+        Holds {group.steps.length} {group.steps.length === 1 ? 'step' : 'steps'}
+        . Switching the group off switches off every step in it. Drag steps in
+        or out in the sidebar.
+      </p>
+      <div className="flex items-start gap-3 px-4">
+        <Switch
+          id={switchId}
+          checked={group.subDocument}
+          onCheckedChange={handleSubDocument}
+        />
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={switchId}>Own picture</Label>
+          <p className="text-caption text-muted-foreground">
+            Its first layer that is on sets its size, its steps act on that
+            picture only, and the result is placed on the canvas like a layer.
+          </p>
+        </div>
+      </div>
+      {group.subDocument && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them
+        <div onBlur={flush}>
+          <LayerSettingsForm settings={draft} onChange={change} />
+        </div>
+      )}
+      <div className="px-4 pb-4">
+        <Button variant="secondary" size="sm" onClick={handleUngroup}>
+          Ungroup
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 /** The options of the step selected in the sidebar. */
 export function StepOptions({
   documentId,
@@ -232,7 +320,10 @@ export function StepOptions({
 }: StepOptionsProps): React.JSX.Element {
   const selectedId = useAppStore((state) => state.selectedSteps[documentId])
   const preview = usePreview(documentId)
-  const step = preview?.pipeline.steps.find(({ id }) => id === selectedId)
+  const step =
+    preview && selectedId !== undefined
+      ? findStep(preview.pipeline, selectedId)?.step
+      : undefined
   const skipped = preview?.problems.find(
     ({ stepId }) => stepId === selectedId,
   )?.message
@@ -268,6 +359,9 @@ export function StepOptions({
         <p className="px-4 pt-2 text-caption text-muted-foreground">
           This step is off.
         </p>
+      )}
+      {step.kind === PipelineStepKind.Group && (
+        <GroupStepOptions documentId={documentId} group={step} />
       )}
       {step.kind === PipelineStepKind.Layer && (
         <LayerStepOptions

@@ -26,6 +26,7 @@ import {
   moveDocument,
   renameDocument,
 } from '@/features/documents/document-functions'
+import { SidebarToolbar } from '@/features/app/sidebar-toolbar'
 import { DocumentNameInput } from '@/features/app/document-name-input'
 import { DocumentSteps } from '@/features/documents/document-steps'
 import {
@@ -549,6 +550,7 @@ export function AppSidebar(): React.JSX.Element {
           </TabsContent>
         </SidebarContent>
       </Tabs>
+      <SidebarToolbar />
       <SidebarEdgeToggle />
       <SidebarRail aria-hidden="true" />
     </Sidebar>

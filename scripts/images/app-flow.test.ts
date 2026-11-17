@@ -469,6 +469,228 @@ describe('workflows through the CLI', () => {
   })
 })
 
+describe('groups through the CLI', () => {
+  type Step = {
+    id: string
+    kind: string
+    name?: string
+    enabled: boolean
+    steps?: Step[]
+  }
+  type GroupDoc = { document: { id: string; pipeline: { steps: Step[] } } }
+
+  async function documentWithSteps() {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('group.png'),
+    )
+    const { document } = await cli<Doc>('document', 'create', source.id)
+    await cli('document', 'step', 'add', document.id, '--op', 'flip')
+    const two = await cli<GroupDoc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--op',
+      'flop',
+    )
+    return two.document
+  }
+
+  it('groups, edits inside, moves in and out, switches, renames and ungroups', async () => {
+    const document = await documentWithSteps()
+    const [, flip, flop] = document.pipeline.steps
+
+    const grouped = await cli<GroupDoc>(
+      'document',
+      'step',
+      'group',
+      document.id,
+      `${flip?.id},${flop?.id}`,
+      '--name',
+      'Look',
+    )
+    const group = grouped.document.pipeline.steps.at(1)
+    expect(group).toMatchObject({ kind: 'group', name: 'Look' })
+    expect(group?.steps?.map(({ id }) => id)).toEqual([flip?.id, flop?.id])
+
+    const added = await cli<GroupDoc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--op',
+      'negate',
+      '--group',
+      group?.id ?? '',
+    )
+    expect(added.document.pipeline.steps.at(1)?.steps).toHaveLength(3)
+
+    const out = await cli<GroupDoc>(
+      'document',
+      'step',
+      'move',
+      document.id,
+      flip?.id ?? '',
+      '0',
+    )
+    expect(out.document.pipeline.steps.map(({ kind }) => kind)).toEqual([
+      'sharp',
+      'layer',
+      'group',
+    ])
+
+    const into = await cli<GroupDoc>(
+      'document',
+      'step',
+      'move',
+      document.id,
+      flip?.id ?? '',
+      '0',
+      '--into',
+      group?.id ?? '',
+    )
+    expect(into.document.pipeline.steps.at(1)?.steps?.[0]?.id).toBe(flip?.id)
+
+    const off = await cli<GroupDoc>(
+      'document',
+      'step',
+      'disable',
+      document.id,
+      group?.id ?? '',
+    )
+    expect(off.document.pipeline.steps.at(1)?.enabled).toBe(false)
+
+    const renamed = await cli<GroupDoc>(
+      'document',
+      'step',
+      'rename',
+      document.id,
+      group?.id ?? '',
+      'Finish',
+    )
+    expect(renamed.document.pipeline.steps.at(1)?.name).toBe('Finish')
+
+    const ungrouped = await cli<GroupDoc>(
+      'document',
+      'step',
+      'ungroup',
+      document.id,
+      group?.id ?? '',
+    )
+    expect(ungrouped.document.pipeline.steps.map(({ kind }) => kind)).toEqual([
+      'layer',
+      'sharp',
+      'sharp',
+      'sharp',
+    ])
+
+    const undone = await cli<GroupDoc>('document', 'undo', document.id)
+    expect(undone.document.pipeline.steps.at(1)).toMatchObject({
+      kind: 'group',
+      name: 'Finish',
+      enabled: false,
+    })
+  })
+
+  it('makes a group a picture of its own, placed on the canvas, and back', async () => {
+    const blue = path.join(workDir, 'blue.png')
+    await sharp({
+      create: { width: 8, height: 8, channels: 3, background: '#00f' },
+    })
+      .png()
+      .toFile(blue)
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      blue,
+    )
+    const document = await documentWithSteps()
+    const added = await cli<GroupDoc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      '--layer',
+      source.id,
+    )
+    const layer = added.document.pipeline.steps.at(-1)
+    const grouped = await cli<GroupDoc>(
+      'document',
+      'step',
+      'group',
+      document.id,
+      layer?.id ?? '',
+      '--name',
+      'Logo',
+    )
+    const group = grouped.document.pipeline.steps.at(-1)
+
+    const sub = await cli<GroupDoc & { document: { pipeline: unknown } }>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      group?.id ?? '',
+      '--sub-document',
+      'on',
+    )
+    expect(sub.document.pipeline.steps.at(-1)).toMatchObject({
+      kind: 'group',
+      subDocument: true,
+    })
+
+    const placed = await cli<GroupDoc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      group?.id ?? '',
+      '--settings',
+      '{"fit":"original","anchor":"northwest"}',
+    )
+    expect(placed.document.pipeline.steps.at(-1)).toMatchObject({
+      fit: 'original',
+      anchor: 'northwest',
+    })
+
+    const out = path.join(workDir, 'sub.png')
+    await cli('export', document.id, '--out', out, '--format', 'png')
+    const raw = await sharp(out).raw().ensureAlpha().toBuffer()
+    const meta = await sharp(out).metadata()
+    expect([meta.width, meta.height]).toEqual([64, 48])
+    expect([...raw.subarray(0, 4)]).toEqual([0, 0, 255, 255])
+    const far = (40 * 64 + 40) * 4
+    expect([...raw.subarray(far, far + 4)]).toEqual([221, 51, 51, 255])
+
+    const plain = await cli<GroupDoc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      group?.id ?? '',
+      '--sub-document',
+      'off',
+    )
+    expect(plain.document.pipeline.steps.at(-1)).toMatchObject({
+      subDocument: false,
+    })
+
+    await expect(
+      cli('document', 'step', 'set', document.id, group?.id ?? ''),
+    ).rejects.toThrow(/--sub-document or --settings/)
+  })
+
+  it('refuses steps that are not next to each other and a group inside a group', async () => {
+    const document = await documentWithSteps()
+    const [layer, , flop] = document.pipeline.steps
+    await expect(
+      cli('document', 'step', 'group', document.id, `${layer?.id},${flop?.id}`),
+    ).rejects.toThrow()
+  })
+})
+
 describe('naming and ordering documents through the CLI', () => {
   it('renames a document and moves it in the list', async () => {
     const first = await cli<{ source: { id: string } }>(

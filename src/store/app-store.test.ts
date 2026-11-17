@@ -164,6 +164,32 @@ describe('useAppStore', () => {
       useAppStore.getState().selectStep(FIRST, undefined)
       expect(useAppStore.getState().selectedSteps[FIRST]).toBeUndefined()
     })
+
+    it('picks several steps together, starting over when one is selected', () => {
+      const store = useAppStore.getState()
+      store.selectStep(FIRST, 'a')
+      expect(useAppStore.getState().markedSteps[FIRST]).toEqual(['a'])
+
+      store.markSteps(FIRST, ['a', 'b'])
+      expect(useAppStore.getState().markedSteps[FIRST]).toEqual(['a', 'b'])
+
+      store.selectStep(FIRST, 'c')
+      expect(useAppStore.getState().markedSteps[FIRST]).toEqual(['c'])
+      store.selectStep(FIRST, undefined)
+      expect(useAppStore.getState().markedSteps[FIRST]).toEqual([])
+    })
+
+    it('remembers which groups are folded, without keeping it between visits', () => {
+      useAppStore.getState().setGroupCollapsed('group-1', true)
+      expect(useAppStore.getState().collapsedGroups['group-1']).toBe(true)
+      useAppStore.getState().setGroupCollapsed('group-1', false)
+      expect(useAppStore.getState().collapsedGroups['group-1']).toBe(false)
+      expect(
+        JSON.stringify(
+          useAppStore.persist.getOptions().partialize?.(useAppStore.getState()),
+        ),
+      ).not.toContain('group-1')
+    })
   })
 
   describe('documents', () => {
@@ -247,6 +273,7 @@ describe('useAppStore', () => {
       const state = useAppStore.getState()
       expect(state.documents[FIRST]).toBeUndefined()
       expect(state.selectedSteps[FIRST]).toBeUndefined()
+      expect(state.markedSteps[FIRST]).toBeUndefined()
       expect(state.expandedDocuments[FIRST]).toBeUndefined()
       expect(state.documents[SECOND]).toBeDefined()
     })

@@ -86,7 +86,9 @@ describe('previews', () => {
     const request = t.imageEngine.requests[0]
     expect(request?.target.kind).toBe(EngineTargetKind.Preview)
     expect(
-      request?.steps.map((step) => (step.kind === 'layer' ? 'layer' : step.op)),
+      request?.steps.map((step) =>
+        step.kind === 'sharp' ? step.op : step.kind,
+      ),
     ).toEqual(['blur'])
 
     const opened = await t.app.renders.fetch(
@@ -153,7 +155,7 @@ describe('previews', () => {
     expect(done.result.pendingStepIds).toEqual([ai.id])
     expect(
       t.imageEngine.requests[0]?.steps.map((step) =>
-        step.kind === 'layer' ? 'layer' : step.op,
+        step.kind === 'sharp' ? step.op : step.kind,
       ),
     ).toEqual(['flip'])
   })
@@ -172,7 +174,7 @@ describe('previews', () => {
     ])
     expect(
       t.imageEngine.requests[0]?.steps.map((step) =>
-        step.kind === 'layer' ? 'layer' : step.op,
+        step.kind === 'sharp' ? step.op : step.kind,
       ),
     ).toEqual(['flip'])
   })
@@ -254,7 +256,9 @@ describe('AI steps', () => {
     const request = t.imageEngine.requests.at(-1)
     expect(request?.input).toContain('results')
     expect(
-      request?.steps.map((step) => (step.kind === 'layer' ? 'layer' : step.op)),
+      request?.steps.map((step) =>
+        step.kind === 'sharp' ? step.op : step.kind,
+      ),
     ).toEqual(['flop'])
   })
 
@@ -488,7 +492,7 @@ describe('the document’s image and layers', () => {
     expect(done.state).toBe(JobState.Done)
     const steps = t.imageEngine.requests[0]?.steps
     expect(
-      steps?.map((step) => (step.kind === 'layer' ? 'layer' : step.op)),
+      steps?.map((step) => (step.kind === 'sharp' ? step.op : step.kind)),
     ).toEqual(['blur', 'layer'])
     expect(steps?.[1]).toMatchObject({
       kind: 'layer',

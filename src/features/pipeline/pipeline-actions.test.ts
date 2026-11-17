@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { applyEdit, loadDocument } from '@/features/documents/document-sync'
-import { createLayerStep, createSharpStep } from '@/features/pipeline/pipeline'
 import {
+  createGroupStep,
+  createLayerStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
+import {
+  addStepAfter,
   copyStepToDocument,
+  groupSteps,
   insertImage,
+  reorderStep,
+  setSubDocument,
+  ungroupSteps,
   replaceImage,
   renameStep,
   setLayerSettings,
@@ -350,5 +360,133 @@ describe('copyStepToDocument', () => {
       await copyStepToDocument(DOCUMENT_ID, 'missing', OTHER_ID),
     ).toBeUndefined()
     expect(applyEdit).not.toHaveBeenCalled()
+  })
+})
+
+describe('groups', () => {
+  const blur = createSharpStep('blur')
+  const flip = createSharpStep('flip')
+  const group = createGroupStep([blur], 'Look')
+
+  it('adds a step after one in a group, inside that group', () => {
+    loadDocumentIntoEditor(documentView([group]))
+    const added = createSharpStep('flop')
+
+    addStepAfter(DOCUMENT_ID, added, blur.id)
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'add-step',
+      step: added,
+      index: 1,
+      groupId: group.id,
+    })
+  })
+
+  it('adds a step after a group, at the top level', () => {
+    loadDocumentIntoEditor(documentView([group]))
+    const added = createSharpStep('flop')
+
+    addStepAfter(DOCUMENT_ID, added, group.id)
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'add-step',
+      step: added,
+      index: 2,
+    })
+  })
+
+  it('moves a step to a place inside a group, or out of it', () => {
+    reorderStep(DOCUMENT_ID, flip.id, 0, group.id)
+    reorderStep(DOCUMENT_ID, flip.id, 0)
+
+    expect(vi.mocked(applyEdit).mock.calls.map(([, change]) => change)).toEqual(
+      [
+        { type: 'move-step', stepId: flip.id, to: 0, groupId: group.id },
+        { type: 'move-step', stepId: flip.id, to: 0 },
+      ],
+    )
+  })
+
+  it('groups steps that are next to each other, and selects the group', () => {
+    loadDocumentIntoEditor(documentView([blur, flip]))
+
+    const failure = groupSteps(DOCUMENT_ID, [blur.id, flip.id])
+
+    expect(failure).toBeUndefined()
+    const change = vi.mocked(applyEdit).mock.calls[0]?.[1]
+    expect(change).toMatchObject({
+      type: 'group-steps',
+      group: { kind: 'group', steps: [blur, flip] },
+    })
+    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBe(
+      change?.type === 'group-steps' ? change.group.id : undefined,
+    )
+  })
+
+  it('says why steps cannot be grouped, and changes nothing', () => {
+    const layer = createLayerStep('second')
+    loadDocumentIntoEditor(documentView([blur, layer, flip]))
+
+    expect(groupSteps(DOCUMENT_ID, [blur.id, flip.id])).toMatch(
+      /next to each other/,
+    )
+    expect(groupSteps(DOCUMENT_ID, [])).toMatch(/next to each other/)
+    expect(applyEdit).not.toHaveBeenCalled()
+  })
+
+  it('takes a group apart and clears the selection when it was the group', () => {
+    loadDocumentIntoEditor(documentView([group]))
+    useAppStore.getState().selectStep(DOCUMENT_ID, group.id)
+
+    ungroupSteps(DOCUMENT_ID, group.id)
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'ungroup',
+      groupId: group.id,
+    })
+    expect(useAppStore.getState().selectedSteps[DOCUMENT_ID]).toBeUndefined()
+  })
+
+  it('makes a group a sub-document only for a group', () => {
+    loadDocumentIntoEditor(documentView([group, flip]))
+
+    setSubDocument(DOCUMENT_ID, group.id, true)
+    setSubDocument(DOCUMENT_ID, flip.id, true)
+
+    expect(applyEdit).toHaveBeenCalledTimes(1)
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'set-sub-document',
+      stepId: group.id,
+      subDocument: true,
+    })
+  })
+
+  it('places a sub-document with the layer settings', () => {
+    loadDocumentIntoEditor(documentView([group]))
+
+    setLayerSettings(DOCUMENT_ID, group.id, { ...DEFAULT_LAYER_SETTINGS, x: 4 })
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'set-layer',
+      stepId: group.id,
+      settings: { ...DEFAULT_LAYER_SETTINGS, x: 4 },
+    })
+  })
+
+  it('copies a group to another document, with new ids for it and its steps', async () => {
+    const other = '7a2d7d5f-1f54-4b9a-8b68-3e3a1a9a3c22'
+    loadDocumentIntoEditor(documentView([group]))
+    loadDocumentIntoEditor(documentView([], other))
+
+    await copyStepToDocument(DOCUMENT_ID, group.id, other)
+
+    const change = vi.mocked(applyEdit).mock.calls[0]?.[1]
+    if (change?.type !== 'add-step') throw new Error('expected add-step')
+    expect(change.step).toMatchObject({ kind: 'group', name: 'Look' })
+    expect(change.step.id).not.toBe(group.id)
+    const copied =
+      change.step.kind === 'group' ? change.step.steps[0] : undefined
+    expect(copied).toMatchObject({ kind: 'sharp', op: 'blur' })
+    expect(copied?.id).not.toBe(blur.id)
   })
 })
