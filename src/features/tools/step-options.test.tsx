@@ -495,11 +495,11 @@ describe('StepOptions', () => {
       expect(useUiStore.getState().overlayGuide).toBe('golden-spiral')
     })
 
-    it('says it is showing the result, and offers no guide, while the result is chosen', () => {
+    it('says it is showing the output, and offers no guide, while the output is chosen', () => {
       const extract = createSharpStep('extract')
       showStep([extract], extract)
       act(() => {
-        useUiStore.getState().setStepView(DOCUMENT_ID, StepViewPart.Result)
+        useUiStore.getState().setStepView(DOCUMENT_ID, StepViewPart.Output)
       })
 
       expect(screen.getByText(/picture the step leaves/i)).toBeVisible()

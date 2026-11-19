@@ -17,7 +17,7 @@ import { GroupRow } from '@/features/documents/group-row'
 import { StepRow } from '@/features/documents/step-row'
 import type {
   SelectModifiers,
-  StepPictures,
+  StepPictureChoice,
 } from '@/features/documents/step-row'
 import { pickSteps } from '@/features/documents/step-selection'
 import { setStepDrag } from '@/features/documents/step-drag'
@@ -161,18 +161,18 @@ export function DocumentSteps({
     setStepView(documentId, part)
   }
 
-  function picturesOf(step: LeafStep): StepPictures | undefined {
+  function picturesOf(step: LeafStep): StepPictureChoice | undefined {
     if (overlayToolFor(step) === undefined) return undefined
     const before = thumbnails?.find(
       ({ stepId, before }) => stepId === step.id && before === true,
     )?.key
     return {
-      edit:
+      tool:
         before === null || before === undefined
           ? undefined
           : thumbnailImageUrl(documentId, before),
       shown:
-        selectedId === step.id ? (stepView ?? StepViewPart.Edit) : undefined,
+        selectedId === step.id ? (stepView ?? StepViewPart.Tool) : undefined,
       onShow: handleShow,
     }
   }

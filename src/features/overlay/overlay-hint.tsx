@@ -11,7 +11,7 @@ import type { SharpStep } from '@/features/pipeline/pipeline'
 import { usePreview } from '@/features/pipeline/use-preview'
 
 const RESULT =
-  'This is the picture the step leaves. Choose its Edit picture in the sidebar to change the region.'
+  'This is the picture the step leaves. Choose the step’s own picture in the sidebar to change it.'
 
 const WAITING =
   'Run the AI steps before this one to draw on the picture. Until then, type the numbers.'
@@ -32,7 +32,7 @@ export function OverlayHint({
   const setGuide = useUiStore((state) => state.setOverlayGuide)
   const tool = overlayToolFor(step)
   if (!tool || !preview) return null
-  const result = part === StepViewPart.Result
+  const result = part === StepViewPart.Output
   let text = tool.hint
   if (result) text = RESULT
   else if (waitsForEarlierAi(preview, step.id)) text = WAITING

@@ -4,7 +4,6 @@ import {
   RiDeleteBinLine,
   RiEyeLine,
   RiEyeOffLine,
-  RiImageLine,
 } from '@remixicon/react'
 
 import { Button } from '@/components/ui/button'
@@ -21,14 +20,20 @@ import {
   stepProblem,
 } from '@/features/pipeline/step-problems'
 import { StepViewPart } from '@/features/overlay/step-view'
+import {
+  StepPicture,
+  StepPictures,
+  StepThumbnail,
+} from '@/features/documents/step-pictures'
 import { cn } from '@/lib/utils'
 import { JobState } from '@/server/jobs/job-types'
 
 const PERCENT = 100
 
-export interface StepPictures {
-  /** Small picture of what the step acts on. */
-  edit: string | undefined
+/** For a step whose tool has a picture of its own: that picture's small picture, and which of the step's two pictures the canvas shows. */
+export interface StepPictureChoice {
+  /** Small picture of the tool's own picture. */
+  tool: string | undefined
   /** The part of the step shown on the canvas now; undefined while another step is. */
   shown: StepViewPart | undefined
   onShow: (stepId: string, part: StepViewPart) => void
@@ -54,7 +59,7 @@ export interface StepRowProps {
   dragging: boolean
   thumbnail: string | undefined
   /** For a step a tool draws on the picture for: the two pictures to choose between, and which is shown. Undefined for any other step. */
-  pictures?: StepPictures
+  pictures?: StepPictureChoice
   /** The server has no result for this AI step yet. */
   outOfDate: boolean
   /** For a layer: the file name of its image. */
@@ -123,79 +128,6 @@ function statusOf(
   return { text: aiStepSummary(step), problem: false, running: false }
 }
 
-function Thumbnail({ url }: { url: string | undefined }): React.JSX.Element {
-  if (url === undefined) {
-    return (
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-sm bg-muted text-muted-foreground">
-        <RiImageLine aria-hidden="true" className="size-4" />
-      </span>
-    )
-  }
-  return (
-    <img
-      data-slot="step-thumbnail"
-      src={url}
-      alt=""
-      width={48}
-      height={48}
-      className="size-12 shrink-0 rounded-sm bg-muted object-cover"
-    />
-  )
-}
-
-interface PictureRowProps {
-  label: string
-  title: string
-  subtitle: string
-  problem?: boolean
-  url: string | undefined
-  pressed: boolean
-  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
-}
-
-/** One of a step's two pictures, laid out like any step: its small picture, a name and a line under it. Outlined while it is the one the canvas shows. */
-function PictureRow({
-  label,
-  title,
-  subtitle,
-  problem = false,
-  url,
-  pressed,
-  onClick,
-}: PictureRowProps): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={pressed}
-      className="flex items-center gap-2 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      onClick={onClick}
-    >
-      <span
-        className={cn(
-          'shrink-0 rounded-md p-0.5',
-          pressed ? 'ring-2 ring-ring' : 'ring-1 ring-transparent',
-        )}
-      >
-        <Thumbnail url={url} />
-      </span>
-      <span className="flex min-w-0 flex-col">
-        <span data-slot="step-name" className="truncate text-body-md">
-          {title}
-        </span>
-        <span
-          className={cn(
-            'truncate text-caption',
-            problem ? 'text-destructive' : 'text-muted-foreground',
-          )}
-        >
-          {subtitle}
-        </span>
-      </span>
-    </button>
-  )
-}
-
 /** One step of a document's pipeline in the sidebar: select it, switch it off, move or delete it. */
 export function StepRow({
   documentId,
@@ -227,16 +159,16 @@ export function StepRow({
     })
   }
 
-  function handleEditPicture(event: React.MouseEvent<HTMLButtonElement>): void {
+  function handleToolPicture(event: React.MouseEvent<HTMLButtonElement>): void {
     if (event.metaKey || event.ctrlKey || event.shiftKey) {
       handleSelect(event)
       return
     }
-    pictures?.onShow(step.id, StepViewPart.Edit)
+    pictures?.onShow(step.id, StepViewPart.Tool)
   }
 
   function handleOutputPicture(): void {
-    pictures?.onShow(step.id, StepViewPart.Result)
+    pictures?.onShow(step.id, StepViewPart.Output)
   }
 
   function handleToggle(): void {
@@ -269,28 +201,25 @@ export function StepRow({
       )}
     >
       {pictures !== undefined && (
-        <fieldset
-          aria-label={`Pictures of ${label}`}
-          className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0"
-        >
-          <PictureRow
+        <StepPictures label={`Pictures of ${label}`}>
+          <StepPicture
             label={`Output of ${label}`}
             title="Output"
             subtitle="After this step"
             url={thumbnail}
-            pressed={pictures.shown === StepViewPart.Result}
+            pressed={pictures.shown === StepViewPart.Output}
             onClick={handleOutputPicture}
           />
-          <PictureRow
-            label={`Edit ${label}`}
+          <StepPicture
+            label={`${label} picture`}
             title={label}
             subtitle={status.text}
             problem={status.problem}
-            url={pictures.edit}
-            pressed={pictures.shown === StepViewPart.Edit}
-            onClick={handleEditPicture}
+            url={pictures.tool}
+            pressed={pictures.shown === StepViewPart.Tool}
+            onClick={handleToolPicture}
           />
-        </fieldset>
+        </StepPictures>
       )}
       {pictures === undefined && (
         <button
@@ -300,7 +229,7 @@ export function StepRow({
           className="flex items-center gap-2 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={handleSelect}
         >
-          {pictures === undefined && <Thumbnail url={thumbnail} />}
+          {pictures === undefined && <StepThumbnail url={thumbnail} />}
           <span className="flex min-w-0 flex-col">
             <span data-slot="step-name" className="truncate text-body-md">
               {label}

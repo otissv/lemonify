@@ -362,20 +362,20 @@ describe('DocumentSteps', () => {
         within(list).getByRole('button', { name: 'Output of Extract' }),
       )
       expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(EXTRACT.id)
-      expect(useUiStore.getState().stepViews[DOCUMENT_ID]).toBe('result')
+      expect(useUiStore.getState().stepViews[DOCUMENT_ID]).toBe('output')
       expect(
         within(list).getByRole('button', { name: 'Output of Extract' }),
       ).toHaveAttribute('aria-pressed', 'true')
       expect(
-        within(list).getByRole('button', { name: 'Edit Extract' }),
+        within(list).getByRole('button', { name: 'Extract picture' }),
       ).toHaveAttribute('aria-pressed', 'false')
 
       await user.click(
-        within(list).getByRole('button', { name: 'Edit Extract' }),
+        within(list).getByRole('button', { name: 'Extract picture' }),
       )
-      expect(useUiStore.getState().stepViews[DOCUMENT_ID]).not.toBe('result')
+      expect(useUiStore.getState().stepViews[DOCUMENT_ID]).not.toBe('output')
       expect(
-        within(list).getByRole('button', { name: 'Edit Extract' }),
+        within(list).getByRole('button', { name: 'Extract picture' }),
       ).toHaveAttribute('aria-pressed', 'true')
     })
 
@@ -386,7 +386,7 @@ describe('DocumentSteps', () => {
 
       await user.keyboard('{Control>}')
       await user.click(
-        within(list).getByRole('button', { name: 'Edit Extract' }),
+        within(list).getByRole('button', { name: 'Extract picture' }),
       )
       await user.keyboard('{/Control}')
 
@@ -402,7 +402,7 @@ describe('DocumentSteps', () => {
       await user.click(within(list).getByRole('button', { name: 'Blur' }))
 
       expect(
-        within(list).getByRole('button', { name: 'Edit Extract' }),
+        within(list).getByRole('button', { name: 'Extract picture' }),
       ).toHaveAttribute('aria-pressed', 'false')
       expect(
         within(list).getByRole('button', { name: 'Output of Extract' }),

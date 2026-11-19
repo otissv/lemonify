@@ -1,6 +1,10 @@
 import { PreviewStatus } from '@/features/documents/document-render'
 import { toolStepIds } from '@/features/overlay/tool-steps'
-import { StepViewPart, stepViewOf } from '@/features/overlay/step-view'
+import {
+  StepViewPart,
+  previewPictureRequest,
+  stepViewOf,
+} from '@/features/overlay/step-view'
 import type { StepView } from '@/features/overlay/step-view'
 import { followJob } from '@/features/jobs/follow-job'
 import { cancelJob } from '@/features/jobs/job-functions'
@@ -28,7 +32,7 @@ function viewedStep(documentId: string): StepView | undefined {
   return stepViewOf(
     ui.selectedSteps[documentId],
     session.confirmed.pipeline,
-    ui.stepViews[documentId] ?? StepViewPart.Edit,
+    ui.stepViews[documentId] ?? StepViewPart.Tool,
   )
 }
 
@@ -36,10 +40,12 @@ function previewRequest(
   documentId: string,
   view: StepView | undefined,
 ): { documentId: string; beforeStepId?: string; throughStepId?: string } {
-  if (view === undefined) return { documentId }
-  return view.part === StepViewPart.Edit
-    ? { documentId, beforeStepId: view.stepId }
-    : { documentId, throughStepId: view.stepId }
+  const session = documentSession(usePipelineStore.getState(), documentId)
+  if (view === undefined || !session) return { documentId }
+  return {
+    documentId,
+    ...previewPictureRequest(session.confirmed.pipeline, view),
+  }
 }
 
 /**

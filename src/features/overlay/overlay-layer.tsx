@@ -42,7 +42,7 @@ export function OverlayLayer({
   if (
     !tool ||
     !size ||
-    !sameStepView(preview.view, { stepId: step.id, part: StepViewPart.Edit })
+    !sameStepView(preview.view, { stepId: step.id, part: StepViewPart.Tool })
   )
     return null
 

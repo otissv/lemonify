@@ -118,13 +118,13 @@ describe('refreshPreview', () => {
       })
       expect(usePipelineStore.getState().previews[DOCUMENT_ID]).toMatchObject({
         size: { width: 500, height: 400 },
-        view: { stepId: extract.id, part: 'edit' },
+        view: { stepId: extract.id, part: 'tool' },
       })
     })
 
     it('asks for the picture the step leaves when its result is chosen', async () => {
       useUiStore.getState().selectStep(DOCUMENT_ID, extract.id)
-      useUiStore.getState().setStepView(DOCUMENT_ID, StepViewPart.Result)
+      useUiStore.getState().setStepView(DOCUMENT_ID, StepViewPart.Output)
       vi.mocked(followJob).mockResolvedValue(ready(300, 200))
 
       await refreshPreview(DOCUMENT_ID, SIGNAL)
@@ -134,7 +134,7 @@ describe('refreshPreview', () => {
       })
       expect(usePipelineStore.getState().previews[DOCUMENT_ID]).toMatchObject({
         size: { width: 300, height: 200 },
-        view: { stepId: extract.id, part: 'result' },
+        view: { stepId: extract.id, part: 'output' },
       })
     })
 
@@ -167,7 +167,7 @@ describe('refreshPreview', () => {
         status: PreviewStatus.Failed,
         key: 'k',
         size: { width: 500, height: 400 },
-        view: { stepId: extract.id, part: 'edit' },
+        view: { stepId: extract.id, part: 'tool' },
       })
     })
   })

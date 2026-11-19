@@ -38,7 +38,7 @@ function ready(overrides: Partial<DocumentPreview> = {}): void {
     status: PreviewStatus.Ready,
     key: 'k',
     size: { width: 4000, height: 2000 },
-    view: { stepId: EXTRACT.id, part: StepViewPart.Edit },
+    view: { stepId: EXTRACT.id, part: StepViewPart.Tool },
     pendingStepIds: [],
     problems: [],
     ...overrides,
@@ -72,7 +72,7 @@ describe('OverlayLayer', () => {
   })
 
   it("draws nothing while the result of the step is shown, only the tool's own picture has the box", async () => {
-    ready({ view: { stepId: EXTRACT.id, part: StepViewPart.Result } })
+    ready({ view: { stepId: EXTRACT.id, part: StepViewPart.Output } })
     await mount()
     expect(screen.queryByTestId('overlay-box')).not.toBeInTheDocument()
   })
@@ -89,7 +89,7 @@ describe('OverlayLayer', () => {
       const save = vi
         .spyOn(actions, 'setSharpOptions')
         .mockImplementation(() => {})
-      ready({ view: { stepId: UNSET.id, part: StepViewPart.Edit } })
+      ready({ view: { stepId: UNSET.id, part: StepViewPart.Tool } })
       await mount()
       await screen.findByTestId('overlay-box')
 

@@ -71,7 +71,7 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
       : stepViewOf(
           selectedId,
           session.confirmed.pipeline,
-          part ?? StepViewPart.Edit,
+          part ?? StepViewPart.Tool,
         )
   const viewedId = viewed?.stepId
   const viewedPart = viewed?.part

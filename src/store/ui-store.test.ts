@@ -157,9 +157,9 @@ describe('useUiStore', () => {
       store.selectStep(FIRST, 'a')
       expect(useUiStore.getState().stepViews[FIRST]).toBeUndefined()
 
-      store.setStepView(FIRST, StepViewPart.Result)
+      store.setStepView(FIRST, StepViewPart.Output)
       store.selectStep(FIRST, 'a')
-      expect(useUiStore.getState().stepViews[FIRST]).toBe(StepViewPart.Result)
+      expect(useUiStore.getState().stepViews[FIRST]).toBe(StepViewPart.Output)
 
       store.selectStep(FIRST, 'b')
       expect(useUiStore.getState().stepViews[FIRST]).toBeUndefined()
@@ -167,7 +167,7 @@ describe('useUiStore', () => {
 
     it('is kept apart for each document and dropped with it', () => {
       const store = useUiStore.getState()
-      store.setStepView(FIRST, StepViewPart.Result)
+      store.setStepView(FIRST, StepViewPart.Output)
       expect(useUiStore.getState().stepViews[SECOND]).toBeUndefined()
 
       store.forgetUi(FIRST)
