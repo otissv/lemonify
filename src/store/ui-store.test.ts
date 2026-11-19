@@ -17,6 +17,7 @@ import {
   workflowSelectionOf,
 } from '@/store/ui-store'
 
+import { StepViewPart } from '@/features/overlay/step-view'
 import { OverlayGuide } from '@/features/overlay/grid-guides'
 
 const StoredPreferencesSchema = z.object({
@@ -147,6 +148,30 @@ describe('useUiStore', () => {
         JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? 'null'),
       )
       expect(stored.state).toMatchObject({ overlayGuide: 'golden-spiral' })
+    })
+  })
+
+  describe('the picture of a step that is shown', () => {
+    it('is its edit picture until the result is chosen, and goes back when another step is selected', () => {
+      const store = useUiStore.getState()
+      store.selectStep(FIRST, 'a')
+      expect(useUiStore.getState().stepViews[FIRST]).toBeUndefined()
+
+      store.setStepView(FIRST, StepViewPart.Result)
+      store.selectStep(FIRST, 'a')
+      expect(useUiStore.getState().stepViews[FIRST]).toBe(StepViewPart.Result)
+
+      store.selectStep(FIRST, 'b')
+      expect(useUiStore.getState().stepViews[FIRST]).toBeUndefined()
+    })
+
+    it('is kept apart for each document and dropped with it', () => {
+      const store = useUiStore.getState()
+      store.setStepView(FIRST, StepViewPart.Result)
+      expect(useUiStore.getState().stepViews[SECOND]).toBeUndefined()
+
+      store.forgetUi(FIRST)
+      expect(useUiStore.getState().stepViews[FIRST]).toBeUndefined()
     })
   })
 

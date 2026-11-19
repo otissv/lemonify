@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PreviewStatus } from '@/features/documents/document-render'
 import type { DocumentPreview } from '@/features/documents/document-render'
+import { StepViewPart } from '@/features/overlay/step-view'
 import { OverlayLayer } from '@/features/overlay/overlay-layer'
 import { AiToolId } from '@/features/ai/ai-tools'
 import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
@@ -37,7 +38,7 @@ function ready(overrides: Partial<DocumentPreview> = {}): void {
     status: PreviewStatus.Ready,
     key: 'k',
     size: { width: 4000, height: 2000 },
-    beforeStepId: EXTRACT.id,
+    view: { stepId: EXTRACT.id, part: StepViewPart.Edit },
     pendingStepIds: [],
     problems: [],
     ...overrides,
@@ -70,6 +71,12 @@ describe('OverlayLayer', () => {
     expect(box.style.width).toBe('20%')
   })
 
+  it("draws nothing while the result of the step is shown, only the tool's own picture has the box", async () => {
+    ready({ view: { stepId: EXTRACT.id, part: StepViewPart.Result } })
+    await mount()
+    expect(screen.queryByTestId('overlay-box')).not.toBeInTheDocument()
+  })
+
   it('draws nothing when no step, or one without such a tool, is selected', async () => {
     ready()
     useUiStore.getState().selectStep(DOCUMENT_ID, BLUR.id)
@@ -81,7 +88,7 @@ describe('OverlayLayer', () => {
   })
 
   it('draws nothing until the picture shown is the one before the step', async () => {
-    ready({ beforeStepId: undefined })
+    ready({ view: undefined })
     await mount()
     expect(screen.queryByTestId('overlay-box')).not.toBeInTheDocument()
 

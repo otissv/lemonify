@@ -1,5 +1,6 @@
 import { PipelineStepKind, planSteps } from '@/features/pipeline/pipeline'
 import type { LeafStep, PlanStep } from '@/features/pipeline/pipeline'
+import { stepsBefore } from '@/features/pipeline/step-input'
 import type { Canvas } from '@/features/pipeline/canvas'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
@@ -62,14 +63,22 @@ export class ThumbnailHandler implements JobHandler {
     this.#deps = deps
   }
 
-  /** The key of a small picture of `steps`, or null when they cannot make one. A layer shows its own image. */
+  /** The key of a small picture of `steps`, or null when they cannot make one, so one picture that fails does not take the others with it. A layer shows its own image. */
   async #thumbnailKey(
     document: DocumentRecord,
     shown: Shown,
   ): Promise<string | null> {
-    const plan = await this.#deps.planner.plan(document, shown)
-    if (plan.pending.length > 0 || plan.skipped.length > 0) return null
-    return (await ensureRender(this.#deps, RenderKind.Thumbnail, plan)).key
+    try {
+      const plan = await this.#deps.planner.plan(document, shown)
+      if (plan.pending.length > 0 || plan.skipped.length > 0) return null
+      return (await ensureRender(this.#deps, RenderKind.Thumbnail, plan)).key
+    } catch (error) {
+      this.#deps.logger.warn('A small picture could not be made', {
+        documentId: document.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return null
+    }
   }
 
   async #shownFor(
@@ -100,7 +109,11 @@ export class ThumbnailHandler implements JobHandler {
         )
         const steps = planSteps(document.pipeline)
         const inside = stepsInSubDocuments(steps)
-        const thumbnails: Array<{ stepId: string; key: string | null }> = []
+        const thumbnails: Array<{
+          stepId: string
+          key: string | null
+          before?: true
+        }> = []
         for (const [done, stepId] of payload.stepIds.entries()) {
           context.setProgress(done / payload.stepIds.length)
           const index = steps.findIndex((step) => step.id === stepId)
@@ -118,6 +131,14 @@ export class ThumbnailHandler implements JobHandler {
               ? null
               : await this.#thumbnailKey(document, shown)
           thumbnails.push({ stepId, key })
+        }
+        for (const stepId of payload.beforeStepIds ?? []) {
+          const ahead = stepsBefore(document.pipeline, stepId)
+          const key =
+            ahead === undefined
+              ? null
+              : await this.#thumbnailKey(document, { steps: ahead })
+          thumbnails.push({ stepId, key, before: true })
         }
         return {
           outcome: {

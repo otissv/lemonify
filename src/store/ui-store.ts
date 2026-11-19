@@ -1,4 +1,5 @@
 import { OverlayGuide } from '@/features/overlay/grid-guides'
+import type { StepViewPart } from '@/features/overlay/step-view'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { PersistStorage } from 'zustand/middleware'
@@ -70,6 +71,8 @@ interface UiStateData {
   collapsedGroups: Keyed<boolean>
   /** Documents shown as uploaded instead of as their edits make them. */
   showOriginal: Keyed<boolean>
+  /** Which picture of the selected step the canvas shows, by document; the edit picture when not set. Selecting another step clears it. */
+  stepViews: Keyed<StepViewPart>
   /** How far in each document's canvas is zoomed, and where. Not kept between visits to the app. */
   viewports: Keyed<Viewport>
   /** The canvas window and picture as last measured, by document, for whatever else shows the view. */
@@ -92,6 +95,7 @@ interface UiStateActions {
   setPanelCollapsed: (collapsed: boolean) => void
   setActiveTool: (tool: Tool) => void
   setOverlayGuide: (guide: OverlayGuide) => void
+  setStepView: (documentId: string, part: StepViewPart) => void
   setShowOriginal: (documentId: string, show: boolean) => void
   setViewport: (documentId: string, viewport: Viewport) => void
   setViewFrame: (documentId: string, frame: ViewFrame) => void
@@ -133,6 +137,7 @@ export const INITIAL_UI_STATE: Readonly<UiStateData> = {
   runCanvasModes: {},
   collapsedGroups: {},
   showOriginal: {},
+  stepViews: {},
   viewports: {},
   viewFrames: {},
   exportSettings: {},
@@ -244,8 +249,15 @@ export const useUiStore = create<UiState>()(
           expandedItems: { ...expandedItems, [id]: expanded },
         }))
       },
+      setStepView: (documentId, part) => {
+        set(({ stepViews }) => ({
+          stepViews: { ...stepViews, [documentId]: part },
+        }))
+      },
       selectStep: (id, stepId) => {
-        set(({ selectedSteps, markedSteps, workflowFocus }) => ({
+        set(({ selectedSteps, markedSteps, workflowFocus, stepViews }) => ({
+          stepViews:
+            selectedSteps[id] === stepId ? stepViews : without(stepViews, id),
           workflowFocus:
             stepId === undefined ? workflowFocus : without(workflowFocus, id),
           selectedSteps: { ...selectedSteps, [id]: stepId },
@@ -317,6 +329,7 @@ export const useUiStore = create<UiState>()(
           workflowFocus: without(state.workflowFocus, id),
           runCanvasModes: without(state.runCanvasModes, id),
           showOriginal: without(state.showOriginal, id),
+          stepViews: without(state.stepViews, id),
           viewports: without(state.viewports, id),
           viewFrames: without(state.viewFrames, id),
           exportSettings: without(state.exportSettings, id),

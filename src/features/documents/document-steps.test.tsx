@@ -307,6 +307,96 @@ describe('DocumentSteps', () => {
     })
   })
 
+  describe('a step a tool draws on the picture for', () => {
+    const EXTRACT = createSharpStep('extract', {
+      left: 0,
+      top: 0,
+      width: 4,
+      height: 4,
+    })
+
+    it('shows the picture before and the picture after, and has no such pair for another step', async () => {
+      const user = userEvent.setup()
+      const list = await showSteps([BLUR, EXTRACT], user)
+      usePipelineStore.getState().setThumbnails(DOCUMENT_ID, [
+        { stepId: BLUR.id, key: 'blur' },
+        { stepId: EXTRACT.id, key: 'after' },
+        { stepId: EXTRACT.id, key: 'before', before: true },
+      ])
+
+      const pictures = within(list).getByRole('group', {
+        name: 'Pictures of Extract',
+      })
+      await waitFor(() => {
+        const sources = [...pictures.querySelectorAll('img')].map((image) =>
+          image.getAttribute('src'),
+        )
+        expect(sources).toEqual([
+          `/api/documents/${DOCUMENT_ID}/renders/thumbnail/before`,
+          `/api/documents/${DOCUMENT_ID}/renders/thumbnail/after`,
+        ])
+      })
+      expect(
+        within(list).queryAllByRole('group', { name: /Pictures of/ }),
+      ).toHaveLength(1)
+    })
+
+    it('selects the step and shows its result when the result is chosen, and its edit picture when that is', async () => {
+      const user = userEvent.setup()
+      const list = await showSteps([EXTRACT], user)
+
+      await user.click(
+        within(list).getByRole('button', { name: 'Output of Extract' }),
+      )
+      expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(EXTRACT.id)
+      expect(useUiStore.getState().stepViews[DOCUMENT_ID]).toBe('result')
+      expect(
+        within(list).getByRole('button', { name: 'Output of Extract' }),
+      ).toHaveAttribute('aria-pressed', 'true')
+      expect(
+        within(list).getByRole('button', { name: 'Edit Extract' }),
+      ).toHaveAttribute('aria-pressed', 'false')
+
+      await user.click(
+        within(list).getByRole('button', { name: 'Edit Extract' }),
+      )
+      expect(useUiStore.getState().stepViews[DOCUMENT_ID]).not.toBe('result')
+      expect(
+        within(list).getByRole('button', { name: 'Edit Extract' }),
+      ).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('keeps picking steps together with a held key from the edit picture, without choosing a picture', async () => {
+      const user = userEvent.setup()
+      const list = await showSteps([BLUR, EXTRACT], user)
+      await user.click(within(list).getByRole('button', { name: 'Blur' }))
+
+      await user.keyboard('{Control>}')
+      await user.click(
+        within(list).getByRole('button', { name: 'Edit Extract' }),
+      )
+      await user.keyboard('{/Control}')
+
+      expect(useUiStore.getState().markedSteps[DOCUMENT_ID]).toEqual(
+        expect.arrayContaining([BLUR.id, EXTRACT.id]),
+      )
+      expect(useUiStore.getState().stepViews[DOCUMENT_ID]).toBeUndefined()
+    })
+
+    it('shows neither as chosen while another step is selected', async () => {
+      const user = userEvent.setup()
+      const list = await showSteps([BLUR, EXTRACT], user)
+      await user.click(within(list).getByRole('button', { name: 'Blur' }))
+
+      expect(
+        within(list).getByRole('button', { name: 'Edit Extract' }),
+      ).toHaveAttribute('aria-pressed', 'false')
+      expect(
+        within(list).getByRole('button', { name: 'Output of Extract' }),
+      ).toHaveAttribute('aria-pressed', 'false')
+    })
+  })
+
   describe('a group', () => {
     const MEMBER_ONE = createSharpStep('blur', { sigma: 3 })
     const MEMBER_TWO = createSharpStep('flop')

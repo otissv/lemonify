@@ -9,11 +9,16 @@ import type {
   LeafStep,
   PipelineStep,
 } from '@/features/pipeline/pipeline'
+import { overlayToolFor } from '@/features/overlay/overlay-tools'
+import { StepViewPart } from '@/features/overlay/step-view'
 import { thumbnailImageUrl } from '@/features/documents/image-urls'
 import { useDocument } from '@/features/documents/use-document'
 import { GroupRow } from '@/features/documents/group-row'
 import { StepRow } from '@/features/documents/step-row'
-import type { SelectModifiers } from '@/features/documents/step-row'
+import type {
+  SelectModifiers,
+  StepPictures,
+} from '@/features/documents/step-row'
 import { pickSteps } from '@/features/documents/step-selection'
 import { setStepDrag } from '@/features/documents/step-drag'
 import {
@@ -61,6 +66,8 @@ export function DocumentSteps({
   const thumbnails = usePipelineStore((state) => state.thumbnails[documentId])
   const run = usePipelineStore((state) => state.aiRuns[documentId])
   const selectStep = useUiStore((state) => state.selectStep)
+  const stepView = useUiStore((state) => state.stepViews[documentId])
+  const setStepView = useUiStore((state) => state.setStepView)
   const markSteps = useUiStore((state) => state.markSteps)
   const setGroupCollapsed = useUiStore((state) => state.setGroupCollapsed)
   const setActiveTool = useUiStore((state) => state.setActiveTool)
@@ -149,6 +156,27 @@ export function DocumentSteps({
     setOverGroupId(place.groupId)
   }
 
+  function handleShow(stepId: string, part: StepViewPart): void {
+    handleSelect(stepId, { toggle: false, range: false })
+    setStepView(documentId, part)
+  }
+
+  function picturesOf(step: LeafStep): StepPictures | undefined {
+    if (overlayToolFor(step) === undefined) return undefined
+    const before = thumbnails?.find(
+      ({ stepId, before }) => stepId === step.id && before === true,
+    )?.key
+    return {
+      edit:
+        before === null || before === undefined
+          ? undefined
+          : thumbnailImageUrl(documentId, before),
+      shown:
+        selectedId === step.id ? (stepView ?? StepViewPart.Edit) : undefined,
+      onShow: handleShow,
+    }
+  }
+
   function handleDrop(
     event: React.DragEvent<HTMLLIElement>,
     place: DropPlace,
@@ -172,7 +200,9 @@ export function DocumentSteps({
     siblings: ReadonlyArray<PipelineStep>,
     group?: GroupStep,
   ): React.JSX.Element {
-    const key = thumbnails?.find(({ stepId }) => stepId === step.id)?.key
+    const key = thumbnails?.find(
+      ({ stepId, before }) => stepId === step.id && before !== true,
+    )?.key
     const place: DropPlace = { index: position, groupId: group?.id }
     return (
       <li
@@ -204,6 +234,7 @@ export function DocumentSteps({
               ? undefined
               : thumbnailImageUrl(documentId, key)
           }
+          pictures={picturesOf(step)}
           sourceName={sourceNameOf(step, preview?.document.sources)}
           outOfDate={preview?.pending.includes(step.id) ?? false}
           skipped={
@@ -221,7 +252,9 @@ export function DocumentSteps({
 
   function renderGroup(group: GroupStep, position: number): React.JSX.Element {
     const collapsed = collapsedGroups[group.id] ?? false
-    const key = thumbnails?.find(({ stepId }) => stepId === group.id)?.key
+    const key = thumbnails?.find(
+      ({ stepId, before }) => stepId === group.id && before !== true,
+    )?.key
     const members = [...group.steps].reverse()
     return (
       <li

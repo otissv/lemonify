@@ -2,7 +2,7 @@ import type { Readable } from 'node:stream'
 
 import { PipelineStepKind, effectiveSteps } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
-import { stepsBefore } from '@/features/pipeline/step-input'
+import { stepsBefore, stepsThrough } from '@/features/pipeline/step-input'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
 import type { ExportSettings } from '@/features/export/export-settings'
 
@@ -43,6 +43,8 @@ function thumbnailStepIds(pipeline: Pipeline): string[] {
   })
 }
 
+const ONE_STEP_VIEW =
+  'Ask for the picture before a step or through it, not both.'
 const NO_SUCH_STEP = 'The document has no such step.'
 const NOT_AN_AI_STEP = 'That step is not an AI step that is switched on.'
 const ALREADY_RUN = 'This AI step has already been run.'
@@ -52,6 +54,13 @@ const NO_MAX = Number.MAX_SAFE_INTEGER
 export type PreviewOptions = {
   /** Show the picture this step acts on instead of the whole Pipeline. */
   beforeStepId?: string
+  /** Show the picture this step leaves, with the steps after it left out. Not together with `beforeStepId`. */
+  throughStepId?: string
+}
+
+export type ThumbnailOptions = {
+  stepIds?: ReadonlyArray<string>
+  beforeStepIds?: ReadonlyArray<string>
 }
 
 export type RenderServiceDependencies = {
@@ -99,10 +108,15 @@ export class RenderService {
     options: PreviewOptions = {},
   ): Promise<JobView> {
     const document = await this.#owned(actor, documentId)
-    const { beforeStepId } = options
+    const { beforeStepId, throughStepId } = options
+    if (beforeStepId !== undefined && throughStepId !== undefined) {
+      throw new ValidationError(ONE_STEP_VIEW)
+    }
     if (
-      beforeStepId !== undefined &&
-      stepsBefore(document.pipeline, beforeStepId) === undefined
+      (beforeStepId !== undefined &&
+        stepsBefore(document.pipeline, beforeStepId) === undefined) ||
+      (throughStepId !== undefined &&
+        stepsThrough(document.pipeline, throughStepId) === undefined)
     ) {
       throw new ValidationError(NO_SUCH_STEP)
     }
@@ -118,6 +132,7 @@ export class RenderService {
             documentId,
             revision: document.revision,
             ...(beforeStepId === undefined ? {} : { beforeStepId }),
+            ...(throughStepId === undefined ? {} : { throughStepId }),
           },
           pool: WorkerPool.Cpu,
           groupKey: documentId,
@@ -126,18 +141,29 @@ export class RenderService {
       ],
       (payload) =>
         payload.kind === JobKind.Preview &&
-        payload.beforeStepId === beforeStepId,
+        payload.beforeStepId === beforeStepId &&
+        payload.throughStepId === throughStepId,
     )
   }
 
-  /** Queues small pictures for the given steps (all of them when none are given). */
+  /**
+   * Queues small pictures: one after each of `stepIds` (all of the steps when
+   * none are given) and one before each of `beforeStepIds`, which is what the
+   * step acts on.
+   */
   async requestThumbnails(
     actor: Actor,
     documentId: string,
-    stepIds?: ReadonlyArray<string>,
+    options: ThumbnailOptions = {},
   ): Promise<JobView> {
     const document = await this.#owned(actor, documentId)
-    const ids = stepIds ?? thumbnailStepIds(document.pipeline)
+    const ids = options.stepIds ?? thumbnailStepIds(document.pipeline)
+    const beforeIds = options.beforeStepIds ?? []
+    for (const id of beforeIds) {
+      if (stepsBefore(document.pipeline, id) === undefined) {
+        throw new ValidationError(NO_SUCH_STEP)
+      }
+    }
     return this.#latestOnly(actor, document, JobKind.Thumbnail, async () => [
       {
         kind: JobKind.Thumbnail,
@@ -146,6 +172,7 @@ export class RenderService {
           documentId,
           revision: document.revision,
           stepIds: [...ids],
+          ...(beforeIds.length === 0 ? {} : { beforeStepIds: [...beforeIds] }),
         },
         pool: WorkerPool.Cpu,
         groupKey: documentId,

@@ -1,5 +1,7 @@
 import { PreviewStatus } from '@/features/documents/document-render'
-import { viewedStepId } from '@/features/overlay/viewed-step'
+import { toolStepIds } from '@/features/overlay/tool-steps'
+import { StepViewPart, stepViewOf } from '@/features/overlay/step-view'
+import type { StepView } from '@/features/overlay/step-view'
 import { followJob } from '@/features/jobs/follow-job'
 import { cancelJob } from '@/features/jobs/job-functions'
 import {
@@ -18,14 +20,26 @@ const AI_FAILED = 'The AI step could not be run.'
 
 const aiControllers = new Map<string, AbortController>()
 
-/** The step the canvas shows the picture before, for the document as it is saved and the step selected now. */
-function viewedStep(documentId: string): string | undefined {
+/** The step picture the canvas shows, for the document as it is saved and the step selected now. */
+function viewedStep(documentId: string): StepView | undefined {
   const session = documentSession(usePipelineStore.getState(), documentId)
   if (!session) return undefined
-  return viewedStepId(
-    useUiStore.getState().selectedSteps[documentId],
+  const ui = useUiStore.getState()
+  return stepViewOf(
+    ui.selectedSteps[documentId],
     session.confirmed.pipeline,
+    ui.stepViews[documentId] ?? StepViewPart.Edit,
   )
+}
+
+function previewRequest(
+  documentId: string,
+  view: StepView | undefined,
+): { documentId: string; beforeStepId?: string; throughStepId?: string } {
+  if (view === undefined) return { documentId }
+  return view.part === StepViewPart.Edit
+    ? { documentId, beforeStepId: view.stepId }
+    : { documentId, throughStepId: view.stepId }
 }
 
 /**
@@ -40,7 +54,7 @@ export async function refreshPreview(
 ): Promise<void> {
   const store = usePipelineStore.getState()
   const before = store.previews[documentId]
-  const beforeStepId = viewedStep(documentId)
+  const view = viewedStep(documentId)
   store.setPreview(documentId, {
     ...before,
     pendingStepIds: before?.pendingStepIds ?? [],
@@ -49,7 +63,9 @@ export async function refreshPreview(
     error: undefined,
   })
   try {
-    const queued = await requestPreview({ data: { documentId, beforeStepId } })
+    const queued = await requestPreview({
+      data: previewRequest(documentId, view),
+    })
     const ended = await followJob(queued.id, signal)
     if (ended === undefined || ended.state === JobState.Cancelled) return
     const { result } = ended
@@ -58,7 +74,7 @@ export async function refreshPreview(
         status: PreviewStatus.Ready,
         key: result.key,
         size: { width: result.width, height: result.height },
-        beforeStepId,
+        view,
         pendingStepIds: result.pendingStepIds,
         problems: result.problems,
       })
@@ -83,13 +99,17 @@ function failPreview(documentId: string, error: string): void {
   })
 }
 
-/** Asks for small pictures of every step; a step whose picture cannot be made is simply left without one. */
+/** Asks for small pictures after every step, and before each step a tool draws on; a step whose picture cannot be made is simply left without one. */
 export async function refreshThumbnails(
   documentId: string,
   signal: AbortSignal,
 ): Promise<void> {
   try {
-    const queued = await requestThumbnails({ data: { documentId } })
+    const session = documentSession(usePipelineStore.getState(), documentId)
+    const beforeStepIds = session ? toolStepIds(session.confirmed.pipeline) : []
+    const queued = await requestThumbnails({
+      data: { documentId, beforeStepIds },
+    })
     const ended = await followJob(queued.id, signal)
     const result = ended?.result
     if (ended?.state !== JobState.Done || result?.kind !== JobKind.Thumbnail) {

@@ -1,7 +1,8 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { StepViewPart } from '@/features/overlay/step-view'
 import { AiToolId } from '@/features/ai/ai-tools'
 import { PreviewStatus } from '@/features/documents/document-render'
 import { changeDocument } from '@/features/documents/document-functions'
@@ -492,6 +493,19 @@ describe('StepOptions', () => {
       await user.click(screen.getByRole('option', { name: 'Golden spiral' }))
 
       expect(useUiStore.getState().overlayGuide).toBe('golden-spiral')
+    })
+
+    it('says it is showing the result, and offers no guide, while the result is chosen', () => {
+      const extract = createSharpStep('extract')
+      showStep([extract], extract)
+      act(() => {
+        useUiStore.getState().setStepView(DOCUMENT_ID, StepViewPart.Result)
+      })
+
+      expect(screen.getByText(/picture the step leaves/i)).toBeVisible()
+      expect(
+        screen.queryByRole('combobox', { name: 'Guide' }),
+      ).not.toBeInTheDocument()
     })
 
     it('says to run the AI steps first while one ahead of it has not run', () => {

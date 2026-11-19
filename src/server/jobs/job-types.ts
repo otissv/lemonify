@@ -49,12 +49,16 @@ export const JobPayloadSchema = z.discriminatedUnion('kind', [
     revision,
     /** Show the picture this step acts on instead of the whole Pipeline. */
     beforeStepId: id.optional(),
+    /** Show the picture this step leaves, with the steps after it left out. Not together with `beforeStepId`. */
+    throughStepId: id.optional(),
   }),
   z.strictObject({
     kind: z.literal(JobKind.Thumbnail),
     documentId: id,
     revision,
     stepIds: z.array(id),
+    /** Steps to make a picture of what they act on for, apart from the pictures after `stepIds`. */
+    beforeStepIds: z.array(id).optional(),
   }),
   z.strictObject({
     kind: z.literal(JobKind.WorkflowThumbnail),
@@ -114,7 +118,12 @@ export const JobResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal(JobKind.Thumbnail),
     thumbnails: z.array(
-      z.strictObject({ stepId: id, key: z.string().min(1).nullable() }),
+      z.strictObject({
+        stepId: id,
+        key: z.string().min(1).nullable(),
+        /** The picture is of what the step acts on, not of what it leaves. */
+        before: z.literal(true).optional(),
+      }),
     ),
   }),
   z.strictObject({

@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   refreshPreview,
+  refreshThumbnails,
   runPendingAiSteps,
 } from '@/features/documents/document-render-sync'
 import { followJob } from '@/features/jobs/follow-job'
 import {
   requestAiStep,
   requestPreview,
+  requestThumbnails,
 } from '@/features/render/render-functions'
 import { JobKind, JobState } from '@/server/jobs/job-types'
 import type { JobView } from '@/server/services/job-service'
@@ -15,6 +17,7 @@ import { useLibraryStore } from '@/store/library-store'
 import { usePipelineStore } from '@/store/pipeline-store'
 import { PreviewStatus } from '@/features/documents/document-render'
 import { resetStores } from '@/store/reset-stores'
+import { StepViewPart } from '@/features/overlay/step-view'
 import { useUiStore } from '@/store/ui-store'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 import {
@@ -79,7 +82,7 @@ describe('refreshPreview', () => {
       status: PreviewStatus.Ready,
       key: 'k1',
       size: { width: 4000, height: 3000 },
-      beforeStepId: undefined,
+      view: undefined,
       pendingStepIds: ['s2'],
       problems: [{ stepId: 's3', message: 'Needs width.' }],
     })
@@ -115,7 +118,23 @@ describe('refreshPreview', () => {
       })
       expect(usePipelineStore.getState().previews[DOCUMENT_ID]).toMatchObject({
         size: { width: 500, height: 400 },
-        beforeStepId: extract.id,
+        view: { stepId: extract.id, part: 'edit' },
+      })
+    })
+
+    it('asks for the picture the step leaves when its result is chosen', async () => {
+      useUiStore.getState().selectStep(DOCUMENT_ID, extract.id)
+      useUiStore.getState().setStepView(DOCUMENT_ID, StepViewPart.Result)
+      vi.mocked(followJob).mockResolvedValue(ready(300, 200))
+
+      await refreshPreview(DOCUMENT_ID, SIGNAL)
+
+      expect(requestPreview).toHaveBeenCalledWith({
+        data: { documentId: DOCUMENT_ID, throughStepId: extract.id },
+      })
+      expect(usePipelineStore.getState().previews[DOCUMENT_ID]).toMatchObject({
+        size: { width: 300, height: 200 },
+        view: { stepId: extract.id, part: 'result' },
       })
     })
 
@@ -130,7 +149,7 @@ describe('refreshPreview', () => {
         expect(call.data.beforeStepId).toBeUndefined()
       }
       expect(
-        usePipelineStore.getState().previews[DOCUMENT_ID]?.beforeStepId,
+        usePipelineStore.getState().previews[DOCUMENT_ID]?.view,
       ).toBeUndefined()
     })
 
@@ -148,7 +167,7 @@ describe('refreshPreview', () => {
         status: PreviewStatus.Failed,
         key: 'k',
         size: { width: 500, height: 400 },
-        beforeStepId: extract.id,
+        view: { stepId: extract.id, part: 'edit' },
       })
     })
   })
@@ -178,6 +197,40 @@ describe('refreshPreview', () => {
     await refreshPreview('d1', SIGNAL)
     expect(usePipelineStore.getState().previews.d1?.status).toBe(
       PreviewStatus.Rendering,
+    )
+  })
+})
+
+describe('refreshThumbnails', () => {
+  beforeEach(() => {
+    resetStores()
+    vi.resetAllMocks()
+  })
+
+  it('asks for the picture before each step a tool draws on, and keeps both kinds', async () => {
+    const extract = createSharpStep('extract')
+    loadDocumentIntoEditor(documentView([createSharpStep('blur'), extract]))
+    vi.mocked(requestThumbnails).mockResolvedValue(
+      job(JobKind.Thumbnail, JobState.Waiting),
+    )
+    const thumbnails = [
+      { stepId: extract.id, key: 'after' },
+      { stepId: extract.id, key: 'before', before: true as const },
+    ]
+    vi.mocked(followJob).mockResolvedValue(
+      job(JobKind.Thumbnail, JobState.Done, {
+        kind: JobKind.Thumbnail,
+        thumbnails,
+      }),
+    )
+
+    await refreshThumbnails(DOCUMENT_ID, SIGNAL)
+
+    expect(requestThumbnails).toHaveBeenCalledWith({
+      data: { documentId: DOCUMENT_ID, beforeStepIds: [extract.id] },
+    })
+    expect(usePipelineStore.getState().thumbnails[DOCUMENT_ID]).toEqual(
+      thumbnails,
     )
   })
 })

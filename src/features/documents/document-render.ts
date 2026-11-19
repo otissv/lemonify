@@ -9,6 +9,8 @@ export enum PreviewStatus {
 /** Why the server left a step out of the picture. */
 export type StepProblem = { stepId: string; message: string }
 
+import type { StepView } from '@/features/overlay/step-view'
+
 export type PictureSize = { width: number; height: number }
 
 /** A document's rendered pipeline; the last good picture stays while a new one is made or fails. */
@@ -18,8 +20,8 @@ export type DocumentPreview = {
   key?: string
   /** The picture's size in its own pixels, which the preview may have shrunk to be shown. */
   size?: PictureSize
-  /** The step the picture is the one before, or undefined when it is the whole document. Set with the picture. */
-  beforeStepId?: string
+  /** The step picture the canvas shows, or undefined when it is the whole document. Set with the picture. */
+  view?: StepView
   /** Enabled AI steps with no result yet; the picture stops before the first. */
   pendingStepIds: ReadonlyArray<string>
   problems: ReadonlyArray<StepProblem>
@@ -30,6 +32,8 @@ export type DocumentPreview = {
 export type DocumentThumbnails = ReadonlyArray<{
   stepId: string
   key: string | null
+  /** The picture is of what the step acts on, not of what it leaves. */
+  before?: true
 }>
 
 /** The AI step running for a document; the next pending ones follow it. */

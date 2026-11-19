@@ -10,7 +10,8 @@ import {
 } from '@/features/documents/image-urls'
 import { originalSourceId } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
-import { viewedStepId } from '@/features/overlay/viewed-step'
+import { StepViewPart, stepViewOf } from '@/features/overlay/step-view'
+import type { StepView } from '@/features/overlay/step-view'
 import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 import { useUiStore } from '@/store/ui-store'
 import { PreviewStatus } from '@/features/documents/document-render'
@@ -28,8 +29,8 @@ export interface PipelinePreview {
   imageUrl: string | undefined
   /** The rendered picture's size in its own pixels, which the preview may have shrunk to be shown. Undefined until the first render is ready. */
   size: PictureSize | undefined
-  /** The step the rendered picture is the one before, or undefined when it is the whole document. */
-  beforeStepId: string | undefined
+  /** The step picture the rendered picture is, or undefined when it is the whole document. */
+  view: StepView | undefined
   /** The original image, as opened, before any edit. */
   originalUrl: string | undefined
   status: PreviewStatus
@@ -61,12 +62,19 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
     documentSession(state, documentId),
   )
   const selectedId = useUiStore((state) => state.selectedSteps[documentId])
+  const part = useUiStore((state) => state.stepViews[documentId])
   const settled = session !== undefined && session.pending.length === 0
   const revision = session?.confirmed.revision
   const viewed =
     session === undefined
       ? undefined
-      : viewedStepId(selectedId, session.confirmed.pipeline)
+      : stepViewOf(
+          selectedId,
+          session.confirmed.pipeline,
+          part ?? StepViewPart.Edit,
+        )
+  const viewedId = viewed?.stepId
+  const viewedPart = viewed?.part
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the revision is what makes the preview ask again
   useEffect(() => {
@@ -79,7 +87,7 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [documentId, enabled, settled, revision, viewed])
+  }, [documentId, enabled, settled, revision, viewedId, viewedPart])
 }
 
 /** What a document looks like after its pipeline. Undefined until the document has loaded. */
@@ -105,7 +113,7 @@ export function usePreview(documentId: string): PipelinePreview | undefined {
       source,
       imageUrl: rendered,
       size: current?.size,
-      beforeStepId: current?.beforeStepId,
+      view: current?.view,
       originalUrl: original,
       status: current?.status ?? PreviewStatus.Rendering,
       error: current?.error,

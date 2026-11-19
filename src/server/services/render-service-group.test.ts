@@ -199,7 +199,9 @@ describe('thumbnails of a document with groups', () => {
       await t.app.renders.requestThumbnails(t.ann, document.id),
     )
     const asked = await run(
-      await t.app.renders.requestThumbnails(t.ann, document.id, [group.id]),
+      await t.app.renders.requestThumbnails(t.ann, document.id, {
+        stepIds: [group.id],
+      }),
     )
 
     if (all.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
@@ -348,7 +350,9 @@ describe('sub-documents', () => {
     await subDocument(document.id, [createImageLayerStep(logo.id), flip], false)
 
     const done = await run(
-      await t.app.renders.requestThumbnails(t.ann, document.id, [flip.id]),
+      await t.app.renders.requestThumbnails(t.ann, document.id, {
+        stepIds: [flip.id],
+      }),
     )
 
     if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')

@@ -1,5 +1,7 @@
-import { stepsBefore } from '@/features/pipeline/step-input'
+import { stepsBefore, stepsThrough } from '@/features/pipeline/step-input'
 
+import type { PlanStep } from '@/features/pipeline/pipeline'
+import type { DocumentRecord } from '../../dao/document-dao.ts'
 import type { Logger } from '../../http/logger.ts'
 import type { DocumentPlanner } from '../../render/document-planner.ts'
 import { planKey } from '../../render/plan-pipeline.ts'
@@ -65,6 +67,22 @@ export async function ensureRender(
   }
 }
 
+function shownSteps(
+  pipeline: DocumentRecord['pipeline'],
+  payload: { beforeStepId?: string; throughStepId?: string },
+): ReadonlyArray<PlanStep> | undefined {
+  const { beforeStepId, throughStepId } = payload
+  if (beforeStepId !== undefined) {
+    const steps = stepsBefore(pipeline, beforeStepId)
+    if (steps === undefined) throw new StepGoneError(beforeStepId)
+    return steps
+  }
+  if (throughStepId === undefined) return undefined
+  const steps = stepsThrough(pipeline, throughStepId)
+  if (steps === undefined) throw new StepGoneError(throughStepId)
+  return steps
+}
+
 class StepGoneError extends Error {
   constructor(stepId: string) {
     super(`The step ${stepId} is no longer in the document.`)
@@ -91,13 +109,7 @@ export class PreviewHandler implements JobHandler {
           payload.documentId,
           payload.revision,
         )
-        const steps =
-          payload.beforeStepId === undefined
-            ? undefined
-            : stepsBefore(document.pipeline, payload.beforeStepId)
-        if (payload.beforeStepId !== undefined && steps === undefined) {
-          throw new StepGoneError(payload.beforeStepId)
-        }
+        const steps = shownSteps(document.pipeline, payload)
         const whole = await this.#deps.planner.plan(document)
         const plan =
           steps === undefined

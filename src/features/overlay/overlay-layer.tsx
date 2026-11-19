@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 
 import { OverlayContext } from '@/features/overlay/overlay-context'
+import { StepViewPart, sameStepView } from '@/features/overlay/step-view'
 import { waitsForEarlierAi } from '@/features/overlay/overlay-state'
 import { overlayToolFor } from '@/features/overlay/overlay-tools'
 import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
@@ -38,7 +39,12 @@ export function OverlayLayer({
   if (step?.kind !== PipelineStepKind.Sharp) return null
   const tool = overlayToolFor(step)
   const { size } = preview
-  if (!tool || !size || preview.beforeStepId !== step.id) return null
+  if (
+    !tool ||
+    !size ||
+    !sameStepView(preview.view, { stepId: step.id, part: StepViewPart.Edit })
+  )
+    return null
 
   if (waitsForEarlierAi(preview, step.id)) return null
 

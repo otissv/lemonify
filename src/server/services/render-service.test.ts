@@ -185,6 +185,94 @@ describe('previews', () => {
       ).toEqual(['layer'])
     })
 
+    it('shows the picture the step leaves when asked through it', async () => {
+      const document = await newDocument()
+      const blur = createSharpStep('blur', { sigma: 2 })
+      const extract = createSharpStep('extract', {
+        left: 1,
+        top: 1,
+        width: 2,
+        height: 2,
+      })
+      const flip = createSharpStep('flip')
+      await addStep(document.id, blur)
+      await addStep(document.id, extract)
+      await addStep(document.id, flip)
+
+      const done = await run(
+        await t.app.renders.requestPreview(t.ann, document.id, {
+          throughStepId: extract.id,
+        }),
+      )
+
+      expect(done.state).toBe(JobState.Done)
+      expect(
+        t.imageEngine.requests[0]?.steps.map((step) =>
+          step.kind === 'sharp' ? step.op : step.kind,
+        ),
+      ).toEqual(['layer', 'blur', 'extract'])
+    })
+
+    it('refuses a step it does not have, and both ways of choosing one at once', async () => {
+      const document = await newDocument()
+      const blur = createSharpStep('blur')
+      await addStep(document.id, blur)
+
+      await expect(
+        t.app.renders.requestPreview(t.ann, document.id, {
+          throughStepId: 'missing',
+        }),
+      ).rejects.toBeInstanceOf(ValidationError)
+      await expect(
+        t.app.renders.requestPreview(t.ann, document.id, {
+          beforeStepId: blur.id,
+          throughStepId: blur.id,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError)
+    })
+
+    it("asks again for another step's result, and returns the job already queued for the same step", async () => {
+      const document = await newDocument()
+      const first = createSharpStep('blur')
+      const second = createSharpStep('flip')
+      await addStep(document.id, first)
+      await addStep(document.id, second)
+
+      const one = await t.app.renders.requestPreview(t.ann, document.id, {
+        throughStepId: first.id,
+      })
+      const again = await t.app.renders.requestPreview(t.ann, document.id, {
+        throughStepId: first.id,
+      })
+      const other = await t.app.renders.requestPreview(t.ann, document.id, {
+        throughStepId: second.id,
+      })
+
+      expect(again.id).toBe(one.id)
+      expect(other.id).not.toBe(one.id)
+      expect((await t.app.jobs.get(t.ann, one.id)).state).toBe(
+        JobState.Cancelled,
+      )
+    })
+
+    it('is a different job from the picture before the same step', async () => {
+      const document = await newDocument()
+      const blur = createSharpStep('blur')
+      await addStep(document.id, blur)
+
+      const before = await t.app.renders.requestPreview(t.ann, document.id, {
+        beforeStepId: blur.id,
+      })
+      const through = await t.app.renders.requestPreview(t.ann, document.id, {
+        throughStepId: blur.id,
+      })
+
+      expect(through.id).not.toBe(before.id)
+      expect((await t.app.jobs.get(t.ann, before.id)).state).toBe(
+        JobState.Cancelled,
+      )
+    })
+
     it('refuses a step the Document does not have', async () => {
       const document = await newDocument()
       await expect(
@@ -344,6 +432,87 @@ describe('thumbnails', () => {
         )
       ).mediaType,
     ).toBe('image/webp')
+  })
+})
+
+describe('thumbnails that cannot be made', () => {
+  it('are left without a picture, and the Job still finishes', async () => {
+    const document = await newDocument()
+    await addStep(document.id, createSharpStep('flip'))
+    t.imageEngine.failWith = new Error('boom')
+
+    const done = await run(
+      await t.app.renders.requestThumbnails(t.ann, document.id),
+    )
+
+    expect(done.state).toBe(JobState.Done)
+    if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
+    expect(done.result.thumbnails.every(({ key }) => key === null)).toBe(true)
+    expect(
+      t.logger.lines.some(({ message }) =>
+        message.includes('small picture could not be made'),
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('thumbnails before a step', () => {
+  it('makes a picture of what each asked-for step acts on, apart from the pictures after the steps', async () => {
+    const document = await newDocument()
+    const first = createSharpStep('flip')
+    const extract = createSharpStep('extract', {
+      left: 0,
+      top: 0,
+      width: 2,
+      height: 2,
+    })
+    await addStep(document.id, first)
+    await addStep(document.id, extract)
+
+    const done = await run(
+      await t.app.renders.requestThumbnails(t.ann, document.id, {
+        stepIds: [first.id],
+        beforeStepIds: [extract.id, first.id],
+      }),
+    )
+
+    if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
+    expect(done.result.thumbnails).toEqual([
+      { stepId: first.id, key: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      {
+        stepId: extract.id,
+        key: expect.stringMatching(/^[0-9a-f]{64}$/),
+        before: true,
+      },
+      {
+        stepId: first.id,
+        key: expect.stringMatching(/^[0-9a-f]{64}$/),
+        before: true,
+      },
+    ])
+    const [, beforeExtract, beforeFirst] = done.result.thumbnails
+    expect(beforeExtract?.key).not.toBe(beforeFirst?.key)
+  })
+
+  it('is shown even when the step is switched off, and refuses a step the document does not have', async () => {
+    const document = await newDocument()
+    const off = { ...createSharpStep('extract'), enabled: false }
+    await addStep(document.id, off)
+
+    const done = await run(
+      await t.app.renders.requestThumbnails(t.ann, document.id, {
+        stepIds: [],
+        beforeStepIds: [off.id],
+      }),
+    )
+    if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
+    expect(done.result.thumbnails[0]?.key).toMatch(/^[0-9a-f]{64}$/)
+
+    await expect(
+      t.app.renders.requestThumbnails(t.ann, document.id, {
+        beforeStepIds: ['missing'],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError)
   })
 })
 

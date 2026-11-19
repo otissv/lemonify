@@ -15,25 +15,37 @@ const DocumentSchema = z.object({ documentId: z.string().min(1) })
 export const requestPreview = createServerFn({ method: 'POST' })
   .middleware(protectedChain('queue'))
   .validator(
-    DocumentSchema.extend({ beforeStepId: z.string().min(1).optional() }),
+    DocumentSchema.extend({
+      beforeStepId: z.string().min(1).optional(),
+      throughStepId: z.string().min(1).optional(),
+    }),
   )
   .handler(async ({ context, data }): Promise<JobView> => {
     const { app, actor } = await appFor(context)
-    return app.renders.requestPreview(
-      actor,
-      data.documentId,
-      data.beforeStepId === undefined
+    return app.renders.requestPreview(actor, data.documentId, {
+      ...(data.beforeStepId === undefined
         ? {}
-        : { beforeStepId: data.beforeStepId },
-    )
+        : { beforeStepId: data.beforeStepId }),
+      ...(data.throughStepId === undefined
+        ? {}
+        : { throughStepId: data.throughStepId }),
+    })
   })
 
 export const requestThumbnails = createServerFn({ method: 'POST' })
   .middleware(protectedChain('queue'))
-  .validator(DocumentSchema.extend({ stepIds: z.array(z.string()).optional() }))
+  .validator(
+    DocumentSchema.extend({
+      stepIds: z.array(z.string()).optional(),
+      beforeStepIds: z.array(z.string()).optional(),
+    }),
+  )
   .handler(async ({ context, data }): Promise<JobView> => {
     const { app, actor } = await appFor(context)
-    return app.renders.requestThumbnails(actor, data.documentId, data.stepIds)
+    return app.renders.requestThumbnails(actor, data.documentId, {
+      stepIds: data.stepIds,
+      beforeStepIds: data.beforeStepIds,
+    })
   })
 
 const WorkflowThumbnailSchema = z.object({
