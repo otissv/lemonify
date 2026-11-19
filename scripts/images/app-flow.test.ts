@@ -919,6 +919,41 @@ describe('looking at a document through the CLI', () => {
     problems: unknown[]
   }
 
+  it('writes the picture a step acts on with `document preview --before-step`', async () => {
+    const id = await newDoc()
+    await cli<Doc>('document', 'step', 'add', id, '--op', 'flop')
+    const added = await cli<Doc>(
+      'document',
+      'step',
+      'add',
+      id,
+      '--op',
+      'extract',
+      '--options',
+      '{"left":0,"top":0,"width":2,"height":2}',
+    )
+    const extract = added.document.pipeline.steps.at(-1)
+    const file = path.join(workDir, 'before.png')
+
+    const { preview } = await cli<{
+      preview: Preview & { beforeStepId: string | null; size: unknown }
+    }>(
+      'document',
+      'preview',
+      id,
+      '--out',
+      file,
+      '--before-step',
+      extract?.id ?? '',
+    )
+
+    expect(preview.beforeStepId).toBe(extract?.id)
+    expect(preview.size).toMatchObject({
+      width: expect.any(Number),
+      height: expect.any(Number),
+    })
+  })
+
   it('writes the picture the canvas shows with `document preview`', async () => {
     const id = await newDoc()
     await cli<Doc>('document', 'step', 'add', id, '--op', 'flop')

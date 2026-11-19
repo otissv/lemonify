@@ -152,6 +152,8 @@ describe('JobService', () => {
         result: {
           kind: JobKind.Preview,
           key: 'k',
+          width: 8,
+          height: 6,
           pendingStepIds: [],
           problems: [],
         },

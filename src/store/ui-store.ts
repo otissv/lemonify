@@ -1,3 +1,4 @@
+import { OverlayGuide } from '@/features/overlay/grid-guides'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { PersistStorage } from 'zustand/middleware'
@@ -53,6 +54,8 @@ interface UiStateData {
   panelCollapsed: boolean
   activeTool: Tool
   recentUpscaleModels: ReadonlyArray<string>
+  /** The lines drawn inside the box of a tool on the picture, such as extract. Kept in this browser. */
+  overlayGuide: OverlayGuide
   /** Documents and workflows whose steps are listed in the sidebar. */
   expandedItems: Keyed<boolean>
   /** The step whose options are shown, by document or workflow. */
@@ -88,6 +91,7 @@ interface UiStateActions {
   setPanelPosition: (position: PanelPosition) => void
   setPanelCollapsed: (collapsed: boolean) => void
   setActiveTool: (tool: Tool) => void
+  setOverlayGuide: (guide: OverlayGuide) => void
   setShowOriginal: (documentId: string, show: boolean) => void
   setViewport: (documentId: string, viewport: Viewport) => void
   setViewFrame: (documentId: string, frame: ViewFrame) => void
@@ -120,6 +124,7 @@ export const INITIAL_UI_STATE: Readonly<UiStateData> = {
   panelCollapsed: false,
   activeTool: Tool.Tools,
   recentUpscaleModels: [],
+  overlayGuide: OverlayGuide.None,
   visitTrail: [],
   expandedItems: {},
   selectedSteps: {},
@@ -148,7 +153,10 @@ export function workflowSelectionOf(
   return stepId === undefined ? NO_SELECTION : stepSelection(stepId)
 }
 
-type StoredPreferences = Pick<UiStateData, 'recentUpscaleModels'>
+type StoredPreferences = Pick<
+  UiStateData,
+  'recentUpscaleModels' | 'overlayGuide'
+>
 
 function withRecent(
   recent: ReadonlyArray<string>,
@@ -222,6 +230,9 @@ export const useUiStore = create<UiState>()(
         set(({ viewFrames }) => ({
           viewFrames: { ...viewFrames, [documentId]: frame },
         }))
+      },
+      setOverlayGuide: (overlayGuide) => {
+        set({ overlayGuide })
       },
       rememberUpscaleModel: (name) => {
         set(({ recentUpscaleModels }) => ({
@@ -315,9 +326,10 @@ export const useUiStore = create<UiState>()(
     {
       name: PREFERENCES_STORAGE_KEY,
       storage: preferencesStorage,
-      partialize: ({ recentUpscaleModels }): StoredPreferences => ({
+      partialize: ({
         recentUpscaleModels,
-      }),
+        overlayGuide,
+      }): StoredPreferences => ({ recentUpscaleModels, overlayGuide }),
       skipHydration: true,
     },
   ),

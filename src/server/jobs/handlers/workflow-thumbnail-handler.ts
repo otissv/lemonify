@@ -60,11 +60,7 @@ export class WorkflowThumbnailHandler implements JobHandler {
         const thumbnails: Array<{ stepId: string; key: string | null }> = []
         for (const [done, nodeId] of payload.nodeIds.entries()) {
           context.setProgress(done / payload.nodeIds.length)
-          const shown = shownForWorkflowNode(
-            filled,
-            nodeId,
-            firstSlot?.id,
-          )
+          const shown = shownForWorkflowNode(filled, nodeId, firstSlot?.id)
           if (shown === undefined) {
             thumbnails.push({ stepId: nodeId, key: null })
             continue
@@ -74,7 +70,7 @@ export class WorkflowThumbnailHandler implements JobHandler {
             thumbnails.push({ stepId: nodeId, key: null })
             continue
           }
-          const key = await ensureRender(
+          const { key } = await ensureRender(
             this.#deps,
             RenderKind.WorkflowNode,
             plan,

@@ -46,6 +46,8 @@ export function job(overrides: Partial<JobRecord> = {}): JobRecord {
 const DONE_RESULT: JobResult = {
   kind: JobKind.Preview,
   key: 'a'.repeat(64),
+  width: 8,
+  height: 6,
   pendingStepIds: [],
   problems: [],
 }

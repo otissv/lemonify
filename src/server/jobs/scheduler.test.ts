@@ -21,6 +21,8 @@ const DONE_PREVIEW: JobOutcome = {
   result: {
     kind: JobKind.Preview,
     key: 'a'.repeat(64),
+    width: 8,
+    height: 6,
     pendingStepIds: [],
     problems: [],
   },

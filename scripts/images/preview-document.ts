@@ -20,6 +20,8 @@ export type PreviewOptions = {
   region?: Region
   /** Shrink the picture to this width; it is never made larger. */
   width?: number
+  /** The picture this step acts on, made of the steps ahead of it, instead of the whole document. */
+  beforeStepId?: string
 }
 
 export type PreviewPicture = {
@@ -27,6 +29,10 @@ export type PreviewPicture = {
   bytes: number
   format: PictureFormat
   original: boolean
+  /** The step whose picture was written, or null for the whole document. */
+  beforeStepId: string | null
+  /** The picture's size in its own pixels, whatever size it was written at; null for the image as opened. */
+  size: { width: number; height: number } | null
   /** The part of the picture that was written, or null for all of it. */
   region: Region | null
   /** AI steps still waiting for a result; the picture shows the pipeline only up to the first. */
@@ -70,12 +76,18 @@ async function renderedPicture(
   app: App,
   actor: Actor,
   documentId: string,
+  beforeStepId: string | undefined,
 ): Promise<{
   stream: Readable
+  size: { width: number; height: number }
   pending: string[]
   problems: PreviewPicture['problems']
 }> {
-  const queued = await app.renders.requestPreview(actor, documentId)
+  const queued = await app.renders.requestPreview(
+    actor,
+    documentId,
+    beforeStepId === undefined ? {} : { beforeStepId },
+  )
   const done = await app.jobs.waitFor(actor, queued.id)
   if (done.result?.kind !== JobKind.Preview) {
     throw new Error('The preview finished without a result.')
@@ -88,6 +100,7 @@ async function renderedPicture(
   )
   return {
     stream: opened.stream,
+    size: { width: done.result.width, height: done.result.height },
     pending: done.result.pendingStepIds,
     problems: done.result.problems,
   }
@@ -120,13 +133,19 @@ export async function writePreview(
 ): Promise<PreviewPicture> {
   const format = formatFor(destination)
   const original = options.original === true
+  if (original && options.beforeStepId !== undefined) {
+    throw new ValidationError(
+      'The image as opened has no steps; leave out the step or the original.',
+    )
+  }
   const picture = original
     ? {
         stream: await originalPicture(app, actor, documentId),
+        size: null,
         pending: [],
         problems: [],
       }
-    : await renderedPicture(app, actor, documentId)
+    : await renderedPicture(app, actor, documentId, options.beforeStepId)
 
   const wanted = format ?? NATIVE_FORMAT
   const unchanged =
@@ -164,6 +183,8 @@ export async function writePreview(
     bytes: size,
     format: wanted,
     original,
+    beforeStepId: options.beforeStepId ?? null,
+    size: picture.size,
     region: options.region ?? null,
     pending: picture.pending,
     problems: picture.problems,

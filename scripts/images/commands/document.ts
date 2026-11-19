@@ -193,18 +193,22 @@ export const documentPreviewCommand = defineAppCommand({
   name: 'document preview',
   summary: 'Write the picture the canvas shows to a file',
   synopsis:
-    '<id> --out <path> [--original] [--region <x,y,w,h>] [--width <px>]',
+    '<id> --out <path> [--original] [--before-step <id>] [--region <x,y,w,h>] [--width <px>]',
   help: `Writes the picture the editor's canvas would show for the document, so it can
 be looked at without the website. It is made by the same preview the editor
 asks for. The file type follows the extension of --out (.webp, .png, .jpg); a
 folder uses the document's name. Prints the file, the AI steps still waiting
 for a result (the picture shows the pipeline only up to the first of them) and
-the steps left out of the picture, with why. For the full-size picture use
-export.
+the steps left out of the picture, with why. It also prints the picture's size
+in its own pixels, whatever size the file is written at. For the full-size
+picture use export.
 
 Options:
   --out <path>         Where to write the picture (required)
   --original           The image as opened, before any step
+  --before-step <id>   The picture this step acts on, made of the steps ahead of
+                       it: what the editor shows while the step is open, and
+                       what the numbers of a step such as extract refer to
   --region <x,y,w,h>   Only this part of the picture: x, y, width and height as
                        fractions from 0 to 1, e.g. 0.25,0.25,0.5,0.5 for the
                        middle quarter. Taken before --width shrinks it
@@ -213,6 +217,7 @@ Options:
     id,
     out: z.string().min(1),
     original: z.boolean().default(false),
+    beforeStep: z.string().min(1).optional(),
     region: z.string().min(1).transform(parseRegion).optional(),
     width: z.coerce.number().int().positive().optional(),
   },
@@ -220,6 +225,7 @@ Options:
   flags: {
     out: { type: 'string' },
     original: { type: 'boolean' },
+    'before-step': { type: 'string' },
     region: { type: 'string' },
     width: { type: 'string' },
   },
@@ -227,6 +233,7 @@ Options:
     withWorkers(app, async () => ({
       preview: await writePreview(app, actor, options.id, options.out, {
         original: options.original,
+        beforeStepId: options.beforeStep,
         region: options.region,
         width: options.width,
       }),

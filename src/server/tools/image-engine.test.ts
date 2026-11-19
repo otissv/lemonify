@@ -69,6 +69,27 @@ describe('SharpImageEngine', () => {
     expect((await sharp(output).metadata()).width).toBe(info.width)
   })
 
+  it('reports the size the picture has before it is shrunk to the preview', async () => {
+    const info = await engine.render({
+      input: file(input),
+      steps: [createSharpStep('rotate', { angle: 90 })],
+      target: { kind: EngineTargetKind.Preview },
+      output: path.join(directory, 'rotated-preview.webp'),
+    })
+    expect(Math.max(info.width, info.height)).toBe(PREVIEW_MAX_SIZE)
+    expect(info).toMatchObject({ pictureWidth: 2000, pictureHeight: 3000 })
+  })
+
+  it('reports the picture size of a render that is not shrunk', async () => {
+    const info = await engine.render({
+      input: file(input),
+      steps: [],
+      target: { kind: EngineTargetKind.Intermediate },
+      output: path.join(directory, 'plain.png'),
+    })
+    expect(info).toMatchObject({ pictureWidth: 3000, pictureHeight: 2000 })
+  })
+
   it('writes a thumbnail and never enlarges a small image', async () => {
     const small = await makeImage(40, 30, 'small.png')
     const info = await engine.render({

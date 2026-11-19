@@ -52,6 +52,41 @@ describe('FileRenderStore', () => {
     expect(await readdir(path.join(root, RenderKind.Preview))).toEqual([])
   })
 
+  it('keeps the size a render was made at beside it', async () => {
+    const renders = new FileRenderStore(root, 1000)
+    const target = await renders.reserve(RenderKind.Preview, KEY)
+    await writeFile(target.partial, Buffer.alloc(10))
+    await renders.commit(target, { width: 4000, height: 3000 })
+    expect(await renders.size(RenderKind.Preview, KEY)).toEqual({
+      width: 4000,
+      height: 3000,
+    })
+    expect(await renders.size(RenderKind.Thumbnail, KEY)).toBeUndefined()
+  })
+
+  it('has no size for a render stored without one, or with a damaged record', async () => {
+    const renders = new FileRenderStore(root, 1000)
+    await store(renders, KEY, 10)
+    expect(await renders.size(RenderKind.Preview, KEY)).toBeUndefined()
+    await writeFile(
+      path.join(root, RenderKind.Preview, `${KEY}.size.json`),
+      '{"width":"wide"}',
+    )
+    expect(await renders.size(RenderKind.Preview, KEY)).toBeUndefined()
+  })
+
+  it('removes the size record with the render it belongs to', async () => {
+    const renders = new FileRenderStore(root, 15)
+    const first = await renders.reserve(RenderKind.Preview, KEY)
+    await writeFile(first.partial, Buffer.alloc(10))
+    const kept = await renders.commit(first, { width: 1, height: 1 })
+    await utimes(kept, new Date(1000), new Date(1000))
+    await store(renders, OTHER_KEY, 10)
+    expect(await readdir(path.join(root, RenderKind.Preview))).toEqual([
+      `${OTHER_KEY}.webp`,
+    ])
+  })
+
   it('lets two renders of the same key be written at once, each in a file of its own', async () => {
     const renders = new FileRenderStore(root, 1000)
     const first = await renders.reserve(RenderKind.Preview, KEY)

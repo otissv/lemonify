@@ -2,6 +2,7 @@ import type { Readable } from 'node:stream'
 
 import { PipelineStepKind, effectiveSteps } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
+import { stepsBefore } from '@/features/pipeline/step-input'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
 import type { ExportSettings } from '@/features/export/export-settings'
 
@@ -19,7 +20,7 @@ import { requireOwned } from '../domain/ownership.ts'
 import { ConflictError, NotFoundError, ValidationError } from '../errors.ts'
 import { requireCompletePlan } from '../jobs/handlers/export-handler.ts'
 import { JobKind } from '../jobs/job-types.ts'
-import type { JobRecord } from '../jobs/job-types.ts'
+import type { JobPayload, JobRecord } from '../jobs/job-types.ts'
 import type { DocumentPlanner } from '../render/document-planner.ts'
 import { exportFormatOptions } from '../tools/image-engine.ts'
 import { RENDER_MEDIA_TYPE, type RenderKind } from '../tools/render-store.ts'
@@ -42,10 +43,16 @@ function thumbnailStepIds(pipeline: Pipeline): string[] {
   })
 }
 
+const NO_SUCH_STEP = 'The document has no such step.'
 const NOT_AN_AI_STEP = 'That step is not an AI step that is switched on.'
 const ALREADY_RUN = 'This AI step has already been run.'
 const EARLIER_FIRST = 'Run the earlier AI steps first.'
 const NO_MAX = Number.MAX_SAFE_INTEGER
+
+export type PreviewOptions = {
+  /** Show the picture this step acts on instead of the whole Pipeline. */
+  beforeStepId?: string
+}
 
 export type RenderServiceDependencies = {
   documents: DocumentDao
@@ -81,25 +88,46 @@ export class RenderService {
   }
 
   /**
-   * Queues a preview of the Document as it is now. A newer request replaces
-   * older ones for the same Document (latest wins); asking twice for the same
-   * revision returns the Job already queued.
+   * Queues a preview of the Document as it is now, or of the picture a step
+   * acts on when `beforeStepId` is given. A newer request replaces older ones
+   * for the same Document (latest wins); asking twice for the same revision and
+   * step returns the Job already queued.
    */
-  async requestPreview(actor: Actor, documentId: string): Promise<JobView> {
+  async requestPreview(
+    actor: Actor,
+    documentId: string,
+    options: PreviewOptions = {},
+  ): Promise<JobView> {
     const document = await this.#owned(actor, documentId)
-    return this.#latestOnly(actor, document, JobKind.Preview, async () => [
-      {
-        kind: JobKind.Preview,
-        payload: {
+    const { beforeStepId } = options
+    if (
+      beforeStepId !== undefined &&
+      stepsBefore(document.pipeline, beforeStepId) === undefined
+    ) {
+      throw new ValidationError(NO_SUCH_STEP)
+    }
+    return this.#latestOnly(
+      actor,
+      document,
+      JobKind.Preview,
+      async () => [
+        {
           kind: JobKind.Preview,
+          payload: {
+            kind: JobKind.Preview,
+            documentId,
+            revision: document.revision,
+            ...(beforeStepId === undefined ? {} : { beforeStepId }),
+          },
+          pool: WorkerPool.Cpu,
+          groupKey: documentId,
           documentId,
-          revision: document.revision,
         },
-        pool: WorkerPool.Cpu,
-        groupKey: documentId,
-        documentId,
-      },
-    ])
+      ],
+      (payload) =>
+        payload.kind === JobKind.Preview &&
+        payload.beforeStepId === beforeStepId,
+    )
   }
 
   /** Queues small pictures for the given steps (all of them when none are given). */
@@ -388,6 +416,7 @@ export class RenderService {
     document: DocumentRecord,
     kind: JobKind,
     build: () => Promise<Parameters<JobService['enqueue']>[1]>,
+    asked: (payload: JobPayload) => boolean = () => true,
   ): Promise<JobView> {
     const { jobDao, clock, jobs } = this.#deps
     const active = await jobDao.listActive({
@@ -397,8 +426,9 @@ export class RenderService {
     let current: JobRecord | undefined
     for (const job of active) {
       const revision = 'revision' in job.payload ? job.payload.revision : NO_MAX
-      if (revision === document.revision) current ??= job
-      else await jobDao.requestCancel(job.id, isoNow(clock))
+      if (revision === document.revision && asked(job.payload)) {
+        current ??= job
+      } else await jobDao.requestCancel(job.id, isoNow(clock))
     }
     if (current !== undefined) return toView(current)
     const [queued] = await jobs.enqueue(actor, await build())

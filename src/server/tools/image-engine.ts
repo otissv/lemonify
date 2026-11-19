@@ -94,6 +94,9 @@ export interface EngineRequest {
 export interface EngineOutput {
   width: number
   height: number
+  /** The size of the picture the steps made, before a preview or thumbnail shrank it; the same as `width` and `height` when nothing shrank it. */
+  pictureWidth: number
+  pictureHeight: number
   bytes: number
   /** The format Sharp actually wrote, such as `webp` or `jpeg`. */
   format: string
@@ -289,15 +292,29 @@ function sizesThePicture(target: EngineTarget): boolean {
   }
 }
 
-async function build(request: EngineRequest): Promise<Sharp> {
+interface Built {
+  image: Sharp
+  /** The picture the steps made, before it was sized; undefined when the target does not size it. */
+  picture: { width: number; height: number } | undefined
+}
+
+async function build(request: EngineRequest): Promise<Built> {
   const original = await originalFormat(request.originalFrom)
-  let picture = await applySteps(baseImage(request.input), request.steps)
-  if (request.steps.length > 0 && sizesThePicture(request.target)) {
-    // Sharp keeps one resize per pipeline, and a second one replaces the
-    // first, so the steps' picture is made before it is sized.
-    picture = fromPixels(await pixelsOf(picture))
+  const picture = await applySteps(baseImage(request.input), request.steps)
+  if (!sizesThePicture(request.target)) {
+    return {
+      image: encode(picture, request.target, original),
+      picture: undefined,
+    }
   }
-  return encode(picture, request.target, original)
+  // Sharp keeps one resize per pipeline, and a second one replaces the
+  // first, so the steps' picture is made before it is sized. Its size is read
+  // from the pixels, since a file's own header ignores the orientation.
+  const pixels = await pixelsOf(picture)
+  return {
+    image: encode(fromPixels(pixels), request.target, original),
+    picture: { width: pixels.width, height: pixels.height },
+  }
 }
 
 /**
@@ -312,7 +329,8 @@ export class SharpImageEngine implements ImageEngine {
       `.${randomUUID()}.partial-${path.basename(request.output)}`,
     )
     try {
-      const { data, info } = await (await build(request)).toBuffer({
+      const built = await build(request)
+      const { data, info } = await built.image.toBuffer({
         resolveWithObject: true,
       })
       await writeFile(partial, data)
@@ -320,6 +338,8 @@ export class SharpImageEngine implements ImageEngine {
       return {
         width: info.width,
         height: info.height,
+        pictureWidth: built.picture?.width ?? info.width,
+        pictureHeight: built.picture?.height ?? info.height,
         bytes: info.size,
         format: info.format,
       }

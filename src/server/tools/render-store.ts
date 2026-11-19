@@ -1,8 +1,19 @@
 import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises'
+import {
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  utimes,
+  writeFile,
+} from 'node:fs/promises'
 import path from 'node:path'
 import type { Readable } from 'node:stream'
+
+import { z } from 'zod'
 
 export enum RenderKind {
   /** A display-sized render of a Pipeline. */
@@ -17,7 +28,16 @@ export const RENDER_MEDIA_TYPE = 'image/webp'
 
 const EXTENSION = '.webp'
 const PARTIAL_SUFFIX = '.partial'
+const SIZE_SUFFIX = '.size.json'
 const KEY_PATTERN = /^[0-9a-f]{64}$/
+
+/** The size of the picture a render shows, before it was shrunk to be stored. */
+export const RenderSizeSchema = z.strictObject({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+})
+
+export type RenderSize = z.output<typeof RenderSizeSchema>
 
 export interface RenderTarget {
   /** Where to write the render. */
@@ -35,12 +55,18 @@ export interface RenderStore {
   find(kind: RenderKind, key: string): Promise<string | undefined>
   /** Where to write a render for a key; pass the result to `commit` when done. Each call gets a file of its own, so two renders of the same key can be written at once. */
   reserve(kind: RenderKind, key: string): Promise<RenderTarget>
-  /** Puts a written render in place and makes room if the cache is too big. */
-  commit(target: RenderTarget): Promise<string>
+  /** Puts a written render in place, with the size of the picture it shows when that is known, and makes room if the cache is too big. */
+  commit(target: RenderTarget, size?: RenderSize): Promise<string>
+  /** The size of the picture a stored render shows, or undefined when none was kept or the record is damaged. */
+  size(kind: RenderKind, key: string): Promise<RenderSize | undefined>
   /** Throws away a render that could not be finished. */
   discard(target: RenderTarget): Promise<void>
   /** A read stream of a stored render, for serving it. */
   open(kind: RenderKind, key: string): Readable
+}
+
+function sizeFile(render: string): string {
+  return `${render.slice(0, -EXTENSION.length)}${SIZE_SUFFIX}`
 }
 
 function isMissing(error: unknown): boolean {
@@ -92,7 +118,10 @@ export class FileRenderStore implements RenderStore {
     return { partial: `${final}.${randomUUID()}${PARTIAL_SUFFIX}`, final }
   }
 
-  async commit(target: RenderTarget): Promise<string> {
+  async commit(target: RenderTarget, size?: RenderSize): Promise<string> {
+    const record = sizeFile(target.final)
+    if (size === undefined) await rm(record, { force: true })
+    else await writeFile(record, JSON.stringify(RenderSizeSchema.parse(size)))
     await rename(target.partial, target.final)
     await this.#prune(target.final)
     return target.final
@@ -100,6 +129,22 @@ export class FileRenderStore implements RenderStore {
 
   async discard(target: RenderTarget): Promise<void> {
     await rm(target.partial, { force: true })
+  }
+
+  async size(kind: RenderKind, key: string): Promise<RenderSize | undefined> {
+    let text: string
+    try {
+      text = await readFile(sizeFile(this.#fileFor(kind, key)), 'utf8')
+    } catch (error) {
+      if (isMissing(error)) return undefined
+      throw error
+    }
+    try {
+      const parsed = RenderSizeSchema.safeParse(JSON.parse(text))
+      return parsed.success ? parsed.data : undefined
+    } catch {
+      return undefined
+    }
   }
 
   open(kind: RenderKind, key: string): Readable {
@@ -115,6 +160,7 @@ export class FileRenderStore implements RenderStore {
       if (total <= this.#maxBytes) return
       if (entry.file === keep) continue
       await rm(entry.file, { force: true })
+      await rm(sizeFile(entry.file), { force: true })
       total -= entry.size
     }
   }
@@ -131,7 +177,7 @@ export class FileRenderStore implements RenderStore {
         throw error
       }
       for (const name of names) {
-        if (name.endsWith(PARTIAL_SUFFIX)) continue
+        if (!name.endsWith(EXTENSION)) continue
         const file = path.join(folder, name)
         const stats = await stat(file)
         entries.push({ file, size: stats.size, used: stats.mtimeMs })

@@ -15,6 +15,13 @@ import { useLibraryStore } from '@/store/library-store'
 import { usePipelineStore } from '@/store/pipeline-store'
 import { PreviewStatus } from '@/features/documents/document-render'
 import { resetStores } from '@/store/reset-stores'
+import { useUiStore } from '@/store/ui-store'
+import { createSharpStep } from '@/features/pipeline/pipeline'
+import {
+  DOCUMENT_ID,
+  documentView,
+  loadDocumentIntoEditor,
+} from '@/test/document-fixtures'
 
 vi.mock('@/features/render/render-functions', () => ({
   requestPreview: vi.fn(),
@@ -61,6 +68,8 @@ describe('refreshPreview', () => {
       job(JobKind.Preview, JobState.Done, {
         kind: JobKind.Preview,
         key: 'k1',
+        width: 4000,
+        height: 3000,
         pendingStepIds: ['s2'],
         problems: [{ stepId: 's3', message: 'Needs width.' }],
       }),
@@ -69,8 +78,78 @@ describe('refreshPreview', () => {
     expect(usePipelineStore.getState().previews.d1).toEqual({
       status: PreviewStatus.Ready,
       key: 'k1',
+      size: { width: 4000, height: 3000 },
+      beforeStepId: undefined,
       pendingStepIds: ['s2'],
       problems: [{ stepId: 's3', message: 'Needs width.' }],
+    })
+  })
+
+  describe('with a tool that draws on the picture', () => {
+    const extract = createSharpStep('extract')
+    const blur = createSharpStep('blur')
+
+    function ready(width: number, height: number) {
+      return job(JobKind.Preview, JobState.Done, {
+        kind: JobKind.Preview,
+        key: 'k',
+        width,
+        height,
+        pendingStepIds: [],
+        problems: [],
+      })
+    }
+
+    beforeEach(() => {
+      loadDocumentIntoEditor(documentView([blur, extract]))
+    })
+
+    it('asks for the picture before the selected step and remembers which it is', async () => {
+      useUiStore.getState().selectStep(DOCUMENT_ID, extract.id)
+      vi.mocked(followJob).mockResolvedValue(ready(500, 400))
+
+      await refreshPreview(DOCUMENT_ID, SIGNAL)
+
+      expect(requestPreview).toHaveBeenCalledWith({
+        data: { documentId: DOCUMENT_ID, beforeStepId: extract.id },
+      })
+      expect(usePipelineStore.getState().previews[DOCUMENT_ID]).toMatchObject({
+        size: { width: 500, height: 400 },
+        beforeStepId: extract.id,
+      })
+    })
+
+    it('asks for the whole document when the selected step has no such tool, or none is selected', async () => {
+      vi.mocked(followJob).mockResolvedValue(ready(500, 400))
+
+      await refreshPreview(DOCUMENT_ID, SIGNAL)
+      useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
+      await refreshPreview(DOCUMENT_ID, SIGNAL)
+
+      for (const [call] of vi.mocked(requestPreview).mock.calls) {
+        expect(call.data.beforeStepId).toBeUndefined()
+      }
+      expect(
+        usePipelineStore.getState().previews[DOCUMENT_ID]?.beforeStepId,
+      ).toBeUndefined()
+    })
+
+    it('keeps the picture, its size and which it is while the next one is made and if it fails', async () => {
+      useUiStore.getState().selectStep(DOCUMENT_ID, extract.id)
+      vi.mocked(followJob).mockResolvedValueOnce(ready(500, 400))
+      await refreshPreview(DOCUMENT_ID, SIGNAL)
+
+      vi.mocked(followJob).mockResolvedValueOnce(
+        job(JobKind.Preview, JobState.Failed, null, 'Broken.'),
+      )
+      await refreshPreview(DOCUMENT_ID, SIGNAL)
+
+      expect(usePipelineStore.getState().previews[DOCUMENT_ID]).toMatchObject({
+        status: PreviewStatus.Failed,
+        key: 'k',
+        size: { width: 500, height: 400 },
+        beforeStepId: extract.id,
+      })
     })
   })
 
@@ -137,6 +216,8 @@ describe('runPendingAiSteps', () => {
         job(JobKind.Preview, JobState.Done, {
           kind: JobKind.Preview,
           key: `k${previews}`,
+          width: 10,
+          height: 10,
           pendingStepIds: previews === 1 ? ['b'] : [],
           problems: [],
         }),

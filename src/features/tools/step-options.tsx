@@ -1,5 +1,6 @@
 import { useId } from 'react'
 
+import { OverlayHint } from '@/features/overlay/overlay-hint'
 import { AiRunControl } from '@/features/ai/ai-run-control'
 import { catalogueFor } from '@/features/ai/ai-defaults'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
@@ -71,6 +72,7 @@ function SharpStepOptions({
 
   return (
     <>
+      <OverlayHint documentId={documentId} step={step} />
       {/* biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them */}
       <div onBlur={flush}>
         <SharpOptionsForm op={step.op} options={draft} onChange={change} />

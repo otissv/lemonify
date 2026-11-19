@@ -1,4 +1,5 @@
 import { PreviewStatus } from '@/features/documents/document-render'
+import { viewedStepId } from '@/features/overlay/viewed-step'
 import { followJob } from '@/features/jobs/follow-job'
 import { cancelJob } from '@/features/jobs/job-functions'
 import {
@@ -9,17 +10,29 @@ import {
 import { errorMessage } from '@/lib/error-message'
 import { JobKind, JobState } from '@/server/jobs/job-types'
 import { useLibraryStore } from '@/store/library-store'
-import { usePipelineStore } from '@/store/pipeline-store'
+import { documentSession, usePipelineStore } from '@/store/pipeline-store'
+import { useUiStore } from '@/store/ui-store'
 
 const PREVIEW_FAILED = 'The picture could not be made.'
 const AI_FAILED = 'The AI step could not be run.'
 
 const aiControllers = new Map<string, AbortController>()
 
+/** The step the canvas shows the picture before, for the document as it is saved and the step selected now. */
+function viewedStep(documentId: string): string | undefined {
+  const session = documentSession(usePipelineStore.getState(), documentId)
+  if (!session) return undefined
+  return viewedStepId(
+    useUiStore.getState().selectedSteps[documentId],
+    session.confirmed.pipeline,
+  )
+}
+
 /**
- * Asks the server for the picture of the document as it is now and follows
- * the Job. The last good picture stays on screen while the new one is made. A
- * Job a newer request replaced ends cancelled and is ignored.
+ * Asks the server for the picture the canvas shows and follows the Job: the
+ * document as it is now, or the picture before the selected step when a tool
+ * draws on it. The last good picture stays on screen while the new one is
+ * made. A Job a newer request replaced ends cancelled and is ignored.
  */
 export async function refreshPreview(
   documentId: string,
@@ -27,14 +40,16 @@ export async function refreshPreview(
 ): Promise<void> {
   const store = usePipelineStore.getState()
   const before = store.previews[documentId]
+  const beforeStepId = viewedStep(documentId)
   store.setPreview(documentId, {
+    ...before,
     pendingStepIds: before?.pendingStepIds ?? [],
     problems: before?.problems ?? [],
-    key: before?.key,
     status: PreviewStatus.Rendering,
+    error: undefined,
   })
   try {
-    const queued = await requestPreview({ data: { documentId } })
+    const queued = await requestPreview({ data: { documentId, beforeStepId } })
     const ended = await followJob(queued.id, signal)
     if (ended === undefined || ended.state === JobState.Cancelled) return
     const { result } = ended
@@ -42,6 +57,8 @@ export async function refreshPreview(
       usePipelineStore.getState().setPreview(documentId, {
         status: PreviewStatus.Ready,
         key: result.key,
+        size: { width: result.width, height: result.height },
+        beforeStepId,
         pendingStepIds: result.pendingStepIds,
         problems: result.problems,
       })
@@ -58,9 +75,9 @@ function failPreview(documentId: string, error: string): void {
   const store = usePipelineStore.getState()
   const before = store.previews[documentId]
   store.setPreview(documentId, {
+    ...before,
     pendingStepIds: before?.pendingStepIds ?? [],
     problems: before?.problems ?? [],
-    key: before?.key,
     status: PreviewStatus.Failed,
     error,
   })

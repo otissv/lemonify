@@ -108,6 +108,126 @@ describe('previews', () => {
     expect(blurred.revision).toBe(1)
   })
 
+  it('says how big the picture is before it was shrunk to the preview', async () => {
+    const document = await newDocument()
+    const done = await run(
+      await t.app.renders.requestPreview(t.ann, document.id),
+    )
+    if (done.result?.kind !== JobKind.Preview) throw new Error('wrong result')
+    expect(done.result).toMatchObject({ width: 40, height: 30 })
+  })
+
+  it('keeps the size with a cached render, so a second preview still has it', async () => {
+    const document = await newDocument()
+    await addStep(document.id, createSharpStep('flip'))
+    const first = await run(
+      await t.app.renders.requestPreview(t.ann, document.id),
+    )
+    const second = await finished(
+      await t.app.renders.requestPreview(t.ann, document.id),
+    )
+    expect(t.imageEngine.requests).toHaveLength(1)
+    expect(second.result).toMatchObject({ width: 40, height: 30 })
+    expect(second.result).toEqual(first.result)
+  })
+
+  describe('before a step', () => {
+    it('shows the picture the step acts on, made of the steps ahead of it', async () => {
+      const document = await newDocument()
+      const blur = createSharpStep('blur', { sigma: 2 })
+      const extract = createSharpStep('extract', {
+        left: 1,
+        top: 1,
+        width: 2,
+        height: 2,
+      })
+      await addStep(document.id, blur)
+      await addStep(document.id, extract)
+
+      const done = await run(
+        await t.app.renders.requestPreview(t.ann, document.id, {
+          beforeStepId: extract.id,
+        }),
+      )
+
+      expect(done.state).toBe(JobState.Done)
+      expect(
+        t.imageEngine.requests[0]?.steps.map((step) =>
+          step.kind === 'sharp' ? step.op : step.kind,
+        ),
+      ).toEqual(['layer', 'blur'])
+    })
+
+    it('still reports every AI step waiting and every step left out, wherever they are', async () => {
+      const document = await newDocument()
+      const extract = createSharpStep('extract', {
+        left: 0,
+        top: 0,
+        width: 2,
+        height: 2,
+      })
+      const ai = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
+      await addStep(document.id, extract)
+      await addStep(document.id, ai)
+
+      const done = await run(
+        await t.app.renders.requestPreview(t.ann, document.id, {
+          beforeStepId: extract.id,
+        }),
+      )
+
+      if (done.result?.kind !== JobKind.Preview) throw new Error('wrong result')
+      expect(done.result.pendingStepIds).toEqual([ai.id])
+      expect(
+        t.imageEngine.requests[0]?.steps.map((step) =>
+          step.kind === 'sharp' ? step.op : step.kind,
+        ),
+      ).toEqual(['layer'])
+    })
+
+    it('refuses a step the Document does not have', async () => {
+      const document = await newDocument()
+      await expect(
+        t.app.renders.requestPreview(t.ann, document.id, {
+          beforeStepId: 'missing',
+        }),
+      ).rejects.toBeInstanceOf(ValidationError)
+    })
+
+    it('is a different picture from the whole one, and from that before another step', async () => {
+      const document = await newDocument()
+      const first = createSharpStep('blur', { sigma: 2 })
+      const second = createSharpStep('flip')
+      await addStep(document.id, first)
+      await addStep(document.id, second)
+
+      const whole = await t.app.renders.requestPreview(t.ann, document.id)
+      const beforeFirst = await t.app.renders.requestPreview(
+        t.ann,
+        document.id,
+        { beforeStepId: first.id },
+      )
+      const again = await t.app.renders.requestPreview(t.ann, document.id, {
+        beforeStepId: first.id,
+      })
+      const beforeSecond = await t.app.renders.requestPreview(
+        t.ann,
+        document.id,
+        { beforeStepId: second.id },
+      )
+
+      expect(beforeFirst.id).not.toBe(whole.id)
+      expect(again.id).toBe(beforeFirst.id)
+      expect(beforeSecond.id).not.toBe(beforeFirst.id)
+      expect((await t.app.jobs.get(t.ann, whole.id)).state).toBe(
+        JobState.Cancelled,
+      )
+      expect((await t.app.jobs.get(t.ann, beforeFirst.id)).state).toBe(
+        JobState.Cancelled,
+      )
+    })
+  })
+
   it('reuses a cached render instead of rendering again', async () => {
     const document = await newDocument()
     await addStep(document.id, createSharpStep('flip'))

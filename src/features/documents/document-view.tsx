@@ -1,4 +1,5 @@
 import { Canvas } from '@/features/documents/canvas'
+import { OverlayLayer } from '@/features/overlay/overlay-layer'
 import { useDocument } from '@/features/documents/use-document'
 import { pictureUrl } from '@/features/documents/use-shown-picture'
 import { usePreview } from '@/features/pipeline/use-preview'
@@ -45,6 +46,7 @@ export function DocumentView({ id }: DocumentViewProps): React.JSX.Element {
       name={name}
       width={canvas.width}
       height={canvas.height}
+      overlay={<OverlayLayer documentId={id} />}
     />
   )
 }

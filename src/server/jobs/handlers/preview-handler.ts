@@ -1,3 +1,5 @@
+import { stepsBefore } from '@/features/pipeline/step-input'
+
 import type { Logger } from '../../http/logger.ts'
 import type { DocumentPlanner } from '../../render/document-planner.ts'
 import { planKey } from '../../render/plan-pipeline.ts'
@@ -5,7 +7,7 @@ import type { PipelinePlan } from '../../render/plan-pipeline.ts'
 import { EngineTargetKind } from '../../tools/image-engine.ts'
 import type { ImageEngine } from '../../tools/image-engine.ts'
 import { RenderKind } from '../../tools/render-store.ts'
-import type { RenderStore } from '../../tools/render-store.ts'
+import type { RenderSize, RenderStore } from '../../tools/render-store.ts'
 import { WrongJobKindError, runEach } from '../job-handler.ts'
 import type { JobHandler, JobItem, JobReport } from '../job-handler.ts'
 import { JobKind, JobState } from '../job-types.ts'
@@ -17,20 +19,30 @@ export type RenderHandlerDependencies = {
   logger: Logger
 }
 
+export interface EnsuredRender {
+  key: string
+  /** The size of the picture the render shows, in its own pixels, before it was shrunk. */
+  size: RenderSize
+}
+
 /**
  * Makes the Render of a plan, or finds it in the cache. Shared by previews and
- * thumbnails, which differ only in size.
+ * thumbnails, which differ only in size. A cached render whose size was not
+ * kept is made again, so the size is always known.
  */
 export async function ensureRender(
   deps: RenderHandlerDependencies,
   kind: RenderKind,
   plan: PipelinePlan,
-): Promise<string> {
+): Promise<EnsuredRender> {
   const key = planKey(plan)
-  if ((await deps.renders.find(kind, key)) !== undefined) return key
+  if ((await deps.renders.find(kind, key)) !== undefined) {
+    const size = await deps.renders.size(kind, key)
+    if (size !== undefined) return { key, size }
+  }
   const target = await deps.renders.reserve(kind, key)
   try {
-    await deps.engine.render({
+    const output = await deps.engine.render({
       input: plan.base,
       originalFrom: plan.originalFrom,
       steps: plan.steps,
@@ -44,12 +56,20 @@ export async function ensureRender(
       },
       output: target.partial,
     })
-    await deps.renders.commit(target)
+    const size = { width: output.pictureWidth, height: output.pictureHeight }
+    await deps.renders.commit(target, size)
+    return { key, size }
   } catch (error) {
     await deps.renders.discard(target)
     throw error
   }
-  return key
+}
+
+class StepGoneError extends Error {
+  constructor(stepId: string) {
+    super(`The step ${stepId} is no longer in the document.`)
+    this.name = 'StepGoneError'
+  }
 }
 
 /** Renders a Document's Pipeline at display size, as it stands at the Job's revision. */
@@ -71,16 +91,33 @@ export class PreviewHandler implements JobHandler {
           payload.documentId,
           payload.revision,
         )
-        const plan = await this.#deps.planner.plan(document)
-        const key = await ensureRender(this.#deps, RenderKind.Preview, plan)
+        const steps =
+          payload.beforeStepId === undefined
+            ? undefined
+            : stepsBefore(document.pipeline, payload.beforeStepId)
+        if (payload.beforeStepId !== undefined && steps === undefined) {
+          throw new StepGoneError(payload.beforeStepId)
+        }
+        const whole = await this.#deps.planner.plan(document)
+        const plan =
+          steps === undefined
+            ? whole
+            : await this.#deps.planner.plan(document, { steps })
+        const { key, size } = await ensureRender(
+          this.#deps,
+          RenderKind.Preview,
+          plan,
+        )
         return {
           outcome: {
             state: JobState.Done,
             result: {
               kind: JobKind.Preview,
               key,
-              pendingStepIds: plan.pending.map(({ step }) => step.id),
-              problems: [...plan.skipped],
+              width: size.width,
+              height: size.height,
+              pendingStepIds: whole.pending.map(({ step }) => step.id),
+              problems: [...whole.skipped],
             },
           },
         }

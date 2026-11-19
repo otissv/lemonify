@@ -17,6 +17,8 @@ import {
   workflowSelectionOf,
 } from '@/store/ui-store'
 
+import { OverlayGuide } from '@/features/overlay/grid-guides'
+
 const StoredPreferencesSchema = z.object({
   state: z.record(z.string(), z.unknown()),
 })
@@ -127,7 +129,24 @@ describe('useUiStore', () => {
       const stored = StoredPreferencesSchema.parse(
         JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? 'null'),
       )
-      expect(stored.state).toEqual({ recentUpscaleModels: ['waifu'] })
+      expect(stored.state).toEqual({
+        recentUpscaleModels: ['waifu'],
+        overlayGuide: 'none',
+      })
+    })
+  })
+
+  describe("the guide drawn in a tool's box", () => {
+    it('is none until one is chosen, and kept in this browser', async () => {
+      expect(useUiStore.getState().overlayGuide).toBe(OverlayGuide.None)
+      await useUiStore.persist.rehydrate()
+
+      useUiStore.getState().setOverlayGuide(OverlayGuide.GoldenSpiral)
+
+      const stored = StoredPreferencesSchema.parse(
+        JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? 'null'),
+      )
+      expect(stored.state).toMatchObject({ overlayGuide: 'golden-spiral' })
     })
   })
 

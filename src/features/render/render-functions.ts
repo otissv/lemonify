@@ -11,13 +11,21 @@ import type { ClearedResults } from '@/server/services/render-service'
 
 const DocumentSchema = z.object({ documentId: z.string().min(1) })
 
-/** Queues a preview of the Document as it is now; returns the Job to follow. */
+/** Queues a preview of the Document as it is now, or of the picture before a step; returns the Job to follow. */
 export const requestPreview = createServerFn({ method: 'POST' })
   .middleware(protectedChain('queue'))
-  .validator(DocumentSchema)
+  .validator(
+    DocumentSchema.extend({ beforeStepId: z.string().min(1).optional() }),
+  )
   .handler(async ({ context, data }): Promise<JobView> => {
     const { app, actor } = await appFor(context)
-    return app.renders.requestPreview(actor, data.documentId)
+    return app.renders.requestPreview(
+      actor,
+      data.documentId,
+      data.beforeStepId === undefined
+        ? {}
+        : { beforeStepId: data.beforeStepId },
+    )
   })
 
 export const requestThumbnails = createServerFn({ method: 'POST' })

@@ -461,6 +461,63 @@ describe('StepOptions', () => {
     })
   })
 
+  describe('a step a tool draws on the picture for', () => {
+    function showStep(
+      steps: ReadonlyArray<PipelineStep>,
+      selected: PipelineStep,
+    ) {
+      const view = documentView(steps)
+      echoChanges(vi.mocked(changeDocument), view)
+      loadDocumentIntoEditor(view)
+      useUiStore.getState().selectStep(DOCUMENT_ID, selected.id)
+      render(
+        <StepOptions documentId={DOCUMENT_ID} catalogues={AI_CATALOGUES} />,
+      )
+    }
+
+    it('says how to drag the box, beside the numbers', () => {
+      const extract = createSharpStep('extract')
+      showStep([extract], extract)
+
+      expect(screen.getByText(/drag the box on the picture/i)).toBeVisible()
+      expect(screen.getByLabelText(/^left/i)).toBeVisible()
+    })
+
+    it('offers the guides to draw in the box, and keeps the one chosen', async () => {
+      const user = userEvent.setup()
+      const extract = createSharpStep('extract')
+      showStep([extract], extract)
+
+      await user.click(screen.getByRole('combobox', { name: 'Guide' }))
+      await user.click(screen.getByRole('option', { name: 'Golden spiral' }))
+
+      expect(useUiStore.getState().overlayGuide).toBe('golden-spiral')
+    })
+
+    it('says to run the AI steps first while one ahead of it has not run', () => {
+      const extract = createSharpStep('extract')
+      const ai = upscaleStep()
+      usePipelineStore.getState().setPreview(DOCUMENT_ID, {
+        status: PreviewStatus.Ready,
+        key: 'k',
+        pendingStepIds: [ai.id],
+        problems: [],
+      })
+      showStep([ai, extract], extract)
+
+      expect(
+        screen.getByText(/run the ai steps before this one/i),
+      ).toBeVisible()
+    })
+
+    it('says nothing for a step no tool draws on', () => {
+      const blur = createSharpStep('blur')
+      showStep([blur], blur)
+
+      expect(screen.queryByText(/drag the box/i)).not.toBeInTheDocument()
+    })
+  })
+
   describe('an upscale step', () => {
     it('starts from the settings it was added with', () => {
       showOptionsOf(upscaleStep())

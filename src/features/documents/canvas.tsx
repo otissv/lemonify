@@ -13,6 +13,8 @@ interface CanvasProps {
   /** The size of the canvas image, used until the picture itself has loaded. */
   width: number
   height: number
+  /** Drawn on the picture, moving and zooming with it; shown only while the picture is the one it was made for. */
+  overlay?: React.ReactNode
 }
 
 interface Shown {
@@ -32,9 +34,19 @@ interface Size {
 /** From this percentage of the picture's own pixels, pixels are shown as squares instead of smoothed. */
 const PIXEL_PERCENT = 400
 
+function pixels(value: string): number {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/** The room inside an element's padding, which is where the picture is fitted, so the handles of an overlay on its edge are not cut off. */
 function measure(element: HTMLElement): Size {
   const box = element.getBoundingClientRect()
-  return { width: box.width, height: box.height }
+  const style = getComputedStyle(element)
+  return {
+    width: box.width - pixels(style.paddingLeft) - pixels(style.paddingRight),
+    height: box.height - pixels(style.paddingTop) - pixels(style.paddingBottom),
+  }
 }
 
 /** The size of an element, kept up to date as the window or the layout changes. */
@@ -80,6 +92,7 @@ export function Canvas({
   name,
   width,
   height,
+  overlay,
 }: CanvasProps): React.JSX.Element {
   const [shown, setShown] = useState<Shown>({
     url,
@@ -159,7 +172,7 @@ export function Canvas({
         aria-description="Scroll to move the picture, Ctrl or Cmd and scroll to zoom. Plus and minus zoom, zero fits, one shows actual size, arrow keys move."
         data-slot="canvas-window"
         className={cn(
-          '@container flex size-full touch-none items-center justify-center overflow-hidden outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset',
+          '@container flex size-full touch-none p-2 items-center justify-center overflow-hidden outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset',
           zoomedIn && 'cursor-grab active:cursor-grabbing',
         )}
         {...gestures}
@@ -167,7 +180,7 @@ export function Canvas({
         <div
           data-slot="canvas"
           className={cn(
-            'aspect-(--ratio) w-[min(100cqw,calc(100cqh*var(--ratio)))] shrink-0',
+            'relative aspect-(--ratio) w-[min(100cqw,calc(100cqh*var(--ratio)))] shrink-0',
             shown.loaded && 'bg-checkerboard',
           )}
           style={{ '--ratio': shown.ratio, transform } as React.CSSProperties}
@@ -182,6 +195,7 @@ export function Canvas({
             )}
             onLoad={handleLoad}
           />
+          {shown.url === url && shown.loaded && overlay}
         </div>
       </div>
     </div>

@@ -66,6 +66,87 @@ describe('writePreview', () => {
     expect(readFileSync(file, 'utf8')).toMatch(/^.+:\d+$/)
   })
 
+  it('says how big the picture is in its own pixels', async () => {
+    const document = await newDocument()
+
+    const written = await writePreview(
+      t.app,
+      t.ann,
+      document.id,
+      path.join(out, 'size.webp'),
+    )
+
+    expect(written.size).toEqual({ width: 40, height: 30 })
+  })
+
+  it('has no size for the image as opened', async () => {
+    const document = await newDocument()
+
+    const written = await writePreview(
+      t.app,
+      t.ann,
+      document.id,
+      path.join(out, 'original.png'),
+      { original: true },
+    )
+
+    expect(written.size).toBeNull()
+  })
+
+  it('shows the picture a step acts on when asked, and says which step', async () => {
+    const document = await newDocument()
+    const blur = createSharpStep('blur', { sigma: 2 })
+    const extract = createSharpStep('extract', {
+      left: 0,
+      top: 0,
+      width: 2,
+      height: 2,
+    })
+    await addStep(document.id, blur)
+    await addStep(document.id, extract)
+
+    const written = await writePreview(
+      t.app,
+      t.ann,
+      document.id,
+      path.join(out, 'before.webp'),
+      { beforeStepId: extract.id },
+    )
+
+    expect(written.beforeStepId).toBe(extract.id)
+    expect(readFileSync(path.join(out, 'before.webp'), 'utf8')).toBe(
+      'preview:2',
+    )
+  })
+
+  it('has no step in the picture of the whole document', async () => {
+    const document = await newDocument()
+
+    const written = await writePreview(
+      t.app,
+      t.ann,
+      document.id,
+      path.join(out, 'whole.webp'),
+    )
+
+    expect(written.beforeStepId).toBeNull()
+  })
+
+  it('refuses a step the document does not have, and the original together with a step', async () => {
+    const document = await newDocument()
+    const file = path.join(out, 'x.webp')
+
+    await expect(
+      writePreview(t.app, t.ann, document.id, file, { beforeStepId: 'nope' }),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(
+      writePreview(t.app, t.ann, document.id, file, {
+        original: true,
+        beforeStepId: 'nope',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError)
+  })
+
   it('uses the document’s name in a folder', async () => {
     const document = await newDocument()
 

@@ -200,3 +200,54 @@ describe('Canvas zoom and pan', () => {
     expect(window).toHaveClass('cursor-grab')
   })
 })
+
+describe('Canvas overlay', () => {
+  it('draws the overlay on the picture, inside the box that is zoomed and moved with it', () => {
+    render(
+      <Canvas
+        id={ID}
+        url="/a.png"
+        name="a.png"
+        width={2000}
+        height={1000}
+        overlay={<p data-testid="tool">tool</p>}
+      />,
+    )
+    const picture = screen.getByRole('img', { name: 'a.png' })
+    Object.defineProperty(picture, 'naturalWidth', { value: 2000 })
+    Object.defineProperty(picture, 'naturalHeight', { value: 1000 })
+    fireEvent.load(picture)
+
+    expect(canvasBox()).toContainElement(screen.getByTestId('tool'))
+  })
+
+  it('holds the overlay back until the picture it was made for has loaded', () => {
+    const { rerender } = render(
+      <Canvas
+        id={ID}
+        url="/a.png"
+        name="a.png"
+        width={2000}
+        height={1000}
+        overlay={<p data-testid="tool">tool</p>}
+      />,
+    )
+    const picture = screen.getByRole('img', { name: 'a.png' })
+    Object.defineProperty(picture, 'naturalWidth', { value: 2000 })
+    Object.defineProperty(picture, 'naturalHeight', { value: 1000 })
+    fireEvent.load(picture)
+
+    rerender(
+      <Canvas
+        id={ID}
+        url="/b.png"
+        name="a.png"
+        width={2000}
+        height={1000}
+        overlay={<p data-testid="tool">tool</p>}
+      />,
+    )
+
+    expect(screen.queryByTestId('tool')).not.toBeInTheDocument()
+  })
+})

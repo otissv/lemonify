@@ -69,7 +69,7 @@ export class ThumbnailHandler implements JobHandler {
   ): Promise<string | null> {
     const plan = await this.#deps.planner.plan(document, shown)
     if (plan.pending.length > 0 || plan.skipped.length > 0) return null
-    return ensureRender(this.#deps, RenderKind.Thumbnail, plan)
+    return (await ensureRender(this.#deps, RenderKind.Thumbnail, plan)).key
   }
 
   async #shownFor(

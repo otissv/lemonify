@@ -47,6 +47,8 @@ export const JobPayloadSchema = z.discriminatedUnion('kind', [
     kind: z.literal(JobKind.Preview),
     documentId: id,
     revision,
+    /** Show the picture this step acts on instead of the whole Pipeline. */
+    beforeStepId: id.optional(),
   }),
   z.strictObject({
     kind: z.literal(JobKind.Thumbnail),
@@ -102,6 +104,9 @@ export const JobResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal(JobKind.Preview),
     key: z.string().min(1),
+    /** The size of the picture in its own pixels, before the preview shrank it to be shown. */
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
     /** Enabled AI Steps still waiting for a Result, so the preview shows the Pipeline only up to them. */
     pendingStepIds: z.array(id),
     problems: z.array(ProblemSchema),

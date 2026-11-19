@@ -201,6 +201,9 @@ export class MemoryResultStore implements ResultStore {
 }
 
 const FAKE_SIZE = 10
+/** The size the fake says a picture had before it was shrunk, so it is told apart from the size of the file written. */
+const FAKE_PICTURE_WIDTH = 40
+const FAKE_PICTURE_HEIGHT = 30
 
 /** An ImageEngine that writes a small file naming what it was asked for, and records every request. */
 export class FakeImageEngine implements ImageEngine {
@@ -218,6 +221,8 @@ export class FakeImageEngine implements ImageEngine {
     return {
       width: FAKE_SIZE,
       height: FAKE_SIZE,
+      pictureWidth: FAKE_PICTURE_WIDTH,
+      pictureHeight: FAKE_PICTURE_HEIGHT,
       bytes: text.length,
       format: 'webp',
     }
