@@ -3,6 +3,7 @@ import WebSocket from 'ws'
 
 import { decodeEvent } from '@/features/realtime/realtime-events'
 import type { RealtimeEvent } from '@/features/realtime/realtime-events'
+import { DEFAULT_SITE_ORIGIN } from '../config/site-port.ts'
 import type { Actor } from '../domain/actor.ts'
 import type { Logger } from '../http/logger.ts'
 import { FixedWindowRateLimiter } from '../http/rate-limiter.ts'
@@ -10,7 +11,7 @@ import { RealtimeHub } from './hub.ts'
 import { startRealtimeServer } from './realtime-server.ts'
 import type { RealtimeServer, RealtimeTiming } from './realtime-server.ts'
 
-const ORIGIN = 'http://localhost:3100'
+const ORIGIN = DEFAULT_SITE_ORIGIN
 const ANN: Actor = { userId: 'ann', name: 'Ann' }
 const BEA: Actor = { userId: 'bea', name: 'Bea' }
 const SLOW: RealtimeTiming = { heartbeatMs: 40, sessionCheckMs: 40 }

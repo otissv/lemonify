@@ -54,7 +54,7 @@ To run the web editor as well:
 pnpm dev
 ```
 
-The editor is served at `http://localhost:3100`. To build for production:
+The editor is served at `http://localhost:5173`, or on the port in the `PORT` environment variable. To build for production:
 
 ```bash
 pnpm build
@@ -87,14 +87,14 @@ A command that waits for its jobs (`export`, `workflow run --follow`) does the w
 
 ## Configuration
 
-Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `LEMONIFY_BASE_URL`, `LEMONIFY_REALTIME_PORT`, `LEMONIFY_REALTIME_HOST`, `LEMONIFY_REALTIME_URL` (see [live updates](docs/live-updates.md)), `LEMONIFY_RESEND_API_KEY`, `LEMONIFY_EMAIL_FROM` (see [authentication](docs/authentication.md)) and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
+Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `PORT` (the website's port, default 5173; the next two follow it unless set), `LEMONIFY_BASE_URL`, `LEMONIFY_REALTIME_PORT`, `LEMONIFY_REALTIME_HOST`, `LEMONIFY_REALTIME_URL` (see [live updates](docs/live-updates.md)), `LEMONIFY_RESEND_API_KEY`, `LEMONIFY_EMAIL_FROM` (see [authentication](docs/authentication.md)) and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
 
 ## Scripts
 
 | Script                  | Does                                                                                     |
 | ----------------------- | ---------------------------------------------------------------------------------------- |
 | `pnpm images <command>` | Runs the image CLI, for example `pnpm images --help`                                     |
-| `pnpm dev`              | Starts the web editor's dev server on port 3100                                          |
+| `pnpm dev`              | Starts the web editor's dev server on `PORT` (default 5173)                              |
 | `pnpm build`            | Builds for production                                                                    |
 | `pnpm test`             | Runs the tests once (Vitest)                                                             |
 | `pnpm e2e`              | Runs the browser tests against the snapshots in `e2e/` (Playwright; see `e2e/README.md`) |

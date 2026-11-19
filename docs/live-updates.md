@@ -4,7 +4,7 @@ Tabs of the same account stay in step. When one tab saves, undoes, redoes, renam
 
 ## How it works
 
-The website holds a WebSocket server of its own, next to the web server, on `LEMONIFY_REALTIME_PORT` (default 3101, bound to `LEMONIFY_REALTIME_HOST`, default `127.0.0.1`). TanStack Start's production output is a plain request handler that cannot host WebSockets, so the listener is a separate `http.Server` started with the web runtime. The command line never listens: changes it makes reach open tabs when they next catch up (see below). The browser is told where to connect by `LEMONIFY_REALTIME_URL`; unset, it is `ws://<site host>:<port>/realtime`, or `wss` when the site is `https`.
+The website holds a WebSocket server of its own, next to the web server, on `LEMONIFY_REALTIME_PORT` (default the website's `PORT` plus one, so 5174, bound to `LEMONIFY_REALTIME_HOST`, default `127.0.0.1`). TanStack Start's production output is a plain request handler that cannot host WebSockets, so the listener is a separate `http.Server` started with the web runtime. The command line never listens: changes it makes reach open tabs when they next catch up (see below). The browser is told where to connect by `LEMONIFY_REALTIME_URL`; unset, it is `ws://<site host>:<port>/realtime`, or `wss` when the site is `https`.
 
 Events carry only ids and revisions, never content. A tab that hears "document X is now at revision N" reads the document through the usual authorised server functions, so the realtime channel cannot leak data the person could not already read. The hub routes an event only to connections of the user it concerns.
 

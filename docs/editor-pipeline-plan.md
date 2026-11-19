@@ -296,7 +296,7 @@ Read once at startup in `src/server/config/config.ts`, validated by one Zod sche
 | `MAX_RESULT_BYTES_PER_USER`   | 20 GB                            | Most Result bytes a User may keep.                                                           |
 | `JOB_RETENTION_DAYS`          | 30                               | How long finished Jobs are kept; runs are kept until deleted.                                |
 | `RENDER_CACHE_BYTES`          | 2 GB                             | Size at which the least recently used Renders are removed.                                   |
-| `BASE_URL`, `TRUSTED_ORIGINS` | `http://localhost:3100`, none    | The site's origin and any further origins the CSRF check accepts.                            |
+| `BASE_URL`, `TRUSTED_ORIGINS` | `http://localhost:<PORT>`, none  | The site's origin and any further origins the CSRF check accepts.                            |
 | Auth secret                   | created on first use             | `LEMONIFY_AUTH_SECRET`; when unset, one is made in `DATA_DIR/auth-secret` (owner-read only). |
 
 These defaults are starting points to tune from measured use; changing one needs no design change.

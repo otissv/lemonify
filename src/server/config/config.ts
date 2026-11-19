@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import { REALTIME_PATH } from '@/features/realtime/realtime-events'
 import { ValidationError } from '../errors.ts'
+import { DEFAULT_SITE_PORT } from './site-port.ts'
 
 const MAX_DEFAULT_CPU_WORKERS = 4
 const MEGABYTE = 1024 * 1024
@@ -21,6 +22,11 @@ const blankIsUnset = (schema: z.ZodString) =>
 
 /** The variables the app reads; every one is optional. */
 const EnvironmentSchema = z.object({
+  /** The port the website listens on; the addresses below follow it unless they are set. */
+  PORT: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() || undefined : value),
+    positiveInteger(65_535).default(DEFAULT_SITE_PORT),
+  ),
   LEMONIFY_DATA_DIR: z.string().min(1).default('.data'),
   LEMONIFY_DATABASE: z.literal('sqlite').default('sqlite'),
   LEMONIFY_CPU_WORKERS: positiveInteger(64).optional(),
@@ -43,9 +49,9 @@ const EnvironmentSchema = z.object({
   ),
   LEMONIFY_RATE_LIMIT_MULTIPLIER: positiveInteger(1000).default(1),
   LEMONIFY_AUTH_SECRET: z.string().min(32).optional(),
-  LEMONIFY_BASE_URL: z.url().default('http://localhost:3100'),
+  LEMONIFY_BASE_URL: z.url().optional(),
   LEMONIFY_TRUSTED_ORIGINS: z.string().default(''),
-  LEMONIFY_REALTIME_PORT: positiveInteger(65_535).default(3101),
+  LEMONIFY_REALTIME_PORT: positiveInteger(65_535).optional(),
   LEMONIFY_REALTIME_HOST: z.string().min(1).default('127.0.0.1'),
   LEMONIFY_REALTIME_URL: z.url().optional(),
   LEMONIFY_RESEND_API_KEY: blankIsUnset(z.string().min(1)),
@@ -118,12 +124,19 @@ function emailConfig(
   return { apiKey, from }
 }
 
+/** The site's address: the one set, or this machine on the port the website listens on. */
+function siteUrl(env: z.output<typeof EnvironmentSchema>): string {
+  return env.LEMONIFY_BASE_URL ?? `http://localhost:${env.PORT}`
+}
+
 function realtimeConfig(
   env: z.output<typeof EnvironmentSchema>,
 ): RealtimeConfig {
-  const site = new URL(env.LEMONIFY_BASE_URL)
+  const site = new URL(siteUrl(env))
   const secure = site.protocol === 'https:'
-  if (String(env.LEMONIFY_REALTIME_PORT) === site.port) {
+  const realtimePort = env.LEMONIFY_REALTIME_PORT ?? env.PORT + 1
+  const ownPorts = [String(env.PORT), site.port]
+  if (ownPorts.includes(String(realtimePort))) {
     throw new ValidationError(
       'The configuration is not valid. LEMONIFY_REALTIME_PORT: it is the port the website listens on, so it needs a port of its own.',
     )
@@ -144,10 +157,10 @@ function realtimeConfig(
   }
   return {
     host: env.LEMONIFY_REALTIME_HOST,
-    port: env.LEMONIFY_REALTIME_PORT,
+    port: realtimePort,
     url:
       url ??
-      `${secure ? 'wss' : 'ws'}://${site.hostname}:${env.LEMONIFY_REALTIME_PORT}${REALTIME_PATH}`,
+      `${secure ? 'wss' : 'ws'}://${site.hostname}:${realtimePort}${REALTIME_PATH}`,
   }
 }
 
@@ -186,11 +199,8 @@ export function loadConfig(
     renderCacheBytes: env.LEMONIFY_RENDER_CACHE_BYTES,
     rateLimitMultiplier: env.LEMONIFY_RATE_LIMIT_MULTIPLIER,
     authSecret: env.LEMONIFY_AUTH_SECRET,
-    baseUrl: env.LEMONIFY_BASE_URL,
-    trustedOrigins: parseOrigins(
-      env.LEMONIFY_BASE_URL,
-      env.LEMONIFY_TRUSTED_ORIGINS,
-    ),
+    baseUrl: siteUrl(env),
+    trustedOrigins: parseOrigins(siteUrl(env), env.LEMONIFY_TRUSTED_ORIGINS),
     realtime: realtimeConfig(env),
     email: emailConfig(env),
   }

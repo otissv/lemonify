@@ -5,10 +5,11 @@ import {
   passwordResetEmail,
   verificationEmail,
 } from './auth-emails'
+import { DEFAULT_SITE_ORIGIN } from '../config/site-port'
 
 const INPUT = {
   name: 'Ann',
-  url: 'http://localhost:3100/api/auth/verify-email?token=abc&callbackURL=%2F',
+  url: `${DEFAULT_SITE_ORIGIN}/api/auth/verify-email?token=abc&callbackURL=%2F`,
   expiresInMinutes: 60,
 }
 

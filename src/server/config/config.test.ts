@@ -3,6 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { ValidationError } from '../errors'
+import { DEFAULT_SITE_PORT, sitePort } from './site-port'
 import {
   databaseFile,
   defaultCpuWorkers,
@@ -29,15 +30,63 @@ describe('loadConfig', () => {
       maxResultBytesPerUser: 20 * 1024 * 1024 * 1024,
       renderCacheBytes: 2 * 1024 * 1024 * 1024,
       rateLimitMultiplier: 1,
-      baseUrl: 'http://localhost:3100',
-      trustedOrigins: ['http://localhost:3100'],
+      baseUrl: 'http://localhost:5173',
+      trustedOrigins: ['http://localhost:5173'],
       realtime: {
         host: '127.0.0.1',
-        port: 3101,
-        url: 'ws://localhost:3101/realtime',
+        port: 5174,
+        url: 'ws://localhost:5174/realtime',
       },
     })
     expect(config.authSecret).toBeUndefined()
+  })
+
+  describe("the website's port", () => {
+    it('is the port the site and its live-updates server are put on, when none of the addresses are set', () => {
+      const config = loadConfig({ PORT: '4000' }, 8, '/work')
+      expect(config.baseUrl).toBe('http://localhost:4000')
+      expect(config.trustedOrigins).toEqual(['http://localhost:4000'])
+      expect(config.realtime).toMatchObject({
+        port: 4001,
+        url: 'ws://localhost:4001/realtime',
+      })
+    })
+
+    it('does not decide an address that is set: the base URL, and the live-updates port and address', () => {
+      const config = loadConfig(
+        {
+          PORT: '4000',
+          LEMONIFY_BASE_URL: 'https://lemon.example.com',
+          LEMONIFY_REALTIME_PORT: '9000',
+          LEMONIFY_REALTIME_URL: 'wss://lemon.example.com/realtime',
+        },
+        8,
+        '/work',
+      )
+      expect(config.baseUrl).toBe('https://lemon.example.com')
+      expect(config.realtime).toMatchObject({
+        port: 9000,
+        url: 'wss://lemon.example.com/realtime',
+      })
+    })
+
+    it('is 5173 when it is not set, and treats a blank value as not set', () => {
+      expect(loadConfig({}, 8, '/work').baseUrl).toBe('http://localhost:5173')
+      expect(loadConfig({ PORT: '' }, 8, '/work').baseUrl).toBe(
+        'http://localhost:5173',
+      )
+    })
+
+    it('refuses a value that is not a port, naming the variable', () => {
+      for (const port of ['0', '70000', 'abc']) {
+        expect(() => loadConfig({ PORT: port }, 8, '/work')).toThrow(/PORT/)
+      }
+    })
+
+    it('is the same port the dev server listens on', () => {
+      expect(sitePort({ PORT: '4000' })).toBe(4000)
+      expect(sitePort({})).toBe(DEFAULT_SITE_PORT)
+    })
   })
 
   it('reads how much to loosen the request limits', () => {
@@ -110,7 +159,7 @@ describe('loadConfig', () => {
           8,
           '/work',
         ).realtime.url,
-      ).toBe('wss://lemon.example.com:3101/realtime')
+      ).toBe('wss://lemon.example.com:5174/realtime')
     })
 
     it('takes the address tabs reach it at, as when a proxy serves it on the site’s own port', () => {
@@ -126,7 +175,7 @@ describe('loadConfig', () => {
         ).realtime,
       ).toEqual({
         host: '0.0.0.0',
-        port: 3101,
+        port: 5174,
         url: 'wss://lemon.example.com/realtime',
       })
     })
@@ -156,7 +205,24 @@ describe('loadConfig', () => {
 
     it('refuses the site’s own port, which the website already listens on', () => {
       expect(() =>
-        loadConfig({ LEMONIFY_REALTIME_PORT: '3100' }, 8, '/work'),
+        loadConfig({ LEMONIFY_REALTIME_PORT: '5173' }, 8, '/work'),
+      ).toThrow(/LEMONIFY_REALTIME_PORT/)
+      expect(() =>
+        loadConfig(
+          { PORT: '4000', LEMONIFY_REALTIME_PORT: '4000' },
+          8,
+          '/work',
+        ),
+      ).toThrow(/LEMONIFY_REALTIME_PORT/)
+      expect(() =>
+        loadConfig(
+          {
+            LEMONIFY_BASE_URL: 'http://localhost:4000',
+            LEMONIFY_REALTIME_PORT: '4000',
+          },
+          8,
+          '/work',
+        ),
       ).toThrow(/LEMONIFY_REALTIME_PORT/)
     })
 
