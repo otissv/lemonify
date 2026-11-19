@@ -8,6 +8,17 @@ function isWhole(value: unknown, min: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= min
 }
 
+/** Whether the options hold a usable region, whether or not it fits the picture. */
+export function hasExtractBox(options: Options): boolean {
+  const { left, top, width, height } = options
+  return (
+    isWhole(left, 0) &&
+    isWhole(top, 0) &&
+    isWhole(width, 1) &&
+    isWhole(height, 1)
+  )
+}
+
 /**
  * The box of an extract step's options, cut to the picture it acts on. A step
  * that has no region yet, or one that is not a usable region, shows the whole

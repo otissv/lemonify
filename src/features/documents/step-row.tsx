@@ -274,6 +274,14 @@ export function StepRow({
           className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0"
         >
           <PictureRow
+            label={`Output of ${label}`}
+            title="Output"
+            subtitle="After this step"
+            url={thumbnail}
+            pressed={pictures.shown === StepViewPart.Result}
+            onClick={handleOutputPicture}
+          />
+          <PictureRow
             label={`Edit ${label}`}
             title={label}
             subtitle={status.text}
@@ -281,14 +289,6 @@ export function StepRow({
             url={pictures.edit}
             pressed={pictures.shown === StepViewPart.Edit}
             onClick={handleEditPicture}
-          />
-          <PictureRow
-            label={`Output of ${label}`}
-            title="Output"
-            subtitle="After this step"
-            url={thumbnail}
-            pressed={pictures.shown === StepViewPart.Result}
-            onClick={handleOutputPicture}
           />
         </fieldset>
       )}

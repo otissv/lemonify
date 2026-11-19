@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { extractBox, withExtractBox } from '@/features/overlay/extract-box'
+import {
+  extractBox,
+  hasExtractBox,
+  withExtractBox,
+} from '@/features/overlay/extract-box'
 
 const BOUNDS = { width: 1000, height: 500 }
 
@@ -45,6 +49,19 @@ describe('extractBox', () => {
     expect(
       extractBox({ left: 900, top: 0, width: 300, height: 100 }, BOUNDS),
     ).toEqual({ left: 900, top: 0, width: 100, height: 100 })
+  })
+})
+
+describe('hasExtractBox', () => {
+  it('is whether the options hold a usable region, not whether it fits the picture', () => {
+    expect(hasExtractBox({ left: 0, top: 0, width: 5000, height: 5000 })).toBe(
+      true,
+    )
+    expect(hasExtractBox({})).toBe(false)
+    expect(hasExtractBox({ left: 0, top: 0, width: 0, height: 1 })).toBe(false)
+    expect(hasExtractBox({ left: 0.5, top: 0, width: 1, height: 1 })).toBe(
+      false,
+    )
   })
 })
 

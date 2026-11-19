@@ -332,13 +332,26 @@ describe('DocumentSteps', () => {
           image.getAttribute('src'),
         )
         expect(sources).toEqual([
-          `/api/documents/${DOCUMENT_ID}/renders/thumbnail/before`,
           `/api/documents/${DOCUMENT_ID}/renders/thumbnail/after`,
+          `/api/documents/${DOCUMENT_ID}/renders/thumbnail/before`,
         ])
       })
       expect(
         within(list).queryAllByRole('group', { name: /Pictures of/ }),
       ).toHaveLength(1)
+    })
+
+    it('lists the output above the step, as the steps are listed with the latest on top', async () => {
+      const user = userEvent.setup()
+      const list = await showSteps([EXTRACT], user)
+
+      const pictures = within(list).getByRole('group', {
+        name: 'Pictures of Extract',
+      })
+      const names = [
+        ...pictures.querySelectorAll('[data-slot="step-name"]'),
+      ].map((name) => name.textContent)
+      expect(names).toEqual(['Output', 'Extract'])
     })
 
     it('selects the step and shows its result when the result is chosen, and its edit picture when that is', async () => {

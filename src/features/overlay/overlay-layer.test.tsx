@@ -77,6 +77,53 @@ describe('OverlayLayer', () => {
     expect(screen.queryByTestId('overlay-box')).not.toBeInTheDocument()
   })
 
+  describe('an extract step that has no region yet', () => {
+    const UNSET = createSharpStep('extract')
+
+    beforeEach(() => {
+      loadDocumentIntoEditor(documentView([BLUR, UNSET]))
+      useUiStore.getState().selectStep(DOCUMENT_ID, UNSET.id)
+    })
+
+    it('is given the whole picture as its region, once, so its numbers are set as the box shows', async () => {
+      const save = vi
+        .spyOn(actions, 'setSharpOptions')
+        .mockImplementation(() => {})
+      ready({ view: { stepId: UNSET.id, part: StepViewPart.Edit } })
+      await mount()
+      await screen.findByTestId('overlay-box')
+
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(save).toHaveBeenCalledWith(DOCUMENT_ID, UNSET.id, {
+        left: 0,
+        top: 0,
+        width: 4000,
+        height: 2000,
+      })
+    })
+
+    it('is left as it is while the picture is not the one it acts on', async () => {
+      const save = vi
+        .spyOn(actions, 'setSharpOptions')
+        .mockImplementation(() => {})
+      ready({ view: undefined })
+      await mount()
+
+      expect(save).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not change a region that is already set', async () => {
+    const save = vi
+      .spyOn(actions, 'setSharpOptions')
+      .mockImplementation(() => {})
+    ready()
+    await mount()
+    await screen.findByTestId('overlay-box')
+
+    expect(save).not.toHaveBeenCalled()
+  })
+
   it('draws nothing when no step, or one without such a tool, is selected', async () => {
     ready()
     useUiStore.getState().selectStep(DOCUMENT_ID, BLUR.id)

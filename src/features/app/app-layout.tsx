@@ -11,7 +11,7 @@ import { MenuPanel } from '@/features/app/menu-panel'
 import { LiveStatus } from '@/features/realtime/live-status'
 import { useRealtime } from '@/features/realtime/use-realtime'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { useUiStore } from '@/store/ui-store'
+import { PREFERENCES_STORAGE_KEY, useUiStore } from '@/store/ui-store'
 
 /** Pages that bring their own floating panel. */
 const PANEL_PATHS = ['/documents/', '/workflows/']
@@ -33,6 +33,15 @@ export function AppLayout(): React.JSX.Element {
 
   useEffect(() => {
     void useUiStore.persist.rehydrate()
+    function handleStorage(event: StorageEvent): void {
+      if (event.key === PREFERENCES_STORAGE_KEY) {
+        void useUiStore.persist.rehydrate()
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [])
 
   return (

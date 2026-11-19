@@ -121,7 +121,9 @@ describe('AppLayout', () => {
     vi.mocked(listDocuments).mockResolvedValue([])
     vi.mocked(requestPreview).mockResolvedValue({ id: 'p' } as never)
     vi.mocked(requestThumbnails).mockResolvedValue({ id: 't' } as never)
-    vi.mocked(requestWorkflowThumbnails).mockResolvedValue({ id: 'wt' } as never)
+    vi.mocked(requestWorkflowThumbnails).mockResolvedValue({
+      id: 'wt',
+    } as never)
     vi.mocked(followJob).mockResolvedValue(previewJob())
     vi.mocked(getDocument).mockImplementation(({ data }) =>
       Promise.resolve(
@@ -145,6 +147,42 @@ describe('AppLayout', () => {
     await waitFor(() => {
       expect(useUiStore.getState().recentUpscaleModels).toEqual(['waifu'])
     })
+  })
+
+  it('follows a preference changed in another tab of this browser', async () => {
+    await renderApp()
+    await waitFor(() => {
+      expect(useUiStore.persist.hasHydrated()).toBe(true)
+    })
+
+    const value = JSON.stringify({
+      state: { recentUpscaleModels: [], overlayGuide: 'golden-spiral' },
+      version: 0,
+    })
+    localStorage.setItem(PREFERENCES_STORAGE_KEY, value)
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: PREFERENCES_STORAGE_KEY,
+        newValue: value,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(useUiStore.getState().overlayGuide).toBe('golden-spiral')
+    })
+  })
+
+  it('ignores storage changes that are not its preferences', async () => {
+    await renderApp()
+    await waitFor(() => {
+      expect(useUiStore.persist.hasHydrated()).toBe(true)
+    })
+    const rehydrate = vi.spyOn(useUiStore.persist, 'rehydrate')
+
+    window.dispatchEvent(new StorageEvent('storage', { key: 'something-else' }))
+
+    expect(rehydrate).not.toHaveBeenCalled()
+    rehydrate.mockRestore()
   })
 
   describe('sidebar edge button', () => {
