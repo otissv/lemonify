@@ -112,6 +112,12 @@ describe('NavigatorPanel', () => {
     expect(finder().style.top).toBe('37.5%')
   })
 
+  it('dims only the picture around the frame, not the panel around the picture', () => {
+    show()
+
+    expect(preview()).toHaveClass('overflow-hidden')
+  })
+
   it('moves the frame, and so the canvas, when the picture is clicked outside it', () => {
     show()
     zoomTo(4)
