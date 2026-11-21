@@ -37,6 +37,12 @@ describe('newWorkflowStep', () => {
     )
   })
 
+  it('starts a Sharp step with the values the website fills in', () => {
+    expect(
+      newWorkflowStep({ kind: 'sharp', value: 'scale' }, []),
+    ).toMatchObject({ step: { op: 'scale', options: { percent: 100 } } })
+  })
+
   it('makes an AI step with the settings its catalogue starts from', () => {
     expect(
       newWorkflowStep({ kind: 'ai', value: AiToolId.Upscale }, CATALOGUES),

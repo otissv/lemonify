@@ -5,6 +5,7 @@ import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { NO_CATALOGUE } from '@/features/tools/add-tool'
 import type { ToolChoice } from '@/features/tools/tool-catalogue'
+import { startingSharpOptions } from '@/features/workflows/sharp-starting-options'
 import { errorMessage } from '@/lib/error-message'
 
 /** What a workflow can add: any tool a document has, an image layer, or a group. */
@@ -24,7 +25,9 @@ export function newWorkflowStep(
     case 'group':
       return { step: createGroupStep([]) }
     case 'sharp':
-      return { step: createSharpStep(choice.value) }
+      return {
+        step: createSharpStep(choice.value, startingSharpOptions(choice.value)),
+      }
     case 'ai': {
       const catalogue = catalogueFor(catalogues, choice.value)
       if (catalogue === undefined) return { problem: NO_CATALOGUE }
