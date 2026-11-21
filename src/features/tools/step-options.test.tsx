@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { StepViewPart } from '@/features/overlay/step-view'
+import { catalogueFor } from '@/features/ai/ai-defaults'
 import { AiToolId } from '@/features/ai/ai-tools'
+import { defaultUpscaleSettings } from '@/features/upscale/upscale-settings'
 import { PreviewStatus } from '@/features/documents/document-render'
 import { changeDocument } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
@@ -455,6 +457,26 @@ describe('StepOptions', () => {
       })
     })
 
+    it('resets its options to what a new step starts with, as one change', async () => {
+      const user = userEvent.setup()
+      showOptionsOf(createSharpStep('scale', { percent: 250 }))
+
+      await user.click(screen.getByRole('button', { name: 'Reset options' }))
+
+      expect(firstStep()).toMatchObject({ options: { percent: 100 } })
+      expect(
+        screen.getByRole('button', { name: 'Reset options' }),
+      ).toBeDisabled()
+    })
+
+    it('offers no reset while the options are already the ones it starts with', () => {
+      showOptionsOf(createSharpStep('blur'))
+
+      expect(
+        screen.getByRole('button', { name: 'Reset options' }),
+      ).toBeDisabled()
+    })
+
     it('says when the step is switched off', () => {
       showOptionsOf({ ...createSharpStep('blur'), enabled: false })
 
@@ -545,6 +567,24 @@ describe('StepOptions', () => {
       expect(
         screen.queryByRole('combobox', { name: 'Noise reduction' }),
       ).not.toBeInTheDocument()
+    })
+
+    it('resets its settings to the ones its catalogue starts from', async () => {
+      const user = userEvent.setup()
+      const catalogue = catalogueFor(AI_CATALOGUES, AiToolId.Upscale)
+      if (catalogue === undefined) throw new Error('no catalogue')
+      showOptionsOf(
+        createAiStep({
+          tool: AiToolId.Upscale,
+          settings: { ...SETTINGS, scale: 2, tta: true },
+        }),
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Reset options' }))
+
+      expect(firstStep()).toMatchObject({
+        settings: JSON.parse(JSON.stringify(defaultUpscaleSettings(catalogue))),
+      })
     })
 
     it('saves a changed scale on the step', async () => {
