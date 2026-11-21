@@ -62,7 +62,7 @@ export function SharpOptionsForm({
   onChange,
 }: SharpOptionsFormProps): React.JSX.Element {
   const fields = useMemo(() => sharpOpFields(op), [op])
-  const rows = useMemo(() => sharpFieldRows(fields), [fields])
+  const rows = useMemo(() => sharpFieldRows(op, fields), [op, fields])
   const problems = sharpOptionProblems(op, options)
   const general = problems[GENERAL_PROBLEM]
 
