@@ -8,12 +8,12 @@ import { resetStores } from '@/store/reset-stores'
 import { forgetItem } from '@/store/forget-item'
 
 const ID = 'doc'
-/** A 2000 x 1000 picture in a 1000 x 800 window: fitted it is 1000 x 500, or 50%. */
+/** A 2000 x 1000 picture in a 1000 x 800 window: it fits at 50%. */
 const FRAME: ViewFrame = {
   viewWidth: 1000,
   viewHeight: 800,
-  ratio: 2,
-  naturalWidth: 2000,
+  pictureWidth: 2000,
+  pictureHeight: 1000,
 }
 
 function measured(): void {
@@ -52,8 +52,40 @@ describe('useViewport', () => {
     const { result } = view()
 
     expect(result.current.percent).toBe(50)
-    expect(result.current.limits?.min).toBeCloseTo(0.02, 10)
-    expect(result.current.limits?.max).toBe(64)
+    expect(result.current.limits?.min).toBeCloseTo(0.01, 10)
+    expect(result.current.limits?.max).toBe(32)
+  })
+
+  it('opens at the zoom the picture first fits at, and keeps it', () => {
+    measured()
+
+    expect(useUiStore.getState().viewports[ID]).toEqual({
+      zoom: 0.5,
+      x: 0.5,
+      y: 0.5,
+    })
+  })
+
+  it('opens a picture smaller than the window at actual size', () => {
+    useUiStore
+      .getState()
+      .setViewFrame(ID, { ...FRAME, pictureWidth: 400, pictureHeight: 200 })
+    const { result } = view()
+
+    expect(result.current.percent).toBe(100)
+  })
+
+  it('keeps the zoom when the picture changes size, so a smaller picture looks smaller', () => {
+    measured()
+    const { result } = view()
+
+    act(() => {
+      useUiStore
+        .getState()
+        .setViewFrame(ID, { ...FRAME, pictureWidth: 500, pictureHeight: 250 })
+    })
+
+    expect(result.current.percent).toBe(50)
   })
 
   it('zooms in and out by a step, and back to fit', () => {
@@ -63,17 +95,17 @@ describe('useViewport', () => {
     act(() => {
       result.current.zoomIn()
     })
-    expect(result.current.viewport.zoom).toBe(1.25)
+    expect(result.current.viewport.zoom).toBe(0.625)
     act(() => {
       result.current.zoomOut()
       result.current.zoomOut()
     })
-    expect(result.current.viewport.zoom).toBeCloseTo(0.8, 10)
+    expect(result.current.viewport.zoom).toBeCloseTo(0.4, 10)
     act(() => {
       result.current.zoomToPercent(400)
       result.current.fit()
     })
-    expect(result.current.viewport).toEqual({ zoom: 1, x: 0.5, y: 0.5 })
+    expect(result.current.viewport).toEqual({ zoom: 0.5, x: 0.5, y: 0.5 })
   })
 
   it('zooms to a percentage and to actual size', () => {
@@ -101,7 +133,7 @@ describe('useViewport', () => {
     act(() => {
       result.current.toggleActualSize()
     })
-    expect(result.current.viewport.zoom).toBe(1)
+    expect(result.current.viewport.zoom).toBe(0.5)
   })
 
   it('zooms to where the slider is', () => {
@@ -111,11 +143,11 @@ describe('useViewport', () => {
     act(() => {
       result.current.zoomToPosition(0.5)
     })
-    expect(result.current.viewport.zoom).toBeCloseTo(Math.sqrt(0.02 * 64), 8)
+    expect(result.current.viewport.zoom).toBeCloseTo(Math.sqrt(0.01 * 32), 8)
     act(() => {
       result.current.zoomToPosition(0)
     })
-    expect(result.current.viewport.zoom).toBeCloseTo(0.02, 8)
+    expect(result.current.viewport.zoom).toBeCloseTo(0.01, 8)
   })
 
   it('pans and centres, staying over the picture', () => {
@@ -128,7 +160,7 @@ describe('useViewport', () => {
     act(() => {
       result.current.panBy(-1e6, 0)
     })
-    expect(result.current.viewport.x).toBeCloseTo(1 - 1000 / (1000 * 8) / 2, 8)
+    expect(result.current.viewport.x).toBeCloseTo(1 - 1000 / (2000 * 4) / 2, 8)
 
     act(() => {
       result.current.centreOn({ x: 0.25, y: 0.5 })
@@ -163,7 +195,11 @@ describe('useViewport', () => {
       result.current.zoomIn()
     })
 
-    expect(useUiStore.getState().viewports.other).toBeUndefined()
+    expect(useUiStore.getState().viewports.other).toEqual({
+      zoom: 0.5,
+      x: 0.5,
+      y: 0.5,
+    })
 
     act(() => {
       forgetItem(ID)

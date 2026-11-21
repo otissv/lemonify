@@ -11,8 +11,8 @@ const ID = 'doc'
 const FRAME: ViewFrame = {
   viewWidth: 1000,
   viewHeight: 800,
-  ratio: 2,
-  naturalWidth: 2000,
+  pictureWidth: 2000,
+  pictureHeight: 1000,
 }
 
 function zoom(): number {
@@ -48,11 +48,11 @@ describe('ZoomControl', () => {
     render(<ZoomControl documentId={ID} />)
 
     await user.click(screen.getByRole('button', { name: 'Zoom in' }))
-    expect(zoom()).toBe(1.25)
+    expect(zoom()).toBe(0.625)
     expect(screen.getByRole('textbox', { name: 'Zoom' })).toHaveValue('63%')
 
     await user.click(screen.getByRole('button', { name: 'Zoom out' }))
-    expect(zoom()).toBe(1)
+    expect(zoom()).toBe(0.5)
   })
 
   it('zooms to a percentage typed in, with or without the percent sign', async () => {
@@ -63,13 +63,13 @@ describe('ZoomControl', () => {
 
     await user.clear(field)
     await user.type(field, '200{Enter}')
-    expect(zoom()).toBe(4)
+    expect(zoom()).toBe(2)
     expect(field).toHaveValue('200%')
 
     await user.clear(field)
     await user.type(field, '100%')
     await user.tab()
-    expect(zoom()).toBe(2)
+    expect(zoom()).toBe(1)
   })
 
   it('puts back what was there when what was typed is not a percentage', async () => {
@@ -81,7 +81,7 @@ describe('ZoomControl', () => {
     await user.clear(field)
     await user.type(field, 'lots{Enter}')
 
-    expect(zoom()).toBe(1)
+    expect(zoom()).toBe(0.5)
     expect(field).toHaveValue('50%')
   })
 
@@ -94,7 +94,7 @@ describe('ZoomControl', () => {
     await user.clear(field)
     await user.type(field, '300{Escape}')
 
-    expect(zoom()).toBe(1)
+    expect(zoom()).toBe(0.5)
     expect(field).toHaveValue('50%')
   })
 
@@ -106,10 +106,10 @@ describe('ZoomControl', () => {
 
     slider.focus()
     await user.keyboard('{End}')
-    expect(zoom()).toBeCloseTo(64, 6)
+    expect(zoom()).toBeCloseTo(32, 6)
 
     await user.keyboard('{Home}')
-    expect(zoom()).toBeCloseTo(0.02, 6)
+    expect(zoom()).toBeCloseTo(0.01, 6)
   })
 
   it('follows a change made elsewhere', () => {
@@ -117,7 +117,7 @@ describe('ZoomControl', () => {
     render(<ZoomControl documentId={ID} />)
 
     act(() => {
-      useUiStore.getState().setViewport(ID, { zoom: 8, x: 0.5, y: 0.5 })
+      useUiStore.getState().setViewport(ID, { zoom: 4, x: 0.5, y: 0.5 })
     })
 
     expect(screen.getByRole('textbox', { name: 'Zoom' })).toHaveValue('400%')

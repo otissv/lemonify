@@ -8,6 +8,7 @@ import { closeInTrail, visitInTrail } from '@/features/documents/visit-trail'
 import type { ExportSettings } from '@/features/export/export-settings'
 import { RealtimeStatus } from '@/features/realtime/realtime-client'
 import type { PanelPosition } from '@/features/tools/panel-position'
+import { initialViewport } from '@/features/viewport/viewport'
 import type { ViewFrame, Viewport } from '@/features/viewport/viewport'
 import type { RunCanvasMode } from '@/features/workflows/workflow'
 import {
@@ -232,8 +233,12 @@ export const useUiStore = create<UiState>()(
         }))
       },
       setViewFrame: (documentId, frame) => {
-        set(({ viewFrames }) => ({
+        set(({ viewFrames, viewports }) => ({
           viewFrames: { ...viewFrames, [documentId]: frame },
+          viewports:
+            viewports[documentId] === undefined
+              ? { ...viewports, [documentId]: initialViewport(frame) }
+              : viewports,
         }))
       },
       setOverlayGuide: (overlayGuide) => {

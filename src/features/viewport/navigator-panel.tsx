@@ -90,7 +90,13 @@ export function NavigatorPanel({
           aria-description="Drag to move the canvas. The arrow, plus and minus keys move and zoom it, unless you changed them."
           data-slot="navigator-preview"
           className="relative aspect-(--ratio) w-[min(100cqw,calc(100cqh*var(--ratio)))] cursor-grab touch-none bg-checkerboard outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
-          style={{ '--ratio': frame?.ratio ?? FULL } as React.CSSProperties}
+          style={
+            {
+              '--ratio': frame
+                ? frame.pictureWidth / frame.pictureHeight
+                : FULL,
+            } as React.CSSProperties
+          }
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}

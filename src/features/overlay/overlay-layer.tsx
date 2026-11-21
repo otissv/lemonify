@@ -7,7 +7,6 @@ import { overlayToolFor } from '@/features/overlay/overlay-tools'
 import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { useViewport } from '@/features/viewport/use-viewport'
-import { fitSize } from '@/features/viewport/viewport'
 import { useUiStore } from '@/store/ui-store'
 
 interface OverlayLayerProps {
@@ -48,7 +47,7 @@ export function OverlayLayer({
 
   if (waitsForEarlierAi(preview, step.id)) return null
 
-  const scale = (fitSize(frame).width * viewport.zoom) / size.width
+  const scale = (frame.pictureWidth * viewport.zoom) / size.width
   if (!Number.isFinite(scale) || scale <= 0) return null
   return (
     <OverlayContext value={{ size, scale }}>

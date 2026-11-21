@@ -30,8 +30,13 @@ const UPSCALE = createAiStep({
   settings: { model: 'm', scale: 2, iterations: 1, tta: false },
 })
 
-/** A 4000 x 2000 picture shown in a 1000 x 800 window: fitted it is 1000 wide, a quarter of its pixels. */
-const FRAME = { viewWidth: 1000, viewHeight: 800, ratio: 2, naturalWidth: 2000 }
+/** A 4000 x 2000 picture shown in a 1000 x 800 window: it fits at 25%. */
+const FRAME = {
+  viewWidth: 1000,
+  viewHeight: 800,
+  pictureWidth: 4000,
+  pictureHeight: 2000,
+}
 
 function ready(overrides: Partial<DocumentPreview> = {}): void {
   usePipelineStore.getState().setPreview(DOCUMENT_ID, {
@@ -173,7 +178,9 @@ describe('OverlayLayer', () => {
   })
 
   it('draws nothing when the picture has no size on screen, which no drag could be measured on', async () => {
-    useUiStore.getState().setViewFrame(DOCUMENT_ID, { ...FRAME, viewWidth: 0 })
+    useUiStore
+      .getState()
+      .setViewFrame(DOCUMENT_ID, { ...FRAME, pictureWidth: 0 })
     ready()
     await mount()
     expect(screen.queryByTestId('overlay-box')).not.toBeInTheDocument()
@@ -209,7 +216,7 @@ describe('OverlayLayer', () => {
     act(() =>
       useUiStore
         .getState()
-        .setViewport(DOCUMENT_ID, { zoom: 2, x: 0.5, y: 0.5 }),
+        .setViewport(DOCUMENT_ID, { zoom: 0.5, x: 0.5, y: 0.5 }),
     )
     ready()
     await mount()

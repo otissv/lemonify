@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { useViewport } from '@/features/viewport/use-viewport'
 import { useViewportGestures } from '@/features/viewport/use-viewport-gestures'
-import { fitSize } from '@/features/viewport/viewport'
+import { visibleRect } from '@/features/viewport/viewport'
 import { cn } from '@/lib/utils'
 import { useUiStore } from '@/store/ui-store'
 
@@ -10,7 +10,7 @@ interface CanvasProps {
   id: string
   url: string
   name: string
-  /** The size of the canvas image, used until the picture itself has loaded. */
+  /** The picture's size in its own pixels, which a preview shrunk to be shown does not have, so 100% is one of these pixels to one screen pixel. */
   width: number
   height: number
   /** Drawn on the picture, moving and zooming with it; shown only while the picture is the one it was made for. */
@@ -19,9 +19,9 @@ interface CanvasProps {
 
 interface Shown {
   url: string
-  ratio: number
-  /** The picture's width in its own pixels. */
-  naturalWidth: number
+  /** The picture's size in its own pixels. */
+  width: number
+  height: number
   /** The picture has loaded, so nothing transparent is mistaken for it still arriving. */
   loaded: boolean
 }
@@ -76,10 +76,12 @@ function useElementSize(ref: React.RefObject<HTMLElement | null>): Size {
 /**
  * The picture on a checkerboard that is exactly as big as the picture, so
  * transparency shows against it and nothing around the picture is mistaken
- * for part of it. The picture can be any size, since edits change it, so the
- * box takes its shape from the loaded picture. When a new render arrives the
- * old picture stays until the new one has loaded, so the checkerboard never
- * flashes between renders.
+ * for part of it. The box is laid out at the picture's own size in pixels and
+ * scaled by the zoom, as in an image editor: at 100% one pixel of the picture
+ * is one pixel on screen, and since the zoom stays put when an edit changes
+ * the picture's size, a smaller picture looks smaller. When a new render
+ * arrives the old picture, at its own size, stays until the new one has
+ * loaded, so the checkerboard never flashes between renders.
  *
  * It can be zoomed in and moved around, by wheel, drag, pinch, keys, or the
  * zoom control and Navigator panel, which all change one view per document.
@@ -96,8 +98,8 @@ export function Canvas({
 }: CanvasProps): React.JSX.Element {
   const [shown, setShown] = useState<Shown>({
     url,
-    ratio: width / height,
-    naturalWidth: width,
+    width,
+    height,
     loaded: false,
   })
   const windowRef = useRef<HTMLDivElement>(null)
@@ -111,53 +113,37 @@ export function Canvas({
     setViewFrame(id, {
       viewWidth: size.width,
       viewHeight: size.height,
-      ratio: shown.ratio,
-      naturalWidth: shown.naturalWidth,
+      pictureWidth: shown.width,
+      pictureHeight: shown.height,
     })
-  }, [
-    id,
-    size.width,
-    size.height,
-    shown.ratio,
-    shown.naturalWidth,
-    setViewFrame,
-  ])
+  }, [id, size.width, size.height, shown.width, shown.height, setViewFrame])
 
   useEffect(() => {
-    if (url === shown.url) return
+    if (url === shown.url) {
+      if (width === shown.width && height === shown.height) return
+      setShown((current) => ({ ...current, width, height }))
+      return
+    }
     const next = new Image()
     next.onload = () => {
-      const { naturalWidth, naturalHeight } = next
-      const known = naturalWidth > 0 && naturalHeight > 0
-      setShown({
-        url,
-        ratio: known ? naturalWidth / naturalHeight : width / height,
-        naturalWidth: known ? naturalWidth : width,
-        loaded: true,
-      })
+      setShown({ url, width, height, loaded: true })
     }
     next.src = url
     return () => {
       next.onload = null
     }
-  }, [url, shown.url, width, height])
+  }, [url, shown.url, shown.width, shown.height, width, height])
 
-  function handleLoad(event: React.SyntheticEvent<HTMLImageElement>): void {
-    const { naturalWidth, naturalHeight } = event.currentTarget
-    const known = naturalWidth > 0 && naturalHeight > 0
-    setShown((current) => ({
-      ...current,
-      ratio: known ? naturalWidth / naturalHeight : current.ratio,
-      naturalWidth: known ? naturalWidth : current.naturalWidth,
-      loaded: true,
-    }))
+  function handleLoad(): void {
+    setShown((current) => ({ ...current, loaded: true }))
   }
 
-  const fit = frame ? fitSize(frame) : undefined
-  const transform = fit
-    ? `translate(${(0.5 - viewport.x) * viewport.zoom * fit.width}px, ${(0.5 - viewport.y) * viewport.zoom * fit.height}px) scale(${viewport.zoom})`
+  const transform = frame
+    ? `translate(${(0.5 - viewport.x) * viewport.zoom * shown.width}px, ${(0.5 - viewport.y) * viewport.zoom * shown.height}px) scale(${viewport.zoom})`
     : undefined
-  const zoomedIn = viewport.zoom > 1
+  const visible = frame ? visibleRect(viewport, frame) : undefined
+  const movable =
+    visible !== undefined && (visible.width < 1 || visible.height < 1)
   const pixelated =
     percent !== undefined && percent >= PIXEL_PERCENT && shown.loaded
 
@@ -173,17 +159,14 @@ export function Canvas({
         data-slot="canvas-window"
         className={cn(
           '@container flex size-full touch-none p-2 items-center justify-center overflow-hidden outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset',
-          zoomedIn && 'cursor-grab active:cursor-grabbing',
+          movable && 'cursor-grab active:cursor-grabbing',
         )}
         {...gestures}
       >
         <div
           data-slot="canvas"
-          className={cn(
-            'relative aspect-(--ratio) w-[min(100cqw,calc(100cqh*var(--ratio)))] shrink-0',
-            shown.loaded && 'bg-checkerboard',
-          )}
-          style={{ '--ratio': shown.ratio, transform } as React.CSSProperties}
+          className={cn('relative shrink-0', shown.loaded && 'bg-checkerboard')}
+          style={{ width: shown.width, height: shown.height, transform }}
         >
           <img
             src={shown.url}

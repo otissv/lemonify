@@ -35,6 +35,8 @@ test.describe('zoom and pan', () => {
     await openDocument(page)
     const canvasWindow = page.getByRole('application', { name: 'Canvas' })
     const zoom = zoomField(page)
+    await canvasWindow.focus()
+    await page.keyboard.press('0')
     const fitPercent = await percentOf(zoom)
 
     const navigator = page.locator('[data-slot="navigator"]')
@@ -68,6 +70,8 @@ test.describe('zoom and pan', () => {
     await openDocument(page)
     const canvasWindow = page.getByRole('application', { name: 'Canvas' })
     const zoom = zoomField(page)
+    await canvasWindow.focus()
+    await page.keyboard.press('0')
 
     const fitPercent = await percentOf(zoom)
 
@@ -97,6 +101,7 @@ test.describe('zoom and pan', () => {
     const canvasWindow = page.getByRole('application', { name: 'Canvas' })
     const picture = page.locator('[data-slot="canvas"]')
     await canvasWindow.focus()
+    await page.keyboard.press('0')
     await page.keyboard.press('+')
     await page.keyboard.press('+')
     await page.keyboard.press('+')

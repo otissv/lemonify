@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -6,6 +6,8 @@ import {
   listDocuments,
 } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
+import { JobKind } from '@/server/jobs/job-types'
+import { useUiStore } from '@/store/ui-store'
 import {
   requestPreview,
   requestThumbnails,
@@ -57,7 +59,23 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.resetAllMocks()
+  vi.unstubAllGlobals()
 })
+
+/** The preview job's picture is this big in its own pixels. */
+function renderedAt(width: number, height: number): void {
+  vi.mocked(followJob).mockResolvedValue({
+    ...previewJob(),
+    result: {
+      kind: JobKind.Preview,
+      key: 'preview-key',
+      width,
+      height,
+      pendingStepIds: [],
+      problems: [],
+    },
+  })
+}
 
 describe('DocumentView', () => {
   it('shows a blank canvas of its own size when the document has no image', async () => {
@@ -91,16 +109,39 @@ describe('DocumentView', () => {
     )
   })
 
-  it('takes the shape of the picture once it has loaded, not of the original', async () => {
+  it('is as big as the rendered picture in its own pixels, not the original or the shrunk preview', async () => {
+    renderedAt(4000, 1000)
     await renderApp(`/documents/${DOCUMENT_ID}`)
     const picture = await screen.findByRole('img', { name: 'one.png' })
-    const canvas = picture.closest<HTMLElement>('[data-slot="canvas"]')
-    expect(canvas?.style.getPropertyValue('--ratio')).toBe('1')
-
-    Object.defineProperty(picture, 'naturalWidth', { value: 400 })
-    Object.defineProperty(picture, 'naturalHeight', { value: 100 })
+    Object.defineProperty(picture, 'naturalWidth', { value: 2560 })
+    Object.defineProperty(picture, 'naturalHeight', { value: 640 })
     fireEvent.load(picture)
 
-    expect(canvas?.style.getPropertyValue('--ratio')).toBe('4')
+    const canvas = picture.closest<HTMLElement>('[data-slot="canvas"]')
+    expect(canvas?.style.width).toBe('4000px')
+    expect(canvas?.style.height).toBe('1000px')
+  })
+
+  it('is as big as the original while comparing with it', async () => {
+    vi.stubGlobal(
+      'Image',
+      class LoadingImage {
+        onload: (() => void) | null = null
+        set src(_url: string) {
+          queueMicrotask(() => this.onload?.())
+        }
+      },
+    )
+    renderedAt(4000, 1000)
+    await renderApp(`/documents/${DOCUMENT_ID}`)
+    await screen.findByRole('img', { name: 'one.png' })
+
+    await act(async () => {
+      useUiStore.getState().setShowOriginal(DOCUMENT_ID, true)
+    })
+
+    const source = documentView().source
+    const canvas = document.querySelector<HTMLElement>('[data-slot="canvas"]')
+    expect(canvas?.style.width).toBe(`${source?.width}px`)
   })
 })

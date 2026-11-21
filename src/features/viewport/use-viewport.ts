@@ -4,7 +4,9 @@ import {
   ACTUAL_SIZE_PERCENT,
   centreOn,
   clampViewport,
-  FIT_VIEWPORT,
+  ACTUAL_SIZE_VIEWPORT,
+  fitViewport,
+  initialViewport,
   panBy,
   percentOf,
   zoomBy,
@@ -29,7 +31,7 @@ export interface ViewportActions {
   zoomIn: () => void
   zoomOut: () => void
   zoomToPercent: (percent: number) => void
-  /** Zooms to where the slider is, from 0 (fit) to 1 (the most). */
+  /** Zooms to where the slider is, from 0 (the least) to 1 (the most). */
   zoomToPosition: (position: number) => void
   fit: () => void
   /** One picture pixel to one screen pixel. */
@@ -60,7 +62,7 @@ function change(documentId: string, update: Change): void {
   const frame = state.viewFrames[documentId]
   if (!frame) return
   const current = clampViewport(
-    state.viewports[documentId] ?? FIT_VIEWPORT,
+    state.viewports[documentId] ?? initialViewport(frame),
     frame,
   )
   const next = update(current, frame)
@@ -105,20 +107,17 @@ export function viewportActionsFor(documentId: string): ViewportActions {
       )
     },
     fit: () => {
-      change(documentId, () => FIT_VIEWPORT)
+      change(documentId, (_viewport, frame) => fitViewport(frame))
     },
     actualSize: () => {
       toPercent(ACTUAL_SIZE_PERCENT)
     },
     toggleActualSize: (anchor) => {
       change(documentId, (viewport, frame) => {
-        if (
-          Math.abs(percentOf(viewport.zoom, frame) - ACTUAL_SIZE_PERCENT) < NEAR
-        ) {
-          return FIT_VIEWPORT
+        if (Math.abs(percentOf(viewport.zoom) - ACTUAL_SIZE_PERCENT) < NEAR) {
+          return fitViewport(frame)
         }
-        const factor =
-          zoomForPercent(ACTUAL_SIZE_PERCENT, frame) / viewport.zoom
+        const factor = zoomForPercent(ACTUAL_SIZE_PERCENT) / viewport.zoom
         return zoomBy(viewport, frame, factor, anchor)
       })
     },
@@ -144,14 +143,14 @@ export function useViewport(documentId: string): DocumentViewport {
 
   return useMemo(() => {
     const viewport = frame
-      ? clampViewport(stored ?? FIT_VIEWPORT, frame)
-      : FIT_VIEWPORT
+      ? clampViewport(stored ?? initialViewport(frame), frame)
+      : ACTUAL_SIZE_VIEWPORT
     return {
       ...actions,
       frame,
       viewport,
       limits: frame ? zoomLimits(frame) : undefined,
-      percent: frame ? percentOf(viewport.zoom, frame) : undefined,
+      percent: frame ? percentOf(viewport.zoom) : undefined,
     }
   }, [actions, frame, stored])
 }

@@ -13,12 +13,12 @@ import {
 } from '@/test/document-fixtures'
 import { resetStores } from '@/store/reset-stores'
 
-/** A square picture in a 1000 x 800 window: fitted it is 800 x 800. */
+/** An 800 x 800 picture in a 1000 x 800 window: it fits at 100%. */
 const FRAME: ViewFrame = {
   viewWidth: 1000,
   viewHeight: 800,
-  ratio: 1,
-  naturalWidth: 800,
+  pictureWidth: 800,
+  pictureHeight: 800,
 }
 
 /** The preview is drawn 200 x 200 at the top left of the page. */

@@ -3,10 +3,12 @@
  * part. Everything here is pure, so the canvas and the Navigator panel, which
  * show the same view, cannot disagree about it.
  *
- * `zoom` is relative to the picture fitted to the window, so 1 is "fit"; it
- * can go below that to see the picture small. `x` and `y` say which point of the picture is in the middle
- * of the window, as fractions of the picture (0 is its left or top edge, 1 its
- * right or bottom edge).
+ * `zoom` is screen pixels per picture pixel, as in any image editor: 1 is
+ * 100%, where one pixel of the picture is one pixel on screen. It does not
+ * follow the window or the picture, so a picture that an edit makes smaller
+ * looks smaller, and fitting is a zoom like any other. `x` and `y` say which
+ * point of the picture is in the middle of the window, as fractions of the
+ * picture (0 is its left or top edge, 1 its right or bottom edge).
  */
 
 export interface Viewport {
@@ -15,14 +17,12 @@ export interface Viewport {
   y: number
 }
 
-/** The window and the picture in it, as measured on screen, in CSS pixels. */
+/** The window, in CSS pixels, and the picture in it, in its own pixels, which is what a percentage is a percentage of. */
 export interface ViewFrame {
   viewWidth: number
   viewHeight: number
-  /** Width over height of the picture. */
-  ratio: number
-  /** Width of the picture in its own pixels, which is what a percentage is a percentage of. */
-  naturalWidth: number
+  pictureWidth: number
+  pictureHeight: number
 }
 
 export interface Point {
@@ -43,8 +43,6 @@ export interface ZoomLimits {
   max: number
 }
 
-export const FIT_VIEWPORT: Readonly<Viewport> = { zoom: 1, x: 0.5, y: 0.5 }
-
 /** The most the picture can be magnified, as a percentage of its own pixels. */
 export const MAX_PERCENT = 3200
 /** The least the picture can be shown at, as a percentage of its own pixels. */
@@ -53,6 +51,12 @@ export const MIN_PERCENT = 1
 export const ZOOM_STEP = 1.25
 /** The percentage at which one picture pixel is one screen pixel. */
 export const ACTUAL_SIZE_PERCENT = 100
+/** The middle of the picture at 100%, which is all there is to show before the window is measured. */
+export const ACTUAL_SIZE_VIEWPORT: Readonly<Viewport> = {
+  zoom: 1,
+  x: 0.5,
+  y: 0.5,
+}
 
 const FULL = 1
 const HALF = 0.5
@@ -62,42 +66,60 @@ function clamp(value: number, low: number, high: number): number {
   return Math.min(Math.max(value, low), high)
 }
 
-/** The picture's size when fitted to the window, which is how it looks at zoom 1. */
-export function fitSize(frame: ViewFrame): { width: number; height: number } {
-  const width = Math.min(frame.viewWidth, frame.viewHeight * frame.ratio)
-  return { width, height: width / frame.ratio }
+/** The zoom at which the whole picture just fits in the window. */
+export function fitZoom(frame: ViewFrame): number {
+  const zoom = Math.min(
+    frame.viewWidth / frame.pictureWidth,
+    frame.viewHeight / frame.pictureHeight,
+  )
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : FULL
 }
 
-/** How many screen pixels one picture pixel takes up when fitted. */
-export function fitScale(frame: ViewFrame): number {
-  return fitSize(frame).width / frame.naturalWidth
+/** The whole picture, as big as the window allows. */
+export function fitViewport(frame: ViewFrame): Viewport {
+  return { zoom: fitZoom(frame), x: HALF, y: HALF }
 }
 
+/** How a picture opens, as in an image editor: fitted when it is bigger than the window, at 100% when it is not, so it is never enlarged. */
+export function initialViewport(frame: ViewFrame): Viewport {
+  return { zoom: Math.min(FULL, fitZoom(frame)), x: HALF, y: HALF }
+}
+
+/** From the least percent to the most, always with room for fit. */
 export function zoomLimits(frame: ViewFrame): ZoomLimits {
-  const scale = fitScale(frame)
-  const max = MAX_PERCENT / PERCENT / scale
-  const min = MIN_PERCENT / PERCENT / scale
+  const fit = fitZoom(frame)
   return {
-    min: Number.isFinite(min) ? Math.min(FULL, min) : FULL,
-    max: Number.isFinite(max) ? Math.max(FULL, max) : FULL,
+    min: Math.min(MIN_PERCENT / PERCENT, fit),
+    max: Math.max(MAX_PERCENT / PERCENT, fit),
   }
 }
 
 /** The zoom as a percentage of the picture's own pixels, as Photoshop shows it. */
-export function percentOf(zoom: number, frame: ViewFrame): number {
-  return fitScale(frame) * zoom * PERCENT
+export function percentOf(zoom: number): number {
+  return zoom * PERCENT
 }
 
 /** Which zoom shows the picture at this percentage of its own pixels. */
-export function zoomForPercent(percent: number, frame: ViewFrame): number {
-  return percent / PERCENT / fitScale(frame)
+export function zoomForPercent(percent: number): number {
+  return percent / PERCENT
+}
+
+/** The picture's size on screen at this zoom, in CSS pixels. */
+function shownSize(
+  frame: ViewFrame,
+  zoom: number,
+): { width: number; height: number } {
+  return {
+    width: frame.pictureWidth * zoom,
+    height: frame.pictureHeight * zoom,
+  }
 }
 
 /** The part of the picture in the window. It is bigger than the picture while the picture is smaller than the window. */
 export function visibleRect(viewport: Viewport, frame: ViewFrame): ViewRect {
-  const fit = fitSize(frame)
-  const width = frame.viewWidth / (fit.width * viewport.zoom)
-  const height = frame.viewHeight / (fit.height * viewport.zoom)
+  const shown = shownSize(frame, viewport.zoom)
+  const width = frame.viewWidth / shown.width
+  const height = frame.viewHeight / shown.height
   return {
     x: viewport.x - width * HALF,
     y: viewport.y - height * HALF,
@@ -134,20 +156,21 @@ export function zoomBy(
   factor: number,
   anchor: Point = { x: frame.viewWidth * HALF, y: frame.viewHeight * HALF },
 ): Viewport {
-  const fit = fitSize(frame)
   const limits = zoomLimits(frame)
   const zoom = clamp(viewport.zoom * factor, limits.min, limits.max)
   const offsetX = anchor.x - frame.viewWidth * HALF
   const offsetY = anchor.y - frame.viewHeight * HALF
+  const before = shownSize(frame, viewport.zoom)
+  const after = shownSize(frame, zoom)
   const under = {
-    x: viewport.x + offsetX / (fit.width * viewport.zoom),
-    y: viewport.y + offsetY / (fit.height * viewport.zoom),
+    x: viewport.x + offsetX / before.width,
+    y: viewport.y + offsetY / before.height,
   }
   return clampViewport(
     {
       zoom,
-      x: under.x - offsetX / (fit.width * zoom),
-      y: under.y - offsetY / (fit.height * zoom),
+      x: under.x - offsetX / after.width,
+      y: under.y - offsetY / after.height,
     },
     frame,
   )
@@ -159,7 +182,7 @@ export function zoomToPercent(
   frame: ViewFrame,
   percent: number,
 ): Viewport {
-  return zoomBy(viewport, frame, zoomForPercent(percent, frame) / viewport.zoom)
+  return zoomBy(viewport, frame, zoomForPercent(percent) / viewport.zoom)
 }
 
 /** Moves the picture by this many screen pixels, as if it were dragged. */
@@ -169,12 +192,12 @@ export function panBy(
   dx: number,
   dy: number,
 ): Viewport {
-  const fit = fitSize(frame)
+  const shown = shownSize(frame, viewport.zoom)
   return clampViewport(
     {
       ...viewport,
-      x: viewport.x - dx / (fit.width * viewport.zoom),
-      y: viewport.y - dy / (fit.height * viewport.zoom),
+      x: viewport.x - dx / shown.width,
+      y: viewport.y - dy / shown.height,
     },
     frame,
   )

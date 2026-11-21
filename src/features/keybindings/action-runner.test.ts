@@ -355,12 +355,13 @@ describe('view actions', () => {
     useUiStore.getState().setViewFrame(DOCUMENT_ID, {
       viewWidth: 400,
       viewHeight: 300,
-      ratio: 1,
-      naturalWidth: 1000,
+      pictureWidth: 1000,
+      pictureHeight: 1000,
     })
     expect(runAction('view.zoomIn', context())).toBe(true)
+    // 1000 x 1000 in a 400 x 300 window opens fitted, at 30%.
     expect(useUiStore.getState().viewports[DOCUMENT_ID]?.zoom).toBeGreaterThan(
-      1,
+      0.3,
     )
   })
 
@@ -369,8 +370,8 @@ describe('view actions', () => {
     useUiStore.getState().setViewFrame(DOCUMENT_ID, {
       viewWidth: 400,
       viewHeight: 300,
-      ratio: 1,
-      naturalWidth: 1000,
+      pictureWidth: 1000,
+      pictureHeight: 1000,
     })
     for (let step = 0; step < 4; step += 1) runAction('view.zoomIn', context())
     const start = useUiStore.getState().viewports[DOCUMENT_ID]
