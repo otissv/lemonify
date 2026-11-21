@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -221,6 +227,29 @@ describe('ToolsBrowser', () => {
       expect(
         screen.queryByRole('button', { name: 'Add Resize' }),
       ).not.toBeInTheDocument()
+    })
+
+    it('keeps the groups as they were left when the list is shown again, without saving them', async () => {
+      const user = userEvent.setup()
+      await user.click(groupToggle('Colour'))
+      await user.click(groupToggle('Geometry'))
+      await user.click(groupToggle('Geometry'))
+
+      cleanup()
+      render(
+        <ToolsBrowser
+          documentId={DOCUMENT_ID}
+          tools={AI_TOOLS_OFFERED}
+          catalogues={AI_CATALOGUES}
+        />,
+      )
+
+      expect(groupToggle('Colour')).toHaveAttribute('aria-expanded', 'true')
+      expect(groupToggle('Geometry')).toHaveAttribute('aria-expanded', 'false')
+      const saved = Object.keys(window.localStorage).map((key) =>
+        window.localStorage.getItem(key),
+      )
+      expect(saved.join('')).not.toContain('Colour')
     })
 
     it('keeps the group heading when it is collapsed', async () => {

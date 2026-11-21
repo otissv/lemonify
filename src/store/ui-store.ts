@@ -70,6 +70,8 @@ interface UiStateData {
   runCanvasModes: Keyed<RunCanvasMode>
   /** Groups drawn closed in the sidebar, by group id. Only about the screen: it is not saved. */
   collapsedGroups: Keyed<boolean>
+  /** Tool categories open in the Tools list, by label, so they stay as left when the list is shown again. Not saved. */
+  openToolGroups: Keyed<boolean>
   /** Documents shown as uploaded instead of as their edits make them. */
   showOriginal: Keyed<boolean>
   /** Which picture of the selected step the canvas shows, by document; the edit picture when not set. Selecting another step clears it. */
@@ -109,6 +111,7 @@ interface UiStateActions {
   selectInWorkflow: (workflowId: string, selection: Selection) => void
   setRunCanvasMode: (workflowId: string, mode: RunCanvasMode) => void
   setGroupCollapsed: (groupId: string, collapsed: boolean) => void
+  setToolGroupOpen: (label: string, open: boolean) => void
   setExportSettings: (documentId: string, settings: ExportSettings) => void
   setRealtime: (status: RealtimeStatus) => void
   setLiveNotice: (notice: string | undefined) => void
@@ -137,6 +140,7 @@ export const INITIAL_UI_STATE: Readonly<UiStateData> = {
   workflowFocus: {},
   runCanvasModes: {},
   collapsedGroups: {},
+  openToolGroups: {},
   showOriginal: {},
   stepViews: {},
   viewports: {},
@@ -300,6 +304,11 @@ export const useUiStore = create<UiState>()(
       setGroupCollapsed: (groupId, collapsed) => {
         set(({ collapsedGroups }) => ({
           collapsedGroups: { ...collapsedGroups, [groupId]: collapsed },
+        }))
+      },
+      setToolGroupOpen: (label, open) => {
+        set(({ openToolGroups }) => ({
+          openToolGroups: { ...openToolGroups, [label]: open },
         }))
       },
       setExportSettings: (documentId, settings) => {

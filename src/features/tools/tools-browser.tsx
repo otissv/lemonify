@@ -11,6 +11,7 @@ import { addTool } from '@/features/tools/add-tool'
 import { searchTools, toolGroups } from '@/features/tools/tool-catalogue'
 import type { ToolEntry } from '@/features/tools/tool-catalogue'
 import { cn } from '@/lib/utils'
+import { useUiStore } from '@/store/ui-store'
 
 interface ToolsBrowserProps {
   documentId: string
@@ -116,17 +117,14 @@ export function ToolsList({
 }: ToolsListProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const openGroups = useUiStore((state) => state.openToolGroups)
+  const setToolGroupOpen = useUiStore((state) => state.setToolGroupOpen)
   const searchId = useId()
   const groups = searchTools(toolGroups(tools), query)
   const searching = query.trim() !== ''
 
   function handleToggle(label: string): void {
-    setExpanded((current) => {
-      const next = new Set(current)
-      if (!next.delete(label)) next.add(label)
-      return next
-    })
+    setToolGroupOpen(label, openGroups[label] !== true)
   }
 
   function handleQueryChange(event: React.ChangeEvent<HTMLInputElement>): void {
@@ -171,7 +169,7 @@ export function ToolsList({
             key={group.label}
             label={group.label}
             tools={group.tools}
-            open={searching || expanded.has(group.label)}
+            open={searching || openGroups[group.label] === true}
             onToggle={handleToggle}
             onAdd={handleAdd}
           />
