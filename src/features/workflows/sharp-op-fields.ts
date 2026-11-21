@@ -16,6 +16,8 @@ export enum OpFieldKind {
   Image = 'image',
   /** One or several other images. */
   Images = 'images',
+  /** A point of the picture, picked on a grid, or a smart crop. */
+  Position = 'position',
 }
 
 /** How a matrix field is laid out. */
@@ -159,6 +161,7 @@ const WIDGETS: Readonly<Record<string, Widget>> = {
 
 function widgetFor(op: string, name: string): Widget | undefined {
   if (name === 'background') return { kind: OpFieldKind.Colour }
+  if (name === 'position') return { kind: OpFieldKind.Position }
   return WIDGETS[`${op}.${name}`]
 }
 

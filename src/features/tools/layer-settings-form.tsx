@@ -1,9 +1,9 @@
 import { useEffect, useId, useState } from 'react'
 
+import { AnchorGrid, COMPASS_POINTS } from '@/components/ui/anchor-grid'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  LAYER_ANCHORS,
   LAYER_FITS,
   MAX_LAYER_OFFSET,
   MAX_LAYER_ROTATION,
@@ -32,18 +32,6 @@ const FIT_LABELS: Readonly<Record<LayerFit, string>> = {
   contain: 'Fit inside',
   cover: 'Fill',
   stretch: 'Stretch',
-}
-
-const ANCHOR_LABELS: Readonly<Record<LayerAnchor, string>> = {
-  northwest: 'Top left',
-  north: 'Top',
-  northeast: 'Top right',
-  west: 'Left',
-  centre: 'Centre',
-  east: 'Right',
-  southwest: 'Bottom left',
-  south: 'Bottom',
-  southeast: 'Bottom right',
 }
 
 interface NumberFieldProps {
@@ -106,35 +94,29 @@ function NumberField({
   )
 }
 
-interface AnchorGridProps {
+interface LayerAnchorFieldProps {
   anchor: LayerAnchor
   onChange: (anchor: LayerAnchor) => void
 }
 
 /** The nine points a layer can be placed against, laid out as the canvas is. */
-function AnchorGrid({ anchor, onChange }: AnchorGridProps): React.JSX.Element {
-  const name = useId()
+function LayerAnchorField({
+  anchor,
+  onChange,
+}: LayerAnchorFieldProps): React.JSX.Element {
+  const legendId = useId()
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-body-md font-medium">Anchor</legend>
-      <div className="grid w-28 grid-cols-3 gap-1">
-        {LAYER_ANCHORS.map((point) => (
-          <label key={point} title={ANCHOR_LABELS[point]} className="block">
-            <input
-              type="radio"
-              name={name}
-              aria-label={ANCHOR_LABELS[point]}
-              checked={point === anchor}
-              className="peer sr-only"
-              onChange={() => {
-                onChange(point)
-              }}
-            />
-            <span className="block h-8 rounded-sm border border-input bg-muted peer-checked:bg-primary peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50" />
-          </label>
-        ))}
-      </div>
+      <legend id={legendId} className="mb-2 text-body-md font-medium">
+        Anchor
+      </legend>
+      <AnchorGrid
+        labelledBy={legendId}
+        points={COMPASS_POINTS}
+        value={anchor}
+        onChange={onChange}
+      />
     </fieldset>
   )
 }
@@ -193,7 +175,7 @@ export function LayerSettingsForm({
         />
       </div>
 
-      <AnchorGrid
+      <LayerAnchorField
         anchor={settings.anchor}
         onChange={(anchor) => {
           onChange({ ...settings, anchor })

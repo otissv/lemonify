@@ -3,6 +3,8 @@ import { useMemo } from 'react'
 import { resizeKernel } from '@/features/workflows/fields/matrix-value'
 import type { Dimensions } from '@/features/workflows/fields/matrix-value'
 import { SharpOptionField } from '@/features/workflows/sharp-option-field'
+import { sharpFieldRows } from '@/features/workflows/sharp-field-rows'
+import type { OpField } from '@/features/workflows/sharp-op-fields'
 import {
   sharpOpFields,
   sharpOptionProblems,
@@ -60,6 +62,7 @@ export function SharpOptionsForm({
   onChange,
 }: SharpOptionsFormProps): React.JSX.Element {
   const fields = useMemo(() => sharpOpFields(op), [op])
+  const rows = useMemo(() => sharpFieldRows(fields), [fields])
   const problems = sharpOptionProblems(op, options)
   const general = problems[GENERAL_PROBLEM]
 
@@ -80,16 +83,28 @@ export function SharpOptionsForm({
           This step has no options.
         </p>
       )}
-      {fields.map((field) => (
-        <SharpOptionField
-          key={field.name}
-          field={field}
-          value={options[field.name]}
-          options={options}
-          problem={problems[field.name]}
-          onChange={handleFieldChange}
-        />
-      ))}
+      {rows.map((row) => {
+        const fieldsOfRow = row.map((field: OpField) => (
+          <SharpOptionField
+            key={field.name}
+            field={field}
+            value={options[field.name]}
+            options={options}
+            problem={problems[field.name]}
+            onChange={handleFieldChange}
+          />
+        ))
+        if (row.length === 1) return fieldsOfRow
+        return (
+          <div
+            key={row.map(({ name }) => name).join(',')}
+            data-slot="field-row"
+            className="grid grid-cols-2 gap-3"
+          >
+            {fieldsOfRow}
+          </div>
+        )
+      })}
     </div>
   )
 }

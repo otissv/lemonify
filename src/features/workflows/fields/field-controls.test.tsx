@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -78,6 +84,59 @@ describe('option controls', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.resetAllMocks()
+  })
+
+  it('puts width and height side by side', () => {
+    show('resize')
+
+    const width = screen.getByLabelText(/^Width/)
+    const height = screen.getByLabelText(/^Height/)
+    const row = width.closest('[data-slot="field-row"]')
+    expect(row).not.toBeNull()
+    expect(row).toContainElement(height)
+    expect(row).toHaveClass('grid-cols-2')
+  })
+
+  describe('position', () => {
+    it('is picked from a grid of nine points', async () => {
+      const user = userEvent.setup()
+      show('resize')
+
+      expect(
+        screen.queryByRole('textbox', { name: 'Position' }),
+      ).not.toBeInTheDocument()
+      const grid = screen.getByRole('radiogroup', { name: 'Position' })
+      expect(within(grid).getAllByRole('radio')).toHaveLength(9)
+
+      await user.click(within(grid).getByRole('radio', { name: 'Top left' }))
+
+      expect(latest.position).toBe('northwest')
+    })
+
+    it('shows a position written either way on its point', () => {
+      show('resize', { position: 'right top' })
+
+      expect(screen.getByRole('radio', { name: 'Top right' })).toBeChecked()
+    })
+
+    it('crops to what matters instead, which no point stands for', async () => {
+      const user = userEvent.setup()
+      show('resize', { position: 'north' })
+
+      await user.click(screen.getByRole('combobox', { name: 'Smart crop' }))
+      await user.click(screen.getByRole('option', { name: /Attention/ }))
+
+      expect(latest.position).toBe('attention')
+      for (const radio of screen.getAllByRole('radio')) {
+        expect(radio).not.toBeChecked()
+      }
+
+      await user.click(screen.getByRole('radio', { name: 'Centre' }))
+      expect(latest.position).toBe('centre')
+      expect(
+        screen.getByRole('combobox', { name: 'Smart crop' }),
+      ).toHaveTextContent('Off')
+    })
   })
 
   describe('bounded numbers', () => {

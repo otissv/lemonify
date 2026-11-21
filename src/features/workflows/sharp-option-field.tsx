@@ -28,6 +28,7 @@ import {
   ImagesControl,
 } from '@/features/workflows/fields/image-field'
 import { MatrixControl } from '@/features/workflows/fields/matrix-field'
+import { PositionControl } from '@/features/workflows/fields/position-field'
 import { z } from 'zod'
 
 export type SharpOptionFieldProps = Omit<ControlProps, 'id' | 'describedBy'>
@@ -292,6 +293,8 @@ function Control(props: ControlProps & { labelId: string }): React.JSX.Element {
       return <ImageControl {...props} />
     case OpFieldKind.Images:
       return <ImagesControl {...props} />
+    case OpFieldKind.Position:
+      return <PositionControl {...props} />
     case OpFieldKind.Boolean:
       return <BooleanControl {...props} />
   }

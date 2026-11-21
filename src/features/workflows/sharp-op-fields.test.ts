@@ -74,7 +74,9 @@ describe('sharpOpFields', () => {
   })
 
   it('marks bounded numbers for a slider and picks a step', () => {
-    const quality = sharpOpFields('jpeg').find(({ name }) => name === 'quality')!
+    const quality = sharpOpFields('jpeg').find(
+      ({ name }) => name === 'quality',
+    )!
     const width = sharpOpFields('resize').find(({ name }) => name === 'width')!
     const percent = sharpOpFields('opacity').find(
       ({ name }) => name === 'percent',
@@ -85,6 +87,12 @@ describe('sharpOpFields', () => {
     expect(opFieldHasFixedRange(width)).toBe(false)
     expect(opFieldHasFixedRange(percent)).toBe(true)
     expect(opFieldSliderStep(percent)).toBe(0.1)
+  })
+
+  it('picks a position on a grid, not as typed JSON', () => {
+    expect(
+      sharpOpFields('resize').find(({ name }) => name === 'position'),
+    ).toMatchObject({ kind: OpFieldKind.Position })
   })
 
   it('edits colours with the colour picker, keeping their description', () => {
