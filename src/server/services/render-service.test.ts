@@ -966,3 +966,13 @@ describe('workflow thumbnails', () => {
     ).toBe('image/webp')
   })
 })
+
+describe('exportFormats', () => {
+  it('lists the formats this machine can write, starting with the original', async () => {
+    const formats = await t.app.renders.exportFormats()
+    expect(formats[0]).toBe(ExportFormat.Original)
+    expect(formats).toContain(ExportFormat.Png)
+    expect(formats).toContain(ExportFormat.Jpeg)
+    expect(new Set(formats).size).toBe(formats.length)
+  })
+})

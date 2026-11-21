@@ -21,5 +21,5 @@ export const getAiCatalogue = createServerFn({ method: 'GET' })
   .validator(z.object({ tool: z.enum(AiToolId) }))
   .handler(async ({ context, data }): Promise<AiCatalogue> => {
     const { app } = await appFor(context)
-    return app.aiTools.get(data.tool).engine.catalogue(data.tool)
+    return app.aiTools.catalogue(data.tool)
   })

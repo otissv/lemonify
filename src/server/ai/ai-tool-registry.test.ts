@@ -14,6 +14,23 @@ describe('AiToolRegistry', () => {
     expect(registry.list().map(({ id }) => id)).toEqual([AiToolId.Upscale])
   })
 
+  it('gives the models a tool offers and which one a new step starts with', async () => {
+    const engine = new FakeAiEngine()
+    engine.catalogueOf = { defaultModel: 'fake', models: [] }
+    const withEngine = new AiToolRegistry([upscaleEntry(engine)])
+    await expect(withEngine.catalogue(AiToolId.Upscale)).resolves.toEqual({
+      defaultModel: 'fake',
+      models: [],
+    })
+  })
+
+  it('refuses the catalogue of a tool it does not have', async () => {
+    const empty = new AiToolRegistry([])
+    await expect(empty.catalogue(AiToolId.Upscale)).rejects.toThrow(
+      /not available/,
+    )
+  })
+
   it('refuses a tool it does not have', () => {
     const empty = new AiToolRegistry([])
     expect(() => empty.get(AiToolId.Upscale)).toThrow(/not available/)

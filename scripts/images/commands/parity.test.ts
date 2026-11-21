@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
+import { AiToolRegistry } from '../../../src/server/ai/ai-tool-registry.ts'
 import { WorkflowChangeSchema } from '../../../src/features/workflows/workflow-change.ts'
 import { DocumentChangeSchema } from '../../../src/features/pipeline/document-change.ts'
 import { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
@@ -10,9 +11,11 @@ import { JobService } from '../../../src/server/services/job-service.ts'
 import { RenderService } from '../../../src/server/services/render-service.ts'
 import { ResultService } from '../../../src/server/services/result-service.ts'
 import { SourceService } from '../../../src/server/services/source-service.ts'
+import { UserService } from '../../../src/server/services/user-service.ts'
 import { WorkflowService } from '../../../src/server/services/workflow-service.ts'
 import { COMMANDS } from './index.ts'
 import {
+  AI_TOOL_COMMANDS,
   BUNDLE_COMMANDS,
   DOCUMENT_CHANGE_COMMANDS,
   DOCUMENT_COMMANDS,
@@ -21,6 +24,7 @@ import {
   RENDER_COMMANDS,
   RESULT_COMMANDS,
   SOURCE_COMMANDS,
+  USER_COMMANDS,
   WORKFLOW_CHANGE_COMMANDS,
   WORKFLOW_COMMANDS,
 } from './parity.ts'
@@ -57,6 +61,8 @@ const SERVICES: ReadonlyArray<
   ['KeybindingService', KeybindingService, KEYBINDING_COMMANDS],
   ['RenderService', RenderService, RENDER_COMMANDS],
   ['DocumentBundleService', DocumentBundleService, BUNDLE_COMMANDS],
+  ['UserService', UserService, USER_COMMANDS],
+  ['AiToolRegistry', AiToolRegistry, AI_TOOL_COMMANDS],
 ]
 
 const registered = COMMANDS.map(({ name }) => name)

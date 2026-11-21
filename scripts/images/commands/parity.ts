@@ -1,3 +1,4 @@
+import type { AiToolRegistry } from '../../../src/server/ai/ai-tool-registry.ts'
 import type { WorkflowChange } from '../../../src/features/workflows/workflow-change.ts'
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
 import type { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
@@ -7,6 +8,7 @@ import type { JobService } from '../../../src/server/services/job-service.ts'
 import type { RenderService } from '../../../src/server/services/render-service.ts'
 import type { ResultService } from '../../../src/server/services/result-service.ts'
 import type { SourceService } from '../../../src/server/services/source-service.ts'
+import type { UserService } from '../../../src/server/services/user-service.ts'
 import type { WorkflowService } from '../../../src/server/services/workflow-service.ts'
 import type { ImageCommand } from '../cli.ts'
 import {
@@ -35,7 +37,8 @@ import {
   documentStepSetCommand,
 } from './document-step.ts'
 import { documentCanvasCommand } from './document-canvas.ts'
-import { exportCommand } from './export.ts'
+import { aiCatalogueCommand, aiToolsCommand } from './ai.ts'
+import { exportCommand, exportFormatsCommand } from './export.ts'
 import {
   keysExportCommand,
   keysImportCommand,
@@ -57,6 +60,7 @@ import {
   sourceDeleteCommand,
   sourceListCommand,
 } from './source.ts'
+import { userListCommand } from './user.ts'
 import {
   workflowCancelCommand,
   workflowCreateCommand,
@@ -197,6 +201,7 @@ export const WORKFLOW_COMMANDS = {
 
 export const RENDER_COMMANDS = {
   requestExport: [exportCommand],
+  exportFormats: [exportFormatsCommand],
   requestAiStep: [documentStepRunCommand],
   clearUnusedResults: [resultClearUnusedCommand],
   requestPreview: [documentPreviewCommand],
@@ -223,3 +228,14 @@ export const KEYBINDING_COMMANDS = {
   set: [keysSetCommand, keysUnsetCommand],
   reset: [keysResetCommand],
 } as const satisfies Record<keyof KeybindingService, Coverage>
+
+export const USER_COMMANDS = {
+  list: [userListCommand],
+  resolveActor: { internal: 'how a command picks the user it acts as' },
+} as const satisfies Record<keyof UserService, Coverage>
+
+export const AI_TOOL_COMMANDS = {
+  list: [aiToolsCommand],
+  catalogue: [aiCatalogueCommand],
+  get: { internal: 'the services look a tool up to run or batch it' },
+} as const satisfies Record<keyof AiToolRegistry, Coverage>

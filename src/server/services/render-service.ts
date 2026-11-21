@@ -4,7 +4,11 @@ import { PipelineStepKind, effectiveSteps } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { stepsBefore, stepsThrough } from '@/features/pipeline/step-input'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
-import type { ExportSettings } from '@/features/export/export-settings'
+import type {
+  ExportFormat,
+  ExportSettings,
+} from '@/features/export/export-settings'
+import { writableExportFormats } from '@/features/export/server/export-formats'
 
 import type { AiToolRegistry } from '../ai/ai-tool-registry.ts'
 import type { DocumentDao, DocumentRecord } from '../dao/document-dao.ts'
@@ -299,6 +303,11 @@ export class RenderService {
       },
     ])
     return this.#only(queued)
+  }
+
+  /** The export formats this machine can write, in the order the picker shows them. */
+  exportFormats(): Promise<Array<ExportFormat>> {
+    return writableExportFormats()
   }
 
   /** A stored preview or thumbnail, for serving. */

@@ -1,5 +1,9 @@
 import { AI_TOOLS, AiToolId } from '@/features/ai/ai-tools'
-import type { AiSettings, AiToolSummary } from '@/features/ai/ai-tools'
+import type {
+  AiCatalogue,
+  AiSettings,
+  AiToolSummary,
+} from '@/features/ai/ai-tools'
 
 import { ValidationError } from '../errors.ts'
 import type { AiEngine } from './ai-engine.ts'
@@ -46,6 +50,11 @@ export class AiToolRegistry {
 
   list(): AiToolSummary[] {
     return [...this.#entries.values()].map((entry) => entry.summary)
+  }
+
+  /** The models a tool offers and which one a new step starts with. */
+  async catalogue(tool: AiToolId): Promise<AiCatalogue> {
+    return this.get(tool).engine.catalogue(tool)
   }
 }
 

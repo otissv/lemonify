@@ -5,6 +5,7 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ImageOptionsError } from '../../src/lib/images/errors.ts'
 import { ConflictError, NotFoundError } from '../../src/server/errors.ts'
 import { CliUsageError, runCli } from './cli.ts'
 import { COMMANDS } from './commands/index.ts'
@@ -84,5 +85,78 @@ describe('runCli exit codes', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     await runCli(() => Promise.reject(new Error('boom')), { json: false })
     expect(process.exitCode).toBe(1)
+  })
+})
+
+async function runJson(argv: string[]): Promise<unknown> {
+  const lines: string[] = []
+  vi.spyOn(console, 'log').mockImplementation((line: string) => {
+    lines.push(line)
+  })
+  const selected = dispatch(COMMANDS, [...argv, '--json'])
+  if (selected.kind !== 'run') throw new Error('expected a command')
+  await selected.command.execute(selected.argv, { json: true, progress: false })
+  return JSON.parse(lines.join('\n'))
+}
+
+describe('ai tools', () => {
+  it('lists the AI tools the Tools panel offers', async () => {
+    expect(await runJson(['ai', 'tools'])).toEqual({
+      command: 'ai tools',
+      result: {
+        tools: [
+          { id: 'upscale', label: 'Upscale', pool: 'gpu', output: 'image' },
+        ],
+      },
+    })
+  })
+})
+
+describe('ai catalogue', () => {
+  it("prints a tool's models and the one a new step starts with", async () => {
+    const output = await runJson(['ai', 'catalogue', 'upscale'])
+    expect(output).toMatchObject({
+      command: 'ai catalogue',
+      result: {
+        tool: 'upscale',
+        catalogue: { defaultModel: expect.any(String) },
+      },
+    })
+    const { catalogue } = (
+      output as {
+        result: {
+          catalogue: { defaultModel: string; models: Array<{ name: string }> }
+        }
+      }
+    ).result
+    expect(catalogue.models.map(({ name }) => name)).toContain(
+      catalogue.defaultModel,
+    )
+  })
+
+  it('refuses a tool that does not exist', async () => {
+    const selected = dispatch(COMMANDS, ['ai', 'catalogue', 'nonsense'])
+    if (selected.kind !== 'run') throw new Error('expected a command')
+    await expect(
+      selected.command.execute(selected.argv, { json: true, progress: false }),
+    ).rejects.toThrow(ImageOptionsError)
+  })
+})
+
+describe('export formats', () => {
+  it('lists the formats the export picker offers, starting with the original', async () => {
+    const output = (await runJson(['export', 'formats'])) as {
+      command: string
+      result: { formats: string[] }
+    }
+    expect(output.command).toBe('export formats')
+    expect(output.result.formats[0]).toBe('original')
+    expect(output.result.formats).toContain('png')
+  })
+
+  it('still exports a document whose id is given', () => {
+    const selected = dispatch(COMMANDS, ['export', 'doc-1', '--out', 'x.png'])
+    if (selected.kind !== 'run') throw new Error('expected a command')
+    expect(selected.command.name).toBe('export')
   })
 })

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import {
+  EXPORT_FORMAT_LABELS,
   ExportFormat,
   ExportSettingsSchema,
 } from '../../../src/features/export/export-settings.ts'
@@ -25,7 +26,8 @@ have results; run them first with 'document step run'. The export is also kept a
 
 Options:
   --out <path>         Where to write the image (required)
-  --format <name>      ${Object.values(ExportFormat).join(', ')} (default: original)
+  --format <name>      ${Object.values(ExportFormat).join(', ')} (default: original);
+                       'export formats' lists the ones this machine can write
   --options <json>     The format's options (JSON: inline, @file.json, or - for stdin)
   --metadata           Keep the image's metadata
   --width <px>         Resize to this width`,
@@ -71,4 +73,26 @@ Options:
       return { resultId: done.result.resultId, ...saved }
     })
   },
+})
+
+const FORMAT_COLUMN = 12
+
+function formatFormats({ formats }: { formats: ExportFormat[] }): string {
+  const lines: string[] = []
+  for (const format of formats) {
+    lines.push(`${format.padEnd(FORMAT_COLUMN)}${EXPORT_FORMAT_LABELS[format]}`)
+  }
+  return lines.join('\n')
+}
+
+export const exportFormatsCommand = defineAppCommand({
+  name: 'export formats',
+  summary: 'List the formats this machine can export to',
+  synopsis: '',
+  help: `Lists the formats 'export --format' can write on this machine, in the order\nthe export picker shows them. Sharp builds differ, so each format is tried on\na tiny image once.`,
+  shape: {},
+  async run({ app }) {
+    return { formats: await app.renders.exportFormats() }
+  },
+  format: formatFormats,
 })

@@ -279,6 +279,10 @@ pnpm images upscale photo.jpg ./out --model-path ./my-models --model-name my-mod
 
 `keys list`, `set`, `unset`, `reset`, `export` and `import` show and change the keys that do things in the editor, as the signed-in user (see `--user`). They reach the same feature as the Keyboard shortcuts dialog on the website: the defaults come from the repository, your changes are kept on the server, and the keys are written as `mod+shift+z` (`mod` is Ctrl, or Cmd on a Mac). A key the browser keeps, such as `mod+w`, or one another action already has is refused and the other action is named. The full guide is in [docs/keybindings.md](../docs/keybindings.md).
 
+### `ai tools`, `ai catalogue` and `export formats`
+
+`ai tools` lists the AI tools a step can run, the same list the Tools panel's AI group shows, and `ai catalogue <tool>` lists the models that tool offers with the scales each supports, marking the model a new step starts with. `export formats` lists the formats `export --format` can write on this machine, in the order the export picker shows them; Sharp builds differ, so each format is tried on a tiny image once. All three act as the signed-in user (see `--user`) and come from the same core calls the website makes (`app.aiTools.list`, `app.aiTools.catalogue` and `app.renders.exportFormats`).
+
 ### `formats` and `schema`
 
 `formats` lists every format the installed Sharp build knows about, whether it can read and write it, and the file extensions it recognises, together with the Sharp and libvips versions. `schema` prints the JSON Schema of the options each command accepts, which is described in the next section.
