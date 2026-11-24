@@ -742,6 +742,28 @@ describe('WorkflowPage', () => {
       })
     })
 
+    it('resets a step to how a new one starts', async () => {
+      const workflow = await addResize()
+      const user = userEvent.setup()
+      const reset = within(inspector()).getByRole('button', {
+        name: 'Reset to defaults',
+      })
+      expect(reset).toBeDisabled()
+
+      await user.type(
+        within(inspector()).getByRole('spinbutton', { name: 'Width' }),
+        '800',
+      )
+      await waitFor(() => {
+        expect(resizeOptions(workflow.id)).toEqual({ width: 800 })
+      })
+      await user.click(reset)
+
+      await waitFor(() => {
+        expect(resizeOptions(workflow.id)).toEqual({})
+      })
+    })
+
     it('clears an option when its field is emptied', async () => {
       const workflow = await addResize()
       const user = userEvent.setup()

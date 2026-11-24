@@ -37,6 +37,7 @@ import {
   documentStepSetCommand,
 } from './document-step.ts'
 import { documentCanvasCommand } from './document-canvas.ts'
+import { documentStepResetCommand } from './document-step-reset.ts'
 import { aiCatalogueCommand, aiToolsCommand } from './ai.ts'
 import { exportCommand, exportFormatsCommand } from './export.ts'
 import {
@@ -112,6 +113,8 @@ export const DOCUMENT_CHANGE_COMMANDS = {
   'set-settings': [documentStepSetCommand],
   'set-image': [documentStepSetCommand],
   'set-sub-document': [documentStepSetCommand],
+  'reset-step': [documentStepResetCommand],
+  'restore-step': [documentUndoCommand],
 } as const satisfies Record<DocumentChange['type'], ReadonlyArray<ImageCommand>>
 
 /** The command that makes each kind of edit to a workflow's pipeline, inputs and Output settings. The ones a document has go through `workflow update`, which writes the whole workflow as one change. */

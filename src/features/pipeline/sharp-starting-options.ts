@@ -1,3 +1,4 @@
+import type { PictureSize } from '@/features/pipeline/canvas'
 import type { SharpStep } from '@/features/pipeline/pipeline'
 
 type Options = SharpStep['options']
@@ -61,9 +62,21 @@ const IMAGE_OPTIONS: Readonly<Record<string, (imageId: string) => Options>> = {
   composite: (imageId) => ({ images: [{ input: imageId }] }),
 }
 
+/** Options that start at the size of the picture the step acts on, so the step changes nothing until edited. */
+const SIZE_OPTIONS: Readonly<Record<string, (size: PictureSize) => Options>> = {
+  resize: ({ width, height }) => ({ width, height }),
+}
+
 export interface StartingContext {
   /** An image a step that needs another image starts with, such as the document's own. */
   imageId?: string
+  /** The size of the picture the step acts on, when it is known. */
+  size?: PictureSize
+}
+
+/** Whether a new step of this op starts at the size of the picture it acts on, which the website then has to measure. */
+export function startsAtPictureSize(op: string): boolean {
+  return op in SIZE_OPTIONS
 }
 
 /** The options a new step of this op starts with on the website, as a fresh copy. */
@@ -71,8 +84,15 @@ export function startingSharpOptions(
   op: string,
   context: StartingContext = {},
 ): Options {
-  const options = structuredClone(STARTING_OPTIONS[op] ?? {})
   const image = IMAGE_OPTIONS[op]
-  if (image === undefined || context.imageId === undefined) return options
-  return { ...options, ...image(context.imageId) }
+  const sized = SIZE_OPTIONS[op]
+  return {
+    ...structuredClone(STARTING_OPTIONS[op] ?? {}),
+    ...(image !== undefined && context.imageId !== undefined
+      ? image(context.imageId)
+      : {}),
+    ...(sized !== undefined && context.size !== undefined
+      ? sized(context.size)
+      : {}),
+  }
 }

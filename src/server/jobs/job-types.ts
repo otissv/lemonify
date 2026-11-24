@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { WorkerPool } from '@/features/ai/ai-tools'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
+import { pictureSizeSchema } from '@/features/pipeline/canvas'
 import { RunCanvasModeSchema } from '@/features/workflows/workflow'
 
 export enum JobKind {
@@ -123,6 +124,8 @@ export const JobResultSchema = z.discriminatedUnion('kind', [
         key: z.string().min(1).nullable(),
         /** The picture is of what the step acts on, not of what it leaves. */
         before: z.literal(true).optional(),
+        /** The size of the picture in its own pixels, before it was made small; there with the key. */
+        size: pictureSizeSchema.optional(),
       }),
     ),
   }),

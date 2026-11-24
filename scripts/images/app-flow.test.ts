@@ -1486,3 +1486,94 @@ describe('empty image layers through the CLI', () => {
     ).rejects.toThrow(/--settings, --source or --clear-source/)
   })
 })
+
+describe('resetting a step through the CLI', () => {
+  type Step = { id: string; [key: string]: unknown }
+  type StepDoc = { document: { id: string; pipeline: { steps: Step[] } } }
+
+  async function documentWith(
+    ...args: string[]
+  ): Promise<{ id: string; step: Step }> {
+    const base = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('reset.png'),
+    )
+    const { document } = await cli<StepDoc>(
+      'document',
+      'create',
+      base.source.id,
+    )
+    const added = await cli<StepDoc>(
+      'document',
+      'step',
+      'add',
+      document.id,
+      ...args,
+    )
+    const step = added.document.pipeline.steps.at(-1)
+    if (!step) throw new Error('no step')
+    return { id: document.id, step }
+  }
+
+  it("puts a Sharp step's options and blend back as one change, which undo takes back", async () => {
+    const { id, step } = await documentWith(
+      '--op',
+      'tint',
+      '--options',
+      '{"colour":"#00ff00"}',
+      '--blend',
+      '{"mode":"multiply","opacity":40}',
+    )
+
+    const reset = await cli<StepDoc>('document', 'step', 'reset', id, step.id)
+    const after = reset.document.pipeline.steps.at(-1)
+    expect(after).toMatchObject({ op: 'tint', options: { colour: '#ff0000' } })
+    expect(after).not.toHaveProperty('blend')
+
+    const undone = await cli<StepDoc>('document', 'undo', id)
+    expect(undone.document.pipeline.steps.at(-1)).toMatchObject({
+      options: { colour: '#00ff00' },
+      blend: { mode: 'multiply', opacity: 40 },
+    })
+  })
+
+  it('puts a resize back to the size of the picture it acts on', async () => {
+    const { id, step } = await documentWith(
+      '--op',
+      'resize',
+      '--options',
+      '{"width":5}',
+    )
+
+    const reset = await cli<StepDoc>('document', 'step', 'reset', id, step.id)
+
+    expect(reset.document.pipeline.steps.at(-1)).toMatchObject({
+      op: 'resize',
+      options: { width: 64, height: 48 },
+    })
+  })
+
+  it('puts an image layer back to the default placement, keeping its image', async () => {
+    const image = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('logo.png'),
+    )
+    const { id, step } = await documentWith(
+      '--image-layer',
+      '--source',
+      image.source.id,
+      '--settings',
+      '{"opacity":30,"anchor":"southeast"}',
+    )
+
+    const reset = await cli<StepDoc>('document', 'step', 'reset', id, step.id)
+
+    expect(reset.document.pipeline.steps.at(-1)).toMatchObject({
+      sourceId: image.source.id,
+      opacity: 100,
+      anchor: 'centre',
+    })
+  })
+})

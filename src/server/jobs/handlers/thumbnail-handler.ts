@@ -1,7 +1,7 @@
 import { PipelineStepKind, planSteps } from '@/features/pipeline/pipeline'
 import type { LeafStep, PlanStep } from '@/features/pipeline/pipeline'
 import { stepsBefore } from '@/features/pipeline/step-input'
-import type { Canvas } from '@/features/pipeline/canvas'
+import type { Canvas, PictureSize } from '@/features/pipeline/canvas'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
 import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
@@ -16,6 +16,18 @@ import type { RenderHandlerDependencies } from './preview-handler.ts'
 
 /** What a small picture shows: steps on a canvas; the document's own canvas when none is given. */
 type Shown = { steps: ReadonlyArray<PlanStep>; canvas?: Canvas }
+
+/** One small picture, and the size in its own pixels of what it shows; a key of null has no picture and no size. */
+type Thumbnail = {
+  stepId: string
+  key: string | null
+  before?: true
+  size?: PictureSize
+}
+
+type Made = Pick<Thumbnail, 'key' | 'size'>
+
+const NOT_MADE: Made = { key: null }
 
 /** A layer shows only its own image, as it is, on a canvas the size of that image. Undefined for a layer with no image to show. */
 async function ownImage(
@@ -63,21 +75,18 @@ export class ThumbnailHandler implements JobHandler {
     this.#deps = deps
   }
 
-  /** The key of a small picture of `steps`, or null when they cannot make one, so one picture that fails does not take the others with it. A layer shows its own image. */
-  async #thumbnailKey(
-    document: DocumentRecord,
-    shown: Shown,
-  ): Promise<string | null> {
+  /** A small picture of `steps` and its true size, or none when they cannot make one, so one picture that fails does not take the others with it. A layer shows its own image. */
+  async #thumbnail(document: DocumentRecord, shown: Shown): Promise<Made> {
     try {
       const plan = await this.#deps.planner.plan(document, shown)
-      if (plan.pending.length > 0 || plan.skipped.length > 0) return null
-      return (await ensureRender(this.#deps, RenderKind.Thumbnail, plan)).key
+      if (plan.pending.length > 0 || plan.skipped.length > 0) return NOT_MADE
+      return await ensureRender(this.#deps, RenderKind.Thumbnail, plan)
     } catch (error) {
       this.#deps.logger.warn('A small picture could not be made', {
         documentId: document.id,
         error: error instanceof Error ? error.message : String(error),
       })
-      return null
+      return NOT_MADE
     }
   }
 
@@ -109,11 +118,7 @@ export class ThumbnailHandler implements JobHandler {
         )
         const steps = planSteps(document.pipeline)
         const inside = stepsInSubDocuments(steps)
-        const thumbnails: Array<{
-          stepId: string
-          key: string | null
-          before?: true
-        }> = []
+        const thumbnails: Thumbnail[] = []
         for (const [done, stepId] of payload.stepIds.entries()) {
           context.setProgress(done / payload.stepIds.length)
           const index = steps.findIndex((step) => step.id === stepId)
@@ -126,19 +131,19 @@ export class ThumbnailHandler implements JobHandler {
             within?.shown,
           )
           const on = step === undefined ? within?.enabled : step.enabled
-          const key =
+          const made =
             shown === undefined || !on
-              ? null
-              : await this.#thumbnailKey(document, shown)
-          thumbnails.push({ stepId, key })
+              ? NOT_MADE
+              : await this.#thumbnail(document, shown)
+          thumbnails.push({ stepId, ...made })
         }
         for (const stepId of payload.beforeStepIds ?? []) {
           const ahead = stepsBefore(document.pipeline, stepId)
-          const key =
+          const made =
             ahead === undefined
-              ? null
-              : await this.#thumbnailKey(document, { steps: ahead })
-          thumbnails.push({ stepId, key, before: true })
+              ? NOT_MADE
+              : await this.#thumbnail(document, { steps: ahead })
+          thumbnails.push({ stepId, ...made, before: true })
         }
         return {
           outcome: {

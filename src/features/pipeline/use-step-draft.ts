@@ -9,8 +9,6 @@ export interface StepDraft<T> {
   change: (next: T) => void
   /** Commits a change that is waiting; call when the user leaves the field. */
   flush: () => void
-  /** Replaces the whole value and commits it at once, as one change, such as a reset. */
-  replace: (next: T) => void
 }
 
 /**
@@ -52,11 +50,5 @@ export function useStepDraft<T>(
     send.flush()
   }
 
-  function replace(next: T): void {
-    setDraft(next)
-    send(next)
-    send.flush()
-  }
-
-  return { draft, change, flush, replace }
+  return { draft, change, flush }
 }

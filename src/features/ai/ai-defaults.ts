@@ -1,21 +1,27 @@
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiCatalogue } from '@/features/ai/ai-tools'
+import type { AiStarting } from '@/features/pipeline/step-reset'
 import { createAiStep } from '@/features/pipeline/pipeline'
 import type { AiStep } from '@/features/pipeline/pipeline'
 import { defaultUpscaleSettings } from '@/features/upscale/upscale-settings'
+
+/** The tool and the settings its catalogue starts a new step with, which a reset goes back to. */
+export function startingAiContent(
+  tool: AiToolId,
+  catalogue: AiCatalogue,
+): AiStarting {
+  switch (tool) {
+    case AiToolId.Upscale:
+      return { tool, settings: defaultUpscaleSettings(catalogue) }
+  }
+}
 
 /** A new step for an AI tool, with the settings that tool's catalogue starts from. */
 export function createAiStepFor(
   tool: AiToolId,
   catalogue: AiCatalogue,
 ): AiStep {
-  switch (tool) {
-    case AiToolId.Upscale:
-      return createAiStep({
-        tool,
-        settings: defaultUpscaleSettings(catalogue),
-      })
-  }
+  return createAiStep(startingAiContent(tool, catalogue))
 }
 
 /** A short line about an AI step's settings, shown under its name. */

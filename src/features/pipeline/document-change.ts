@@ -27,8 +27,9 @@ import {
   stepBlendSchema,
   supportsBlend,
 } from '@/features/pipeline/step-blend'
-import { canvasSchema } from '@/features/pipeline/canvas'
+import { canvasSchema, pictureSizeSchema } from '@/features/pipeline/canvas'
 import { layerSettingsOf, layerSettingsSchema } from '@/features/pipeline/layer'
+import { AiStartingSchema, resetStep } from '@/features/pipeline/step-reset'
 
 /** The most changes the Edit history keeps for undo; older ones are dropped. */
 export const MAX_HISTORY_ENTRIES = 100
@@ -98,6 +99,16 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
   }),
   /** Gives the pipeline a different canvas: its size and background. The steps are left as they are. */
   z.strictObject({ type: z.literal('set-canvas'), canvas: canvasSchema }),
+  /** Puts a step back as a new one of its kind starts (see `resetStep`); an AI step names the settings its catalogue starts from. */
+  z.strictObject({
+    type: z.literal('reset-step'),
+    stepId: z.string().min(1),
+    ai: AiStartingSchema.optional(),
+    /** The size of the picture the step acts on, which a resize starts at. */
+    size: pictureSizeSchema.optional(),
+  }),
+  /** Puts a whole step back as it was, which is how a reset is undone. */
+  z.strictObject({ type: z.literal('restore-step'), step: PipelineStepSchema }),
   z.strictObject({
     type: z.literal('rename-step'),
     stepId: z.string().min(1),
@@ -244,6 +255,16 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
     }
     case 'set-canvas':
       return { type: 'set-canvas', canvas: pipeline.canvas }
+    case 'reset-step':
+      return {
+        type: 'restore-step',
+        step: requireStep(pipeline, change.stepId).step,
+      }
+    case 'restore-step':
+      return {
+        type: 'restore-step',
+        step: requireStep(pipeline, change.step.id).step,
+      }
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)
       return {
@@ -382,6 +403,21 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
     }
     case 'set-canvas':
       return { ...pipeline, canvas: change.canvas }
+    case 'reset-step': {
+      const { step } = requireStep(pipeline, change.stepId)
+      const reset = resetStep(pipeline, step, change)
+      if (reset === undefined) {
+        throw new InvalidChangeError(
+          'Resetting an AI step needs the settings its tool starts with.',
+        )
+      }
+      return replaceStep(pipeline, reset)
+    }
+    case 'restore-step': {
+      const { step } = requireStep(pipeline, change.step.id)
+      if (step.kind !== change.step.kind) throw wrongKind()
+      return replaceStep(pipeline, change.step)
+    }
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)
       const name = change.name.trim()

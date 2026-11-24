@@ -292,3 +292,14 @@ export function setAiSettings(
   const change: DocumentChange = { type: 'set-settings', stepId, ...content }
   void applyEdit(documentId, change)
 }
+
+/** Applies a change to one step that a shared control built, such as a reset, as one undoable change; nothing if the step is gone. */
+export function applyStepChange(
+  documentId: string,
+  change: DocumentChange,
+): void {
+  if ('stepId' in change && stepOf(documentId, change.stepId) === undefined) {
+    return
+  }
+  void applyEdit(documentId, change)
+}

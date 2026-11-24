@@ -330,12 +330,12 @@ describe('tool actions', () => {
   })
 
   it('add a Sharp tool as a step after the selected one', () => {
-    expect(runAction('tool.sharp.resize', context())).toBe(true)
+    expect(runAction('tool.sharp.blur', context())).toBe(true)
     expect(applyEdit).toHaveBeenCalledWith(
       DOCUMENT_ID,
       expect.objectContaining({
         type: 'add-step',
-        step: expect.objectContaining({ op: 'resize' }),
+        step: expect.objectContaining({ op: 'blur' }),
       }),
     )
   })

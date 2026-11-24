@@ -1,3 +1,4 @@
+import { OpFieldKind } from '@/features/workflows/sharp-op-fields'
 import type { OpField } from '@/features/workflows/sharp-op-fields'
 
 type FieldPair = readonly [string, string]
@@ -15,6 +16,28 @@ const OP_FIELD_PAIRS: Readonly<Record<string, ReadonlyArray<FieldPair>>> = {
     ['idx', 'idy'],
     ['odx', 'ody'],
   ],
+}
+
+/** Pairs that make the size of a picture in an op, whose proportion a chain between them keeps. Adding one is one entry. */
+const SIZE_PAIRS: Readonly<Record<string, ReadonlyArray<FieldPair>>> = {
+  resize: [['width', 'height']],
+}
+
+const NUMBER_KINDS: ReadonlySet<OpFieldKind> = new Set([
+  OpFieldKind.Integer,
+  OpFieldKind.Number,
+])
+
+/** Whether a row of this op is the size of a picture, two numbers whose proportion can be kept, such as a resize's width and height. */
+export function isSizeRow(op: string, row: ReadonlyArray<OpField>): boolean {
+  const [first, second] = row
+  if (row.length !== 2 || first === undefined || second === undefined) {
+    return false
+  }
+  const named = (SIZE_PAIRS[op] ?? []).some(
+    ([one, other]) => first.name === one && second.name === other,
+  )
+  return named && NUMBER_KINDS.has(first.kind) && NUMBER_KINDS.has(second.kind)
 }
 
 function pairOf(op: string, name: string): FieldPair | undefined {

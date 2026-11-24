@@ -86,15 +86,97 @@ describe('option controls', () => {
     vi.resetAllMocks()
   })
 
-  it('puts width and height side by side', () => {
+  it('puts width and height side by side, with the chain between them', () => {
     show('resize')
 
     const width = screen.getByLabelText(/^Width/)
     const height = screen.getByLabelText(/^Height/)
+    const chain = screen.getByRole('button', { name: 'Keep proportions' })
     const row = width.closest('[data-slot="field-row"]')
     expect(row).not.toBeNull()
     expect(row).toContainElement(height)
-    expect(row).toHaveClass('grid-cols-2')
+    expect(row).toContainElement(chain)
+    expect(
+      width.compareDocumentPosition(chain) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      chain.compareDocumentPosition(height) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  describe('the chain between width and height', () => {
+    it('starts locked, so changing one changes the other in proportion', async () => {
+      const user = userEvent.setup()
+      show('resize', { width: 800, height: 600 })
+      expect(
+        screen.getByRole('button', { name: 'Keep proportions' }),
+      ).toHaveAttribute('aria-pressed', 'true')
+
+      const width = screen.getByLabelText(/^Width/)
+      await user.clear(width)
+      await user.type(width, '400')
+
+      expect(latest).toMatchObject({ width: 400, height: 300 })
+      expect(screen.getByLabelText(/^Height/)).toHaveValue(300)
+    })
+
+    it('changes the width when the height changes', async () => {
+      const user = userEvent.setup()
+      show('resize', { width: 800, height: 600 })
+
+      const height = screen.getByLabelText(/^Height/)
+      await user.clear(height)
+      await user.type(height, '150')
+
+      expect(latest).toMatchObject({ width: 200, height: 150 })
+    })
+
+    it('lets them change on their own once unlocked', async () => {
+      const user = userEvent.setup()
+      show('resize', { width: 800, height: 600 })
+
+      await user.click(screen.getByRole('button', { name: 'Keep proportions' }))
+      const width = screen.getByLabelText(/^Width/)
+      await user.clear(width)
+      await user.type(width, '400')
+
+      expect(latest).toMatchObject({ width: 400, height: 600 })
+    })
+
+    it('keeps the proportion the values had when it was locked again', async () => {
+      const user = userEvent.setup()
+      show('resize', { width: 800, height: 600 })
+      const chain = screen.getByRole('button', { name: 'Keep proportions' })
+      await user.click(chain)
+      const height = screen.getByLabelText(/^Height/)
+      await user.clear(height)
+      await user.type(height, '800')
+      await user.click(chain)
+
+      const width = screen.getByLabelText(/^Width/)
+      await user.clear(width)
+      await user.type(width, '100')
+
+      expect(latest).toMatchObject({ width: 100, height: 100 })
+    })
+
+    it('leaves the other side alone while there is no proportion to keep', async () => {
+      const user = userEvent.setup()
+      show('resize', { width: 800 })
+
+      await user.type(screen.getByLabelText(/^Height/), '100')
+
+      expect(latest).toMatchObject({ width: 800, height: 100 })
+    })
+
+    it('is not offered for pairs that are not the size of a picture, such as the sides of an extend or the size of a kernel', () => {
+      show('extend')
+      show('convolve')
+
+      expect(
+        screen.queryByRole('button', { name: 'Keep proportions' }),
+      ).not.toBeInTheDocument()
+    })
   })
 
   describe('position', () => {

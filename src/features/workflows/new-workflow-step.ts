@@ -5,7 +5,7 @@ import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { NO_CATALOGUE } from '@/features/tools/add-tool'
 import type { ToolChoice } from '@/features/tools/tool-catalogue'
-import { startingSharpOptions } from '@/features/workflows/sharp-starting-options'
+import { startingSharpOptions } from '@/features/pipeline/sharp-starting-options'
 import { errorMessage } from '@/lib/error-message'
 
 /** What a workflow can add: any tool a document has, an image layer, or a group. */

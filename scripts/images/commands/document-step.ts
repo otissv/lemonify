@@ -56,7 +56,10 @@ export function change<
   })
 }
 
-function requireStep(current: DocumentView, stepId: string): PipelineStep {
+export function requireStep(
+  current: DocumentView,
+  stepId: string,
+): PipelineStep {
   const found = findStep(current.pipeline, stepId)
   if (found === undefined)
     throw new ValidationError('That step is not in the pipeline.')

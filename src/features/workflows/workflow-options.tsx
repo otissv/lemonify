@@ -7,6 +7,7 @@ import {
 } from '@remixicon/react'
 
 import { Button } from '@/components/ui/button'
+import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiContent } from '@/features/ai/ai-tools'
 import { CanvasForm } from '@/features/documents/canvas-form'
@@ -27,6 +28,7 @@ import { InputSourcesPanel } from '@/features/workflows/input-sources-panel'
 import { OutputPanel } from '@/features/workflows/output-panel'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
+import { StepResetButton } from '@/features/tools/step-reset-button'
 import type { Workflow } from '@/features/workflows/workflow'
 import {
   WorkflowGroupOptions,
@@ -188,6 +190,10 @@ function CanvasPanel({
   )
 }
 
+function aiCatalogues(entries: ReadonlyArray<AiToolEntry>): AiCatalogues {
+  return entries.map(({ tool, catalogue }) => ({ tool: tool.id, catalogue }))
+}
+
 function Content(props: WorkflowOptionsProps): React.JSX.Element {
   const {
     workflow,
@@ -246,6 +252,12 @@ function Content(props: WorkflowOptionsProps): React.JSX.Element {
             aiTools={aiTools}
             imageName={imageName}
             onChange={onChange}
+          />
+          <StepResetButton
+            pipeline={workflow.pipeline}
+            step={step}
+            catalogues={aiCatalogues(aiTools)}
+            onReset={onChange}
           />
         </Panel>
       )

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { startingSharpOptions } from '@/features/workflows/sharp-starting-options'
+import {
+  startingSharpOptions,
+  startsAtPictureSize,
+} from '@/features/pipeline/sharp-starting-options'
 import {
   SHARP_OP_GROUPS,
   missingSharpOptions,
@@ -40,7 +43,13 @@ describe('startingSharpOptions', () => {
   it('only starts options with values the op accepts', () => {
     for (const op of ALL_OPS) {
       expect(
-        sharpOptionProblems(op, startingSharpOptions(op, { imageId: 'src-1' })),
+        sharpOptionProblems(
+          op,
+          startingSharpOptions(op, {
+            imageId: 'src-1',
+            size: { width: 640, height: 480 },
+          }),
+        ),
         op,
       ).toEqual({})
     }
@@ -75,6 +84,21 @@ describe('startingSharpOptions', () => {
     expect(
       missingSharpOptions('boolean', startingSharpOptions('boolean')),
     ).toEqual(['operand'])
+  })
+
+  it('starts a resize at the size of the picture it acts on', () => {
+    expect(
+      startingSharpOptions('resize', { size: { width: 800, height: 600 } }),
+    ).toEqual({ width: 800, height: 600 })
+  })
+
+  it('leaves a resize empty when the size of its picture is not known', () => {
+    expect(startingSharpOptions('resize')).toEqual({})
+  })
+
+  it('says which ops start at the size of their picture', () => {
+    expect(startsAtPictureSize('resize')).toBe(true)
+    expect(startsAtPictureSize('scale')).toBe(false)
   })
 
   it('hands out a fresh copy each time', () => {

@@ -11,7 +11,8 @@ export type StepProblem = { stepId: string; message: string }
 
 import type { StepView } from '@/features/overlay/step-view'
 
-export type PictureSize = { width: number; height: number }
+export type { PictureSize } from '@/features/pipeline/canvas'
+import type { PictureSize } from '@/features/pipeline/canvas'
 
 /** A document's rendered pipeline; the last good picture stays while a new one is made or fails. */
 export type DocumentPreview = {
@@ -34,6 +35,8 @@ export type DocumentThumbnails = ReadonlyArray<{
   key: string | null
   /** The picture is of what the step acts on, not of what it leaves. */
   before?: true
+  /** The size of the picture in its own pixels; there with the key. */
+  size?: PictureSize
 }>
 
 /** The AI step running for a document; the next pending ones follow it. */

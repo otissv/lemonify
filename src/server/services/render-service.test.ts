@@ -33,6 +33,8 @@ import type { JobView } from './job-service.ts'
 /** The fake AI engine writes `ai:` and the Job id (a UUID), so a User with this limit has room for exactly one. */
 const FAKE_AI_RESULT_BYTES = 3 + 36
 const SETTINGS = { model: 'm', scale: 4, iterations: 1, tta: false } as const
+/** The size the fake image engine says every picture it makes has. */
+const FAKE_PICTURE_SIZE = { width: 40, height: 30 }
 
 let t: TestApp
 
@@ -447,7 +449,11 @@ describe('thumbnails that cannot be made', () => {
 
     expect(done.state).toBe(JobState.Done)
     if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
-    expect(done.result.thumbnails.every(({ key }) => key === null)).toBe(true)
+    expect(
+      done.result.thumbnails.every(
+        ({ key, size }) => key === null && size === undefined,
+      ),
+    ).toBe(true)
     expect(
       t.logger.lines.some(({ message }) =>
         message.includes('small picture could not be made'),
@@ -478,16 +484,22 @@ describe('thumbnails before a step', () => {
 
     if (done.result?.kind !== JobKind.Thumbnail) throw new Error('wrong result')
     expect(done.result.thumbnails).toEqual([
-      { stepId: first.id, key: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      {
+        stepId: first.id,
+        key: expect.stringMatching(/^[0-9a-f]{64}$/),
+        size: FAKE_PICTURE_SIZE,
+      },
       {
         stepId: extract.id,
         key: expect.stringMatching(/^[0-9a-f]{64}$/),
         before: true,
+        size: FAKE_PICTURE_SIZE,
       },
       {
         stepId: first.id,
         key: expect.stringMatching(/^[0-9a-f]{64}$/),
         before: true,
+        size: FAKE_PICTURE_SIZE,
       },
     ])
     const [, beforeExtract, beforeFirst] = done.result.thumbnails

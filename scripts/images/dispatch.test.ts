@@ -112,6 +112,7 @@ describe('COMMANDS', () => {
       'document step remove',
       'document step move',
       'document step set',
+      'document step reset',
       'document step enable',
       'document step disable',
       'document step group',

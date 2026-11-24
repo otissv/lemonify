@@ -17,6 +17,14 @@ const backgroundSchema = z.union([
 
 const sideSchema = z.number().int().min(1).max(MAX_CANVAS_SIDE)
 
+/** The size of a picture in its own pixels, such as the one a step acts on. */
+export const pictureSizeSchema = z.strictObject({
+  width: sideSchema,
+  height: sideSchema,
+})
+
+export type PictureSize = z.output<typeof pictureSizeSchema>
+
 /**
  * The picture a Pipeline's steps are drawn on: its size and what is behind
  * everything. It is part of the Pipeline, so it is saved, undone and copied

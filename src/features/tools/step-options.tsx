@@ -1,4 +1,4 @@
-import { useId, useMemo } from 'react'
+import { useCallback, useId } from 'react'
 
 import { OverlayHint } from '@/features/overlay/overlay-hint'
 import { AiRunControl } from '@/features/ai/ai-run-control'
@@ -8,10 +8,12 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiCatalogue } from '@/features/ai/ai-tools'
 import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
+import type { DocumentChange } from '@/features/pipeline/document-change'
 import type { AiStep, GroupStep, SharpStep } from '@/features/pipeline/pipeline'
 import { layerSettingsOf } from '@/features/pipeline/layer'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import {
+  applyStepChange,
   setAiSettings,
   renameStep,
   setLayerSettings,
@@ -25,7 +27,7 @@ import {
   supportsBlend,
 } from '@/features/pipeline/step-blend'
 import type { StepBlend } from '@/features/pipeline/step-blend'
-import { documentStartingOptions } from '@/features/tools/document-starting-options'
+import { StepResetButton } from '@/features/tools/step-reset-button'
 import { StepBlendForm } from '@/features/tools/step-blend-form'
 import { StepNameField } from '@/features/tools/step-name-field'
 import { LayerSettingsForm } from '@/features/tools/layer-settings-form'
@@ -33,8 +35,8 @@ import { LayerStepOptions } from '@/features/tools/layer-step-options'
 import { pipelineStepLabel } from '@/features/pipeline/step-problems'
 import { usePreview } from '@/features/pipeline/use-preview'
 import { useStepDraft } from '@/features/pipeline/use-step-draft'
+import { usePictureSizeBefore } from '@/features/pipeline/use-step-thumbnails'
 import { UpscaleSettingsForm } from '@/features/upscale/upscale-settings-form'
-import { defaultUpscaleSettings } from '@/features/upscale/upscale-settings'
 import type { UpscaleSettings } from '@/features/upscale/upscale-settings'
 import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
 import { Button } from '@/components/ui/button'
@@ -60,55 +62,17 @@ interface UpscaleStepOptionsProps {
 
 type SharpOptions = SharpStep['options']
 
-interface ResetOptionsProps {
-  /** The options are already the ones it would reset to. */
-  disabled: boolean
-  onReset: () => void
-}
-
-/** Puts a step's options back to the ones a new step of its kind starts with. */
-function ResetOptions({
-  disabled,
-  onReset,
-}: ResetOptionsProps): React.JSX.Element {
-  return (
-    <div className="px-4 pb-4">
-      <Button
-        variant="secondary"
-        size="sm"
-        disabled={disabled}
-        title="Put the options back to the ones a new step starts with"
-        onClick={onReset}
-      >
-        Reset options
-      </Button>
-    </div>
-  )
-}
-
-function sameValue(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
-}
-
 function SharpStepOptions({
   documentId,
   step,
 }: SharpStepOptionsProps): React.JSX.Element {
   const stepId = step.id
-  const { draft, change, flush, replace } = useStepDraft<SharpOptions>(
+  const { draft, change, flush } = useStepDraft<SharpOptions>(
     step.options,
     (options) => {
       setSharpOptions(documentId, stepId, options)
     },
   )
-  const starting = useMemo(
-    () => documentStartingOptions(documentId, step.op),
-    [documentId, step.op],
-  )
-
-  function handleReset(): void {
-    replace(starting)
-  }
 
   return (
     <>
@@ -117,10 +81,6 @@ function SharpStepOptions({
       <div onBlur={flush}>
         <SharpOptionsForm op={step.op} options={draft} onChange={change} />
       </div>
-      <ResetOptions
-        disabled={sameValue(draft, starting)}
-        onReset={handleReset}
-      />
       {supportsBlend(step.op) && (
         <SharpBlendOptions documentId={documentId} step={step} />
       )}
@@ -154,17 +114,12 @@ function UpscaleStepOptions({
   catalogue,
 }: UpscaleStepOptionsProps): React.JSX.Element {
   const stepId = step.id
-  const { draft, change, flush, replace } = useStepDraft<UpscaleSettings>(
+  const { draft, change, flush } = useStepDraft<UpscaleSettings>(
     step.settings,
     (settings) => {
       setAiSettings(documentId, stepId, { tool: AiToolId.Upscale, settings })
     },
   )
-  const starting = useMemo(() => defaultUpscaleSettings(catalogue), [catalogue])
-
-  function handleReset(): void {
-    replace(starting)
-  }
 
   return (
     <>
@@ -176,10 +131,6 @@ function UpscaleStepOptions({
           onChange={change}
         />
       </div>
-      <ResetOptions
-        disabled={sameValue(draft, starting)}
-        onReset={handleReset}
-      />
       <AiRunControl documentId={documentId} stepId={stepId} />
     </>
   )
@@ -264,6 +215,13 @@ export function StepOptions({
     ({ stepId }) => stepId === selectedId,
   )?.message
   const catalogue = catalogueFor(catalogues, AiToolId.Upscale)
+  const sizeBefore = usePictureSizeBefore(documentId, selectedId)
+  const handleReset = useCallback(
+    (change: DocumentChange): void => {
+      applyStepChange(documentId, change)
+    },
+    [documentId],
+  )
 
   if (!step || !preview) {
     return (
@@ -320,6 +278,13 @@ export function StepOptions({
             catalogue={catalogue}
           />
         )}
+      <StepResetButton
+        pipeline={preview.pipeline}
+        step={step}
+        catalogues={catalogues}
+        size={sizeBefore}
+        onReset={handleReset}
+      />
     </div>
   )
 }

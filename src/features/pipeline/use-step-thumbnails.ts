@@ -1,10 +1,25 @@
 import { useEffect } from 'react'
 
 import { refreshThumbnails } from '@/features/documents/document-render-sync'
+import type { PictureSize } from '@/features/pipeline/canvas'
 import { useLibraryStore } from '@/store/library-store'
 import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 
 export const THUMBNAIL_DELAY_MS = 300
+
+/** The size in its own pixels of the picture a step acts on, from its small before picture once that is made. */
+export function usePictureSizeBefore(
+  documentId: string,
+  stepId: string | undefined,
+): PictureSize | undefined {
+  return usePipelineStore((state) =>
+    stepId === undefined
+      ? undefined
+      : state.thumbnails[documentId]?.find(
+          (thumbnail) => thumbnail.stepId === stepId && thumbnail.before,
+        )?.size,
+  )
+}
 
 /**
  * Keeps the small pictures of a document's steps up to date while `active`

@@ -9,7 +9,11 @@ import { defaultUpscaleSettings } from '@/features/upscale/upscale-settings'
 import { PreviewStatus } from '@/features/documents/document-render'
 import { changeDocument } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
-import { createAiStep, createSharpStep } from '@/features/pipeline/pipeline'
+import {
+  createAiStep,
+  createGroupStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { addStepAfter } from '@/features/pipeline/pipeline-actions'
@@ -268,6 +272,31 @@ describe('StepOptions', () => {
       })
     })
 
+    it('is reset with the options by the one button below it, as one change', async () => {
+      const user = userEvent.setup()
+      const tint = {
+        ...createSharpStep('tint', { colour: '#00ff00' }),
+        blend: { mode: 'multiply' as const, opacity: 40 },
+      }
+      showOptionsOf(tint)
+      const reset = screen.getByRole('button', { name: 'Reset to defaults' })
+      const mode = screen.getByRole('combobox', { name: 'Blend mode' })
+
+      expect(
+        mode.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      await user.click(reset)
+
+      expect(changeDocument).toHaveBeenCalledTimes(2)
+      expect(changeDocument).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({
+          change: { type: 'reset-step', stepId: tint.id },
+        }),
+      })
+      expect(firstStep()).toMatchObject({ options: { colour: '#ff0000' } })
+      expect(firstStep()).not.toHaveProperty('blend')
+    })
+
     it('is not offered for a geometry step, which changes the size of the picture', () => {
       const flip = createSharpStep('flip')
       loadDocumentIntoEditor(documentView([flip]))
@@ -286,6 +315,25 @@ describe('StepOptions', () => {
     beforeEach(() => {
       useLibraryStore.setState(INITIAL_LIBRARY_STATE)
       vi.mocked(listSources).mockResolvedValue([])
+    })
+
+    it('resets its placement and keeps its image', async () => {
+      const user = userEvent.setup()
+      showOptionsOf({
+        ...createImageLayerStep('src-one'),
+        opacity: 30,
+        anchor: 'southeast',
+      })
+
+      await user.click(
+        screen.getByRole('button', { name: 'Reset to defaults' }),
+      )
+
+      expect(firstStep()).toMatchObject({
+        sourceId: 'src-one',
+        opacity: 100,
+        anchor: 'centre',
+      })
     })
 
     it('shows its image and its settings under its name', () => {
@@ -461,19 +509,45 @@ describe('StepOptions', () => {
       const user = userEvent.setup()
       showOptionsOf(createSharpStep('scale', { percent: 250 }))
 
-      await user.click(screen.getByRole('button', { name: 'Reset options' }))
+      await user.click(
+        screen.getByRole('button', { name: 'Reset to defaults' }),
+      )
 
       expect(firstStep()).toMatchObject({ options: { percent: 100 } })
       expect(
-        screen.getByRole('button', { name: 'Reset options' }),
+        screen.getByRole('button', { name: 'Reset to defaults' }),
       ).toBeDisabled()
+    })
+
+    it('resets a resize to the size of the picture it acts on', async () => {
+      const user = userEvent.setup()
+      const resize = createSharpStep('resize', { width: 10, height: 10 })
+      showOptionsOf(resize)
+      act(() => {
+        usePipelineStore.getState().setThumbnails(DOCUMENT_ID, [
+          {
+            stepId: resize.id,
+            key: 'before',
+            before: true,
+            size: { width: 800, height: 600 },
+          },
+        ])
+      })
+
+      await user.click(
+        screen.getByRole('button', { name: 'Reset to defaults' }),
+      )
+
+      expect(firstStep()).toMatchObject({
+        options: { width: 800, height: 600 },
+      })
     })
 
     it('offers no reset while the options are already the ones it starts with', () => {
       showOptionsOf(createSharpStep('blur'))
 
       expect(
-        screen.getByRole('button', { name: 'Reset options' }),
+        screen.getByRole('button', { name: 'Reset to defaults' }),
       ).toBeDisabled()
     })
 
@@ -481,6 +555,31 @@ describe('StepOptions', () => {
       showOptionsOf({ ...createSharpStep('blur'), enabled: false })
 
       expect(screen.getByText('This step is off.')).toBeVisible()
+    })
+  })
+
+  describe('a group', () => {
+    it('resets the placement of a group that is its own picture', async () => {
+      const user = userEvent.setup()
+      showOptionsOf({
+        ...createGroupStep([createSharpStep('blur')]),
+        subDocument: true,
+        rotation: 45,
+      })
+
+      await user.click(
+        screen.getByRole('button', { name: 'Reset to defaults' }),
+      )
+
+      expect(firstStep()).toMatchObject({ subDocument: true, rotation: 0 })
+    })
+
+    it('offers no reset for a plain group, which has nothing to reset', () => {
+      showOptionsOf(createGroupStep([createSharpStep('blur')]))
+
+      expect(
+        screen.queryByRole('button', { name: 'Reset to defaults' }),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -580,7 +679,9 @@ describe('StepOptions', () => {
         }),
       )
 
-      await user.click(screen.getByRole('button', { name: 'Reset options' }))
+      await user.click(
+        screen.getByRole('button', { name: 'Reset to defaults' }),
+      )
 
       expect(firstStep()).toMatchObject({
         settings: JSON.parse(JSON.stringify(defaultUpscaleSettings(catalogue))),

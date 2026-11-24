@@ -33,6 +33,7 @@ The two modes share the stored step, the editing code, undo, the CLI and the sid
 | Name, switch, delete a group   | The group's row and options                                        | `document step rename`, `enable`, `disable`, `remove`      |
 | Make it a sub-document         | "Own picture" in the group's options                               | `document step set <id> <groupId> --sub-document on\|off`  |
 | Place a sub-document           | The same settings as a layer, in the group's options               | `document step set <id> <groupId> --settings <json>`       |
+| Reset a placement              | Reset to defaults, at the bottom of the layer's or group's options  | `document step reset <id> <stepId>`                        |
 
 ## Layer kinds
 

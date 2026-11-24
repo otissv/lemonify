@@ -106,6 +106,27 @@ async function renderedPicture(
   }
 }
 
+/**
+ * The size, in its own pixels, of the picture a step acts on, measured by the
+ * same preview the editor's canvas uses. Undefined when that picture cannot be
+ * made yet, such as after an AI step with no result. The caller must have Job
+ * workers running.
+ */
+export async function pictureSizeBefore(
+  app: App,
+  actor: Actor,
+  documentId: string,
+  stepId: string,
+): Promise<{ width: number; height: number } | undefined> {
+  const queued = await app.renders.requestPreview(actor, documentId, {
+    beforeStepId: stepId,
+  })
+  const done = await app.jobs.waitFor(actor, queued.id)
+  if (done.result?.kind !== JobKind.Preview) return undefined
+  if (done.result.pendingStepIds.length > 0) return undefined
+  return { width: done.result.width, height: done.result.height }
+}
+
 async function originalPicture(
   app: App,
   actor: Actor,

@@ -13,6 +13,11 @@ describe('toolStepIds', () => {
     expect(toolStepIds(pipeline)).toEqual([top.id, inner.id])
   })
 
+  it('lists a step that starts at the size of the picture it acts on, such as resize', () => {
+    const resize = createSharpStep('resize')
+    expect(toolStepIds(pipelineOf(resize))).toEqual([resize.id])
+  })
+
   it('is empty when there are none', () => {
     expect(toolStepIds(pipelineOf(createSharpStep('blur')))).toEqual([])
   })

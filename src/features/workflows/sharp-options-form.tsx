@@ -2,8 +2,13 @@ import { useMemo } from 'react'
 
 import { resizeKernel } from '@/features/workflows/fields/matrix-value'
 import type { Dimensions } from '@/features/workflows/fields/matrix-value'
+import { LinkedSizeRow } from '@/features/workflows/fields/linked-size-row'
+import type { OptionsPatch } from '@/features/workflows/fields/linked-size-row'
 import { SharpOptionField } from '@/features/workflows/sharp-option-field'
-import { sharpFieldRows } from '@/features/workflows/sharp-field-rows'
+import {
+  isSizeRow,
+  sharpFieldRows,
+} from '@/features/workflows/sharp-field-rows'
 import type { OpField } from '@/features/workflows/sharp-op-fields'
 import {
   sharpOpFields,
@@ -66,13 +71,20 @@ export function SharpOptionsForm({
   const problems = sharpOptionProblems(op, options)
   const general = problems[GENERAL_PROBLEM]
 
+  function handleOptionsChange(patch: OptionsPatch): void {
+    const next: Options = { ...options }
+    for (const [name, value] of Object.entries(patch)) {
+      if (value === undefined) delete next[name]
+      else next[name] = value
+    }
+    onChange(keepKernelSized(op, options, next))
+  }
+
   function handleFieldChange(
     name: string,
     value: Options[string] | undefined,
   ): void {
-    const { [name]: _previous, ...rest } = options
-    const next = value === undefined ? rest : { ...rest, [name]: value }
-    onChange(keepKernelSized(op, options, next))
+    handleOptionsChange({ [name]: value })
   }
 
   return (
@@ -84,6 +96,19 @@ export function SharpOptionsForm({
         </p>
       )}
       {rows.map((row) => {
+        const [first, second] = row
+        if (isSizeRow(op, row) && first !== undefined && second !== undefined) {
+          return (
+            <LinkedSizeRow
+              key={`${first.name},${second.name}`}
+              first={first}
+              second={second}
+              options={options}
+              problems={problems}
+              onChange={handleOptionsChange}
+            />
+          )
+        }
         const fieldsOfRow = row.map((field: OpField) => (
           <SharpOptionField
             key={field.name}
