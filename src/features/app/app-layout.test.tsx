@@ -11,6 +11,7 @@ import {
   renameDocument,
 } from '@/features/documents/document-functions'
 import type { DocumentSummary } from '@/features/documents/document'
+import { downloadDocument } from '@/features/documents/download-document'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 import { followJob } from '@/features/jobs/follow-job'
 import {
@@ -58,6 +59,9 @@ vi.mock('@/features/render/render-functions', () => ({
   requestAiStep: vi.fn(),
 }))
 vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
+vi.mock('@/features/documents/download-document', () => ({
+  downloadDocument: vi.fn(),
+}))
 
 const FIRST_ID = '6f1c6c4e-0f43-4a8f-9a57-2d2f0f8f2b11'
 const SECOND_ID = '7a2d7d5f-1f54-4b9a-8b68-3e3a1a9a3c22'
@@ -393,7 +397,12 @@ describe('AppLayout', () => {
       const user = userEvent.setup()
       const { router } = await renderApp(`/documents/${FIRST_ID}`)
 
-      await user.click(screen.getByRole('button', { name: 'Delete one.png' }))
+      await user.click(
+        screen.getByRole('button', { name: 'More actions for one.png' }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: 'Delete document' }),
+      )
 
       expect(deleteDocument).toHaveBeenCalledWith({ data: { id: FIRST_ID } })
       await waitFor(() => {
@@ -839,7 +848,69 @@ describe('AppLayout', () => {
       ).toHaveAttribute('aria-expanded', 'false')
     })
 
-    it('shows the active background behind the whole row, toggle and delete included', async () => {
+    it('offers exporting, closing and deleting a document from its More menu', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST])
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      await user.click(
+        screen.getByRole('button', { name: 'More actions for one.png' }),
+      )
+
+      const menu = await screen.findByRole('menu')
+      expect(
+        within(menu)
+          .getAllByRole('menuitem')
+          .map((item) => item.textContent),
+      ).toEqual(['Export document…', 'Close document', 'Delete document'])
+      expect(
+        screen.queryByRole('button', { name: 'Delete one.png' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('saves a document as a file from its More menu', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST])
+      vi.mocked(downloadDocument).mockResolvedValue('one.lemon')
+      const user = userEvent.setup()
+      await renderApp(`/documents/${FIRST_ID}`)
+
+      await user.click(
+        screen.getByRole('button', { name: 'More actions for one.png' }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: 'Export document…' }),
+      )
+
+      expect(downloadDocument).toHaveBeenCalledWith(
+        FIRST_ID,
+        expect.any(Function),
+      )
+    })
+
+    it('closes the open document from its More menu, keeping it in the list', async () => {
+      vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND])
+      const user = userEvent.setup()
+      const { router } = await renderApp(`/documents/${FIRST_ID}`)
+      await user.click(documentLink('two.png'))
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe(`/documents/${SECOND_ID}`)
+      })
+
+      await user.click(
+        screen.getByRole('button', { name: 'More actions for two.png' }),
+      )
+      await user.click(
+        await screen.findByRole('menuitem', { name: 'Close document' }),
+      )
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe(`/documents/${FIRST_ID}`)
+      })
+      expect(useUiStore.getState().visitTrail).not.toContain(SECOND_ID)
+      expect(documentLink('two.png')).toBeVisible()
+    })
+
+    it('shows the active background behind the whole row, toggle and More menu included', async () => {
       vi.mocked(listDocuments).mockResolvedValue([FIRST, SECOND])
       await renderApp(`/documents/${FIRST_ID}`)
 
@@ -853,7 +924,7 @@ describe('AppLayout', () => {
       ).toBeInTheDocument()
       expect(
         within(row as HTMLElement).getByRole('button', {
-          name: 'Delete one.png',
+          name: 'More actions for one.png',
         }),
       ).toBeInTheDocument()
       expect(documentLink('two.png').parentElement).toHaveAttribute(

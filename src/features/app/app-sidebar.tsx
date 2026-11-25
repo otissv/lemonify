@@ -5,6 +5,7 @@ import {
   RiDeleteBinLine,
   RiFlowChart,
   RiImageLine,
+  RiMoreLine,
   RiSearchLine,
 } from '@remixicon/react'
 import {
@@ -26,6 +27,15 @@ import { forgetItem } from '@/store/forget-item'
 import { AddWorkflowDialog } from '@/features/workflows/add-workflow-dialog'
 import { WorkflowSidebarPreview } from '@/features/workflows/workflow-sidebar-preview'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useImageOpener } from '@/features/app/image-opener'
+import { useActionContext } from '@/features/keybindings/use-action-context'
 import { Input } from '@/components/ui/input'
 import { sidebarTabTarget } from '@/features/app/sidebar-tab-nav'
 import { filterByQuery } from '@/features/app/sidebar-search'
@@ -111,6 +121,9 @@ function DocumentItem({
 }: DocumentItemProps): React.JSX.Element {
   const navigate = useNavigate()
   const router = useRouter()
+  const opener = useImageOpener()
+  const { closeDocument } = useActionContext(document.id)
+  const closeVisit = useUiStore((state) => state.closeVisit)
   const expanded = useUiStore(
     (state) => state.expandedItems[document.id] ?? false,
   )
@@ -221,6 +234,19 @@ function DocumentItem({
     }
   }
 
+  function handleDeleteSelect(): void {
+    void handleDelete()
+  }
+
+  function handleExport(): void {
+    void opener.exportDocument(document.id)
+  }
+
+  function handleClose(): void {
+    if (active) closeDocument(document.id)
+    else closeVisit(document.id)
+  }
+
   return (
     <SidebarMenuItem
       data-drop-target={stepOver}
@@ -284,15 +310,34 @@ function DocumentItem({
             </Link>
           </SidebarMenuButton>
         )}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className={ROW_BUTTON_CLASS}
-          aria-label={`Delete ${document.name}`}
-          onClick={() => void handleDelete()}
-        >
-          <RiDeleteBinLine aria-hidden="true" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ROW_BUTTON_CLASS}
+              aria-label={`More actions for ${document.name}`}
+            >
+              <RiMoreLine aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onSelect={handleExport}>
+              Export document…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={handleClose}>
+              Close document
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={handleDeleteSelect}
+            >
+              <RiDeleteBinLine aria-hidden="true" className="size-4" />
+              Delete document
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {error && (
         <p role="alert" className="px-2 text-caption text-destructive">
@@ -664,10 +709,11 @@ export function AppSidebar(): React.JSX.Element {
   const setTab = useUiStore((state) => state.setSidebarTab)
 
   useEffect(() => {
-    const fromRoute =
-      pathname.startsWith('/workflows/') ? SidebarTab.Workflow
-      : pathname.startsWith('/documents/') ? SidebarTab.Editor
-      : undefined
+    const fromRoute = pathname.startsWith('/workflows/')
+      ? SidebarTab.Workflow
+      : pathname.startsWith('/documents/')
+        ? SidebarTab.Editor
+        : undefined
     if (fromRoute !== undefined && fromRoute !== tab) setTab(fromRoute)
   }, [pathname, tab, setTab])
 
