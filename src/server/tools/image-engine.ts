@@ -195,12 +195,13 @@ const FALLBACK_FORMAT = 'png'
 function baseImage(base: EngineBase): Sharp {
   if (base.kind === 'file') return sharp(base.path).autoOrient()
   const { width, height, background } = base.canvas
+  const colour = parseBackground(background)
   return sharp({
     create: {
       width,
       height,
-      channels: CHANNELS,
-      background: parseBackground(background),
+      channels: colour.alpha === 1 ? OPAQUE_CHANNELS : CHANNELS,
+      background: colour,
     },
   })
 }
@@ -242,10 +243,41 @@ async function pixelsOf(image: Sharp): Promise<RawImage> {
   return { data, width, height }
 }
 
+const OPAQUE_CHANNELS = 3
+const OPAQUE_ALPHA = 255
+
+function isOpaque(image: RawImage): boolean {
+  for (let index = CHANNELS - 1; index < image.data.length; index += CHANNELS) {
+    if (image.data[index] !== OPAQUE_ALPHA) return false
+  }
+  return true
+}
+
+/**
+ * The picture made from RGBA pixels, without its alpha when every pixel is
+ * opaque. The steps after it then see what an opaque image file gives them:
+ * a step that adds an alpha (ensure alpha, join channel) takes effect, and one
+ * that works on every band (convolve, bandbool) leaves the alpha alone.
+ */
 function fromPixels(image: RawImage): Sharp {
-  return sharp(image.data, {
-    raw: { width: image.width, height: image.height, channels: CHANNELS },
+  const { width, height } = image
+  if (!isOpaque(image)) {
+    return sharp(image.data, { raw: { width, height, channels: CHANNELS } })
+  }
+  return sharp(withoutAlpha(image.data), {
+    raw: { width, height, channels: OPAQUE_CHANNELS },
   })
+}
+
+/** The colour bytes of RGBA pixels. Sharp's own `removeAlpha` runs after the other operations, so the steps would still see the alpha. */
+function withoutAlpha(rgba: Buffer): Buffer {
+  const rgb = Buffer.alloc((rgba.length / CHANNELS) * OPAQUE_CHANNELS)
+  let to = 0
+  for (let from = 0; from < rgba.length; from += CHANNELS) {
+    rgba.copy(rgb, to, from, from + OPAQUE_CHANNELS)
+    to += OPAQUE_CHANNELS
+  }
+  return rgb
 }
 
 /** The picture with one step applied and its result blended over the picture as it was. */

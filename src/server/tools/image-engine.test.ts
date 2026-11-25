@@ -445,6 +445,47 @@ describe('SharpImageEngine', () => {
       expect([...picture.raw.subarray(0, 4)]).toEqual([255, 136, 0, 255])
     })
 
+    it('has no alpha once its layers cover it completely, so a step that adds one takes effect', async () => {
+      const cover = await makeImage(4, 4, 'cover.png')
+      const picture = await renderCanvas(canvasOfSize(4, 4), [
+        { kind: 'layer', path: cover, ...DEFAULT_LAYER_SETTINGS },
+        createSharpStep('ensureAlpha', { alpha: 0.5 }),
+      ])
+      expect([...picture.raw.subarray(0, 3)]).toEqual([255, 0, 0])
+      expect(picture.raw[3]).toBeGreaterThanOrEqual(127)
+      expect(picture.raw[3]).toBeLessThanOrEqual(128)
+    })
+
+    it('has no alpha for a step that works on every band once its layers cover it', async () => {
+      const cover = path.join(directory, 'brown.png')
+      await sharp({
+        create: { width: 2, height: 2, channels: 3, background: '#804020' },
+      })
+        .png()
+        .toFile(cover)
+      const picture = await renderCanvas(canvasOfSize(2, 2), [
+        { kind: 'layer', path: cover, ...DEFAULT_LAYER_SETTINGS },
+        createSharpStep('bandbool', { operator: 'or' }),
+      ])
+      expect([...picture.raw.subarray(0, 4)]).toEqual([224, 224, 224, 255])
+    })
+
+    it('has no alpha with an opaque background, so an edge filter works on the colours only', async () => {
+      const picture = await renderCanvas(
+        { ...canvasOfSize(3, 3), background: '#808080' },
+        [
+          createSharpStep('convolve', {
+            width: 3,
+            height: 3,
+            kernel: [-1, -1, -1, -1, 8, -1, -1, -1, -1],
+          }),
+        ],
+      )
+      expect([...picture.raw.subarray(4 * 4, 4 * 4 + 4)]).toEqual([
+        0, 0, 0, 255,
+      ])
+    })
+
     it('has the layers drawn on it, none of them setting its size', async () => {
       const small = await makeImage(2, 2, 'small.png')
       const picture = await renderCanvas(canvasOfSize(8, 8), [

@@ -26,12 +26,17 @@ async function avifFile(): Promise<string> {
 
 test('runs a workflow on chosen input images and downloads the results', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto('/')
   // The page answers clicks once React has hydrated it.
   await page.waitForLoadState('networkidle')
   await page.getByRole('button', { name: 'New workflow…' }).click()
-  await page.getByRole('button', { name: 'Create' }).click()
+  // Workflow names are unique per account, and repeats and retries share it.
+  const dialog = page.getByRole('dialog', { name: 'Add workflow' })
+  await dialog
+    .getByLabel('Name')
+    .fill(`Runs ${testInfo.repeatEachIndex}-${testInfo.retry}`)
+  await dialog.getByRole('button', { name: 'Create' }).click()
   await page.waitForURL(/\/workflows\//)
 
   // React Flow keeps its nodes moving while it fits the view, so the click is dispatched.
