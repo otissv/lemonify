@@ -7,7 +7,7 @@ import {
 } from '@/features/pipeline/document-change'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 import { defaultOutputSettings } from '@/features/workflows/output-settings'
-import { createWorkflow } from '@/features/workflows/workflow'
+import { CanvasSize, createWorkflow } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
 import {
   WorkflowChangeSchema,
@@ -18,18 +18,19 @@ import {
 } from '@/features/workflows/workflow-change'
 
 function base(): WorkflowDefinition {
-  const { pipeline, inputs, output } = createWorkflow('Test')
-  return { pipeline, inputs, output }
+  const { pipeline, inputs, output, canvasSize } = createWorkflow('Test')
+  return { pipeline, inputs, output, canvasSize }
 }
 
 describe('WorkflowChangeSchema', () => {
-  it('takes every change a document takes, and the three a workflow adds', () => {
+  it('takes every change a document takes, and the four a workflow adds', () => {
     const definition = base()
     for (const change of [
       { type: 'set-canvas', canvas: canvasOfSize(10, 10) },
       { type: 'remove-step', stepId: 'a' },
       { type: 'set-inputs', sourceIds: ['a', 'b'] },
       { type: 'set-output', output: defaultOutputSettings() },
+      { type: 'set-canvas-size', canvasSize: CanvasSize.Fixed },
       { type: 'replace', definition },
     ]) {
       expect(WorkflowChangeSchema.safeParse(change).success, change.type).toBe(
@@ -52,11 +53,12 @@ describe('WorkflowChangeSchema', () => {
 })
 
 describe('isDocumentChange', () => {
-  it('is true for what a document takes and false for the three only a workflow has', () => {
+  it('is true for what a document takes and false for the four only a workflow has', () => {
     expect(isDocumentChange({ type: 'set-canvas' })).toBe(true)
     expect(isDocumentChange({ type: 'set-settings' })).toBe(true)
     expect(isDocumentChange({ type: 'set-inputs' })).toBe(false)
     expect(isDocumentChange({ type: 'set-output' })).toBe(false)
+    expect(isDocumentChange({ type: 'set-canvas-size' })).toBe(false)
     expect(isDocumentChange({ type: 'replace' })).toBe(false)
   })
 })
@@ -151,13 +153,14 @@ describe('planWorkflowChange', () => {
     })
   })
 
-  it('undoes the inputs, the output and a replacement exactly', () => {
+  it('undoes the inputs, the output, the canvas size and a replacement exactly', () => {
     const definition = base()
     const output = { ...defaultOutputSettings(), widths: [100] }
 
     for (const change of [
       { type: 'set-inputs', sourceIds: ['a'] },
       { type: 'set-output', output },
+      { type: 'set-canvas-size', canvasSize: CanvasSize.Fixed },
       { type: 'replace', definition: { ...definition, inputs: ['q'] } },
     ] satisfies WorkflowChange[]) {
       const planned = planWorkflowChange(definition, change)

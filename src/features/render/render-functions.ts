@@ -2,7 +2,6 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import { ExportSettingsSchema } from '@/features/export/export-settings'
-import { RunCanvasModeSchema } from '@/features/workflows/workflow'
 import { PROTECTED_CHAIN, protectedChain } from '@/server/http/chains'
 import { appFor } from '@/server/http/server-fn-context'
 
@@ -50,7 +49,6 @@ export const requestThumbnails = createServerFn({ method: 'POST' })
 
 const WorkflowThumbnailSchema = z.object({
   workflowId: z.string().min(1),
-  canvasMode: RunCanvasModeSchema,
   nodeIds: z.array(z.string()).optional(),
 })
 
@@ -63,14 +61,12 @@ export const requestWorkflowThumbnails = createServerFn({ method: 'POST' })
     return app.renders.requestWorkflowThumbnails(
       actor,
       data.workflowId,
-      data.canvasMode,
       data.nodeIds,
     )
   })
 
 const WorkflowPreviewSchema = z.object({
   workflowId: z.string().min(1),
-  canvasMode: RunCanvasModeSchema,
   nodeId: z.string().min(1),
 })
 
@@ -83,7 +79,6 @@ export const requestWorkflowPreview = createServerFn({ method: 'POST' })
     return app.renders.requestWorkflowPreview(
       actor,
       data.workflowId,
-      data.canvasMode,
       data.nodeId,
     )
   })

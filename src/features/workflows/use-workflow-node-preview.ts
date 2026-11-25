@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 
 import { workflowPreviewImageUrl } from '@/features/documents/image-urls'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 import { loadWorkflowNodePreview } from '@/features/workflows/workflow-render-sync'
 import type { NodePreviewOutcome } from '@/features/workflows/workflow-render-sync'
 import { usePipelineStore, workflowSession } from '@/store/pipeline-store'
@@ -64,12 +63,11 @@ function previewAfter(
 
 /**
  * The large picture of a workflow diagram node, asked for again shortly after
- * the server confirms each change, and when the node or the run canvas changes.
+ * the server confirms each change, and when the node changes.
  */
 export function useWorkflowNodePreview(
   workflowId: string,
   nodeId: string,
-  canvasMode: RunCanvasMode,
 ): NodePreview {
   const [preview, setPreview] = useState<NodePreview>(INITIAL)
   const revision = usePipelineStore(
@@ -90,7 +88,6 @@ export function useWorkflowNodePreview(
       void (async () => {
         const outcome = await loadWorkflowNodePreview(
           workflowId,
-          canvasMode,
           nodeId,
           controller.signal,
         )
@@ -102,7 +99,7 @@ export function useWorkflowNodePreview(
       clearTimeout(timer)
       controller.abort()
     }
-  }, [workflowId, nodeId, canvasMode, revision, pending])
+  }, [workflowId, nodeId, revision, pending])
 
   return preview
 }

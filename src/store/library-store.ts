@@ -10,7 +10,6 @@ import {
   listResults,
 } from '@/features/results/result-functions'
 import { deleteSource, listSources } from '@/features/sources/source-functions'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 import {
   cancelWorkflowRun,
   deleteWorkflowRun,
@@ -79,7 +78,11 @@ interface LibraryStateActions {
   /** Clears the AI results a document no longer uses; how many were removed. */
   clearUnusedResults: (documentId: string) => Promise<number>
   loadRuns: (workflowId: string) => Promise<void>
-  startRun: (workflowId: string, canvas: RunCanvasMode) => Promise<void>
+  /** Starts a run on the chosen input images, or all of them when none are given. */
+  startRun: (
+    workflowId: string,
+    sourceIds?: ReadonlyArray<string>,
+  ) => Promise<void>
   cancelRun: (workflowId: string, runId: string) => Promise<void>
   removeRun: (workflowId: string, runId: string) => Promise<void>
   /** Drops the results and runs held for a document or workflow that was deleted. */
@@ -214,10 +217,16 @@ export const useLibraryStore = create<LibraryState>()((set, get) => {
         }))
       }
     },
-    startRun: (workflowId, canvas) =>
+    startRun: (workflowId, sourceIds) =>
       act(
         workflowId,
-        () => runWorkflow({ data: { id: workflowId, canvas } }),
+        () =>
+          runWorkflow({
+            data:
+              sourceIds === undefined
+                ? { id: workflowId }
+                : { id: workflowId, sourceIds: [...sourceIds] },
+          }),
         RUN_FAILED,
       ),
     cancelRun: (workflowId, runId) =>

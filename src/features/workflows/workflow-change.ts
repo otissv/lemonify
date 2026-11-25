@@ -6,12 +6,15 @@ import {
   planChange,
 } from '@/features/pipeline/document-change'
 import { OutputSettingsSchema } from '@/features/workflows/output-settings'
-import { WorkflowDefinitionSchema } from '@/features/workflows/workflow'
+import {
+  CanvasSizeSchema,
+  WorkflowDefinitionSchema,
+} from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 /**
  * One edit of a workflow: any change a document takes (its pipeline is the
- * same), and the three that are about the workflow itself. Each is one Edit
+ * same), and the four that are about the workflow itself. Each is one Edit
  * history entry, and the client and the server apply it the same way.
  */
 export const WorkflowChangeSchema = z.discriminatedUnion('type', [
@@ -24,6 +27,10 @@ export const WorkflowChangeSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('set-output'),
     output: OutputSettingsSchema,
+  }),
+  z.strictObject({
+    type: z.literal('set-canvas-size'),
+    canvasSize: CanvasSizeSchema,
   }),
   /** Replaces everything, for a workflow written whole (the CLI's `workflow update`). */
   z.strictObject({
@@ -71,6 +78,17 @@ function planned(
         patch: {
           forward: change,
           inverse: { type: 'set-output', output: definition.output },
+        },
+      }
+    case 'set-canvas-size':
+      return {
+        definition: checked({ ...definition, canvasSize: change.canvasSize }),
+        patch: {
+          forward: change,
+          inverse: {
+            type: 'set-canvas-size',
+            canvasSize: definition.canvasSize,
+          },
         },
       }
     case 'replace':

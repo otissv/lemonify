@@ -8,8 +8,9 @@ import {
 } from '@/features/pipeline/pipeline-sync'
 import { canRunAction, runAction } from '@/features/keybindings/action-runner'
 import type { ActionContext } from '@/features/keybindings/action-runner'
+import { Page } from '@/features/keybindings/actions'
 import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
-import { Tool, useUiStore } from '@/store/ui-store'
+import { SidePanelTab, Tool, useUiStore } from '@/store/ui-store'
 import {
   AI_CATALOGUES,
   DOCUMENT_ID,
@@ -43,6 +44,7 @@ function opener(): ImageOpener {
 
 function context(overrides: Partial<ActionContext> = {}): ActionContext {
   return {
+    page: Page.Document,
     documentId: DOCUMENT_ID,
     catalogues: AI_CATALOGUES,
     opener: opener(),
@@ -64,7 +66,7 @@ beforeEach(() => {
 
 describe('actions on a page with no document', () => {
   it('open and import images, show the library, the sidebar and the shortcuts', () => {
-    const page = context({ documentId: undefined })
+    const page = context({ page: Page.Home, documentId: undefined })
     expect(runAction('file.openImage', page)).toBe(true)
     expect(runAction('file.openLibrary', page)).toBe(true)
     expect(runAction('file.importDocument', page)).toBe(true)
@@ -82,7 +84,7 @@ describe('actions on a page with no document', () => {
   })
 
   it('open the New document dialog, with or without a document open', () => {
-    const page = context({ documentId: undefined })
+    const page = context({ page: Page.Home, documentId: undefined })
     expect(canRunAction('file.newDocument', page)).toBe(true)
 
     expect(runAction('file.newDocument', page)).toBe(true)
@@ -95,7 +97,7 @@ describe('actions on a page with no document', () => {
   })
 
   it('do nothing that needs a document', () => {
-    const page = context({ documentId: undefined })
+    const page = context({ page: Page.Home, documentId: undefined })
     for (const id of [
       'edit.undo',
       'step.delete',
@@ -110,6 +112,7 @@ describe('actions on a page with no document', () => {
 
   it('do not open an image while one is being opened', () => {
     const busy = context({
+      page: Page.Home,
       documentId: undefined,
       opener: { ...opener(), opening: true },
     })
@@ -156,7 +159,10 @@ describe('edit actions', () => {
       index: 1,
     })
     expect(
-      runAction('edit.addImageLayer', context({ documentId: undefined })),
+      runAction(
+        'edit.addImageLayer',
+        context({ page: Page.Home, documentId: undefined }),
+      ),
     ).toBe(false)
   })
 
@@ -167,6 +173,33 @@ describe('edit actions', () => {
     expect(page.opener.insertImage).toHaveBeenCalledWith(DOCUMENT_ID)
     expect(runAction('edit.replaceImage', page)).toBe(true)
     expect(page.opener.replaceImage).toHaveBeenCalledWith(DOCUMENT_ID)
+  })
+})
+
+describe('the page an action is done on', () => {
+  it('does only the actions that apply on it', () => {
+    loadDocumentIntoEditor(documentView())
+    const onDocument = context()
+    const onWorkflow = context({ page: Page.Workflow })
+
+    expect(canRunAction('edit.insertImage', onDocument)).toBe(true)
+    expect(canRunAction('edit.insertImage', onWorkflow)).toBe(false)
+    expect(runAction('panel.navigator', onWorkflow)).toBe(false)
+    expect(runAction('view.stepPreview', onDocument)).toBe(false)
+    expect(
+      canRunAction(
+        'help.shortcuts',
+        context({ page: Page.Home, documentId: undefined }),
+      ),
+    ).toBe(true)
+  })
+
+  it('opens the canvas size of a document in its Document panel', () => {
+    loadDocumentIntoEditor(documentView())
+
+    expect(runAction('edit.setCanvas', context())).toBe(true)
+
+    expect(useUiStore.getState().activeTool).toBe(Tool.Document)
   })
 })
 
@@ -181,24 +214,56 @@ describe('actions on a workflow, which is a pipeline with an Edit history', () =
 
   it('show and hide the step preview, which only a workflow has', () => {
     openWorkflow()
-    const workflow = context({ documentId: WORKFLOW_ID })
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
 
-    expect(useUiStore.getState().workflowPreviewOpen).toBe(true)
+    expect(useUiStore.getState().workflowSidePanelOpen).toBe(true)
     expect(runAction('view.stepPreview', workflow)).toBe(true)
-    expect(useUiStore.getState().workflowPreviewOpen).toBe(false)
+    expect(useUiStore.getState().workflowSidePanelOpen).toBe(false)
     runAction('view.stepPreview', workflow)
-    expect(useUiStore.getState().workflowPreviewOpen).toBe(true)
+    expect(useUiStore.getState().workflowSidePanelOpen).toBe(true)
 
     loadDocumentIntoEditor(documentView())
     expect(canRunAction('view.stepPreview', context())).toBe(false)
     expect(
-      canRunAction('view.stepPreview', context({ documentId: undefined })),
+      canRunAction(
+        'view.stepPreview',
+        context({ page: Page.Home, documentId: undefined }),
+      ),
     ).toBe(false)
+  })
+
+  it('show the run panel, switch the side panel between its tabs, and hide it from the tab it shows', () => {
+    openWorkflow()
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
+    const panel = (): [boolean, SidePanelTab] => {
+      const state = useUiStore.getState()
+      return [state.workflowSidePanelOpen, state.workflowSidePanelTab]
+    }
+
+    expect(runAction('view.runPanel', workflow)).toBe(true)
+    expect(panel()).toEqual([true, SidePanelTab.Runs])
+    runAction('view.stepPreview', workflow)
+    expect(panel()).toEqual([true, SidePanelTab.Preview])
+    runAction('view.stepPreview', workflow)
+    expect(panel()).toEqual([false, SidePanelTab.Preview])
+    runAction('view.runPanel', workflow)
+    expect(panel()).toEqual([true, SidePanelTab.Runs])
+    expect(canRunAction('view.runPanel', context())).toBe(false)
+  })
+
+  it('open the canvas size of a workflow by selecting its Canvas', () => {
+    openWorkflow()
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
+
+    expect(runAction('edit.setCanvas', workflow)).toBe(true)
+
+    expect(useUiStore.getState().workflowFocus[WORKFLOW_ID]).toBe('canvas')
+    expect(useUiStore.getState().activeTool).toBe(Tool.Options)
   })
 
   it('undo and redo only when its Edit history has something to undo or redo', () => {
     openWorkflow(true, false)
-    const workflow = context({ documentId: WORKFLOW_ID })
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
 
     expect(canRunAction('edit.undo', workflow)).toBe(true)
     expect(canRunAction('edit.redo', workflow)).toBe(false)
@@ -211,7 +276,7 @@ describe('actions on a workflow, which is a pipeline with an Edit history', () =
   it('edit its steps with the same keys as a document’s', () => {
     const [layer] = openWorkflow().pipeline.steps
     useUiStore.getState().selectStep(WORKFLOW_ID, layer?.id)
-    const workflow = context({ documentId: WORKFLOW_ID })
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
 
     expect(canRunAction('step.delete', workflow)).toBe(true)
     runAction('step.delete', workflow)
@@ -224,7 +289,7 @@ describe('actions on a workflow, which is a pipeline with an Edit history', () =
 
   it('do not export, replace an image or show an original, which are about a document', () => {
     openWorkflow()
-    const workflow = context({ documentId: WORKFLOW_ID })
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
 
     for (const id of [
       'file.exportImage',

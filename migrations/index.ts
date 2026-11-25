@@ -10,6 +10,7 @@ import { documentOrder } from './20260101000700-document-order.ts'
 import { keybindings } from './20260101000800-keybindings.ts'
 import { workflowPipelines } from './20260101000900-workflow-pipelines.ts'
 import { workflowHistory } from './20260101001000-workflow-history.ts'
+import { workflowCanvasSize } from './20260101001100-workflow-canvas-size.ts'
 
 export type Migration = {
   name: string
@@ -29,4 +30,5 @@ export const MIGRATIONS: readonly Migration[] = [
   keybindings,
   workflowPipelines,
   workflowHistory,
+  workflowCanvasSize,
 ]

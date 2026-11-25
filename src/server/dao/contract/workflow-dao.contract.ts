@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { WorkflowHistoryPatch } from '@/features/workflows/workflow-change'
-import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import { CanvasSize, createWorkflow } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 import { ConflictError, NotFoundError } from '../../errors.ts'
@@ -24,8 +24,8 @@ const T1 = '2026-01-02T00:00:00.000Z'
 const T2 = '2026-01-03T00:00:00.000Z'
 
 function definitionOf(name = 'Test'): WorkflowDefinition {
-  const { pipeline, inputs, output } = createWorkflow(name)
-  return { pipeline, inputs, output }
+  const { pipeline, inputs, output, canvasSize } = createWorkflow(name)
+  return { pipeline, inputs, output, canvasSize }
 }
 
 export function workflow(
@@ -75,7 +75,6 @@ export function run(
     workflowId: 'wf-1',
     ownerId: 'ann',
     definition: definitionOf(),
-    canvasMode: RunCanvasMode.Workflow,
     state: RunState.Running,
     createdAt: T0,
     finishedAt: null,
@@ -253,7 +252,7 @@ export function workflowDaoContract(
       await close()
     })
 
-    it('stores runs with their own copy of the definition and the canvas mode', async () => {
+    it('stores runs with their own copy of the definition, canvas size included', async () => {
       const { dao, close } = await prepare(create)
       await dao.insert(workflow())
       const started = run()
@@ -262,10 +261,13 @@ export function workflowDaoContract(
       expect(await dao.findRun('run-1')).toEqual(started)
       expect(await dao.findRun('missing')).toBeNull()
       await dao.insertRun(
-        run({ id: 'run-2', canvasMode: RunCanvasMode.FirstImage }),
+        run({
+          id: 'run-2',
+          definition: { ...definitionOf(), canvasSize: CanvasSize.Fixed },
+        }),
       )
-      expect((await dao.findRun('run-2'))?.canvasMode).toBe(
-        RunCanvasMode.FirstImage,
+      expect((await dao.findRun('run-2'))?.definition.canvasSize).toBe(
+        CanvasSize.Fixed,
       )
       await close()
     })

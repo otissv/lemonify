@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useImageOpener } from '@/features/app/image-opener'
+import { Page } from '@/features/keybindings/actions'
 import { useActionContext } from '@/features/keybindings/use-action-context'
 import { Input } from '@/components/ui/input'
 import { sidebarTabTarget } from '@/features/app/sidebar-tab-nav'
@@ -122,7 +123,7 @@ function DocumentItem({
   const navigate = useNavigate()
   const router = useRouter()
   const opener = useImageOpener()
-  const { closeDocument } = useActionContext(document.id)
+  const { closeDocument } = useActionContext(Page.Document, document.id)
   const closeVisit = useUiStore((state) => state.closeVisit)
   const expanded = useUiStore(
     (state) => state.expandedItems[document.id] ?? false,

@@ -29,6 +29,8 @@ import { OutputPanel } from '@/features/workflows/output-panel'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import { SharpOptionsForm } from '@/features/workflows/sharp-options-form'
 import { StepResetButton } from '@/features/tools/step-reset-button'
+import { CanvasSizeSelect } from '@/features/workflows/canvas-size-select'
+import { CanvasSize } from '@/features/workflows/workflow'
 import type { Workflow } from '@/features/workflows/workflow'
 import {
   WorkflowGroupOptions,
@@ -50,6 +52,7 @@ interface WorkflowOptionsProps {
   onAddSources: (sourceIds: ReadonlyArray<string>) => void
   onRemoveSource: (sourceId: string) => void
   onOutputChange: (settings: OutputSettings) => void
+  onCanvasSizeChange: (canvasSize: CanvasSize) => void
   /** The file name of an image. */
   imageName: (sourceId: string) => string
   /** An image name to show how results are named. */
@@ -163,10 +166,14 @@ function Panel({ title, children, action }: PanelProps): React.JSX.Element {
 
 function CanvasPanel({
   canvas,
+  canvasSize,
   onChange,
+  onCanvasSizeChange,
 }: {
   canvas: Canvas
+  canvasSize: CanvasSize
   onChange: ChangeHandler
+  onCanvasSizeChange: (canvasSize: CanvasSize) => void
 }): React.JSX.Element {
   function handleSubmit(next: Canvas): void {
     onChange({ type: 'set-canvas', canvas: next })
@@ -176,13 +183,14 @@ function CanvasPanel({
     <Panel title="Canvas">
       <div className="flex flex-col gap-3 p-4">
         <p className="text-body-md text-muted-foreground">
-          The picture every input image is drawn on. A run can use a canvas the
-          size of each image instead.
+          The picture every input image is drawn on.
         </p>
+        <CanvasSizeSelect value={canvasSize} onChange={onCanvasSizeChange} />
         <CanvasForm
-          key={JSON.stringify(canvas)}
+          key={`${canvasSize}:${JSON.stringify(canvas)}`}
           initial={canvas}
           submitLabel="Apply canvas"
+          sizeShown={canvasSize === CanvasSize.Fixed}
           onSubmit={handleSubmit}
         />
       </div>
@@ -209,7 +217,12 @@ function Content(props: WorkflowOptionsProps): React.JSX.Element {
       return <NothingSelected />
     case 'canvas':
       return (
-        <CanvasPanel canvas={workflow.pipeline.canvas} onChange={onChange} />
+        <CanvasPanel
+          canvas={workflow.pipeline.canvas}
+          canvasSize={workflow.canvasSize}
+          onChange={onChange}
+          onCanvasSizeChange={props.onCanvasSizeChange}
+        />
       )
     case 'inputs':
       return (

@@ -4,7 +4,6 @@ import {
   RiEqualizerLine,
   RiFolderImageLine,
   RiInformationLine,
-  RiPlayLine,
   RiToolsLine,
 } from '@remixicon/react'
 import type { RemixiconComponentType } from '@remixicon/react'
@@ -19,7 +18,6 @@ const TOOL_LABELS: Readonly<Record<Tool, string>> = {
   [Tool.Results]: 'Results',
   [Tool.Document]: 'Document',
   [Tool.Navigator]: 'Navigator',
-  [Tool.Run]: 'Run',
 }
 
 const TOOL_ICONS: Readonly<Record<Tool, RemixiconComponentType>> = {
@@ -29,7 +27,6 @@ const TOOL_ICONS: Readonly<Record<Tool, RemixiconComponentType>> = {
   [Tool.Results]: RiFolderImageLine,
   [Tool.Document]: RiInformationLine,
   [Tool.Navigator]: RiCompass3Line,
-  [Tool.Run]: RiPlayLine,
 }
 
 /** The tabs a document's panel has. Nothing a workflow does appears here. */
@@ -42,12 +39,8 @@ export const DOCUMENT_TOOLS: ReadonlyArray<Tool> = [
   Tool.Navigator,
 ]
 
-/** The tabs a workflow's panel has. Nothing a document does appears here. */
-export const WORKFLOW_TOOLS: ReadonlyArray<Tool> = [
-  Tool.Tools,
-  Tool.Options,
-  Tool.Run,
-]
+/** The tabs a workflow's panel has. Nothing a document does appears here, and its runs are in the panel beside the diagram. */
+export const WORKFLOW_TOOLS: ReadonlyArray<Tool> = [Tool.Tools, Tool.Options]
 
 function isTool(value: string): value is Tool {
   return Object.values<string>(Tool).includes(value)

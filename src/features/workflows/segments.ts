@@ -9,7 +9,7 @@ import {
   planSteps,
 } from '@/features/pipeline/pipeline'
 import type { AiStep, Pipeline, PlanStep } from '@/features/pipeline/pipeline'
-import { RunCanvasMode } from '@/features/workflows/workflow'
+import { CanvasSize } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 /** Layers and Sharp steps drawn on the picture, run as one pass. */
@@ -54,17 +54,17 @@ export function fillFirstSlot(pipeline: Pipeline, sourceId: string): Pipeline {
 
 /**
  * The pipeline one input image runs through: the workflow's pipeline with the
- * image in its first slot, on the workflow's canvas or, for `first-image`, on
- * a canvas of the image's size with the workflow's background.
+ * image in its first slot, on the canvas the workflow sets or, when its canvas
+ * matches each input image, on a canvas of the image's size with the
+ * workflow's background.
  */
 export function itemPipeline(
   definition: WorkflowDefinition,
-  mode: RunCanvasMode,
   image: InputImage,
 ): Pipeline {
   const { pipeline } = definition
   const canvas =
-    mode === RunCanvasMode.FirstImage
+    definition.canvasSize === CanvasSize.MatchInput
       ? {
           ...canvasOfSize(image.width, image.height),
           background: pipeline.canvas.background,

@@ -4,8 +4,8 @@ import type { WorkflowView } from '@/server/services/workflow-service'
 
 /** A new workflow's pipeline, inputs and output, for the views tests make up. */
 export function workflowDefinition(): WorkflowDefinition {
-  const { pipeline, inputs, output } = createWorkflow('Fixture')
-  return { pipeline, inputs, output }
+  const { pipeline, inputs, output, canvasSize } = createWorkflow('Fixture')
+  return { pipeline, inputs, output, canvasSize }
 }
 
 /** A workflow as the server sends it, with the pipeline, inputs and output of a new one. */

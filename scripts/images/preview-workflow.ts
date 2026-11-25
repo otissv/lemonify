@@ -1,5 +1,4 @@
 import { OUTPUT_NODE_ID } from '../../src/features/workflows/workflow-graph-layout.ts'
-import type { RunCanvasMode } from '../../src/features/workflows/workflow.ts'
 import { JobKind } from '../../src/server/jobs/job-types.ts'
 import { RenderKind } from '../../src/server/tools/render-store.ts'
 import type { App } from '../../src/server/composition.ts'
@@ -12,7 +11,6 @@ import type { PictureFormat } from './write-picture.ts'
 export type WorkflowPreviewOptions = {
   /** The diagram node to show; the output when not given. */
   nodeId?: string
-  canvasMode: RunCanvasMode
   region?: Region
   width?: number
 }
@@ -22,7 +20,6 @@ export type WorkflowPreviewPicture = {
   bytes: number
   format: PictureFormat
   nodeId: string
-  canvasMode: RunCanvasMode
   /** The picture's size in its own pixels, whatever size it was written at. */
   size: { width: number; height: number }
   region: Region | null
@@ -45,7 +42,6 @@ export async function writeWorkflowPreview(
   const queued = await app.renders.requestWorkflowPreview(
     actor,
     workflowId,
-    options.canvasMode,
     nodeId,
   )
   const done = await app.jobs.waitFor(actor, queued.id)
@@ -74,7 +70,6 @@ export async function writeWorkflowPreview(
   return {
     ...written,
     nodeId,
-    canvasMode: options.canvasMode,
     size: { width: picture.width, height: picture.height },
     region: options.region ?? null,
   }

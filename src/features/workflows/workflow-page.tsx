@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { ResizeHandle } from '@/components/ui/resize-handle'
 import { MenuPanel } from '@/features/app/menu-panel'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
+import { Page } from '@/features/keybindings/actions'
 import { KeyBindings } from '@/features/keybindings/key-bindings'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import { shownWorkflow } from '@/features/pipeline/pipeline-session'
@@ -18,10 +19,12 @@ import type { OutputSettings } from '@/features/workflows/output-settings'
 import { useRunPolling } from '@/features/workflows/use-run-polling'
 import { useWorkflowThumbnails } from '@/features/workflows/use-workflow-thumbnails'
 import { useWorkflow } from '@/features/workflows/use-workflow'
-import { RunCanvasMode } from '@/features/workflows/workflow'
-import type { Workflow } from '@/features/workflows/workflow'
+import type { CanvasSize, Workflow } from '@/features/workflows/workflow'
 import { WorkflowCanvas } from '@/features/workflows/workflow-canvas'
 import { WorkflowNodePreview } from '@/features/workflows/workflow-node-preview'
+import { WorkflowNotices } from '@/features/workflows/workflow-notices'
+import { WorkflowSidePanel } from '@/features/workflows/workflow-side-panel'
+import { RunsPanel } from '@/features/workflows/runs/runs-panel'
 import {
   addInputsChange,
   addStepChange,
@@ -39,7 +42,8 @@ import { sourceFileName, useLibraryStore } from '@/store/library-store'
 import { findStep } from '@/features/pipeline/pipeline'
 import { stepLabel } from '@/features/workflows/workflow-steps'
 import {
-  DEFAULT_WORKFLOW_PREVIEW_SHARE,
+  DEFAULT_WORKFLOW_SIDE_PANEL_SHARE,
+  SidePanelTab,
   Tool,
   useUiStore,
 } from '@/store/ui-store'
@@ -50,8 +54,8 @@ interface WorkflowPageProps {
 }
 
 const SAMPLE_NAME = 'photo.jpg'
-const MIN_PREVIEW_SHARE = 0.2
-const MAX_PREVIEW_SHARE = 0.8
+const MIN_SIDE_PANEL_SHARE = 0.2
+const MAX_SIDE_PANEL_SHARE = 0.8
 
 const FOCUS_LABELS = {
   canvas: 'Canvas',
@@ -94,28 +98,27 @@ function PageMessage({
   )
 }
 
-/** A workflow as a diagram on the left of the page, with the same floating panel a document has over it, and the large picture of the selected node on the right, which takes half the width until its left border is dragged. Selecting a node shows its options in the panel and its picture on the right, and tools are added there. It is held and edited in the store like a document: every change is one entry in its Edit history, shown at once and saved in order. */
+/** A workflow as a diagram on the left of the page, with the same floating panel a document has over it, and a side panel on the right, which takes half the width until its left border is dragged and shows either the large picture of the selected node or the workflow's runs. Selecting a node shows its options in the panel and its picture on the right, and tools are added there. It is held and edited in the store like a document: every change is one entry in its Edit history, shown at once and saved in order. */
 export function WorkflowPage({
   id,
   aiTools,
 }: WorkflowPageProps): React.JSX.Element {
   const { session, loadError } = useWorkflow(id)
-  const canvasMode = useUiStore(
-    (state) => state.runCanvasModes[id] ?? RunCanvasMode.Workflow,
-  )
   useRunPolling(id)
-  useWorkflowThumbnails(id, canvasMode, session !== undefined)
+  useWorkflowThumbnails(id, session !== undefined)
   const sources = useLibraryStore((state) => state.sources)
   const startRun = useLibraryStore((state) => state.startRun)
   const stepId = useUiStore((state) => state.selectedSteps[id])
   const focus = useUiStore((state) => state.workflowFocus[id])
   const setActiveTool = useUiStore((state) => state.setActiveTool)
   const selectInWorkflow = useUiStore((state) => state.selectInWorkflow)
-  const setRunCanvasMode = useUiStore((state) => state.setRunCanvasMode)
   const visitItem = useUiStore((state) => state.visitItem)
-  const previewShare = useUiStore((state) => state.workflowPreviewShare)
-  const setPreviewShare = useUiStore((state) => state.setWorkflowPreviewShare)
-  const previewOpen = useUiStore((state) => state.workflowPreviewOpen)
+  const sidePanelShare = useUiStore((state) => state.workflowSidePanelShare)
+  const setSidePanelShare = useUiStore(
+    (state) => state.setWorkflowSidePanelShare,
+  )
+  const sidePanelOpen = useUiStore((state) => state.workflowSidePanelOpen)
+  const showSidePanel = useUiStore((state) => state.showWorkflowSidePanel)
   const splitRef = useRef<HTMLDivElement>(null)
   const catalogues = useMemo(() => cataloguesOf(aiTools), [aiTools])
 
@@ -143,9 +146,11 @@ export function WorkflowPage({
   const handleSelect = useCallback(
     (next: Selection): void => {
       selectInWorkflow(id, next)
-      if (next.kind !== 'none') setActiveTool(Tool.Options)
+      if (next.kind === 'none') return
+      setActiveTool(Tool.Options)
+      showSidePanel(SidePanelTab.Preview)
     },
-    [id, selectInWorkflow, setActiveTool],
+    [id, selectInWorkflow, setActiveTool, showSidePanel],
   )
 
   const handleAddStep = useCallback(
@@ -194,6 +199,13 @@ export function WorkflowPage({
     [id, workflow],
   )
 
+  const handleCanvasSizeChange = useCallback(
+    (canvasSize: CanvasSize): void => {
+      void applyWorkflowEdit(id, { type: 'set-canvas-size', canvasSize })
+    },
+    [id],
+  )
+
   const handleOutputChange = useCallback(
     (output: OutputSettings): void => {
       void applyWorkflowEdit(id, { type: 'set-output', output })
@@ -209,19 +221,13 @@ export function WorkflowPage({
     [id, selectInWorkflow],
   )
 
-  const handleCanvasModeChange = useCallback(
-    (mode: RunCanvasMode): void => {
-      setRunCanvasMode(id, mode)
-    },
-    [id, setRunCanvasMode],
-  )
-
-  const handleRun = useCallback((): void => {
-    void (async () => {
+  const handleRun = useCallback(
+    async (sourceIds: string[]): Promise<void> => {
       await settlePipeline(id)
-      await startRun(id, canvasMode)
-    })()
-  }, [id, startRun, canvasMode])
+      await startRun(id, sourceIds)
+    },
+    [id, startRun],
+  )
 
   if (workflow === undefined) {
     return loadError === undefined ? (
@@ -245,12 +251,15 @@ export function WorkflowPage({
           onRemoveStep={handleRemove}
           imageName={imageName}
         />
-        <KeyBindings documentId={id} catalogues={catalogues} />
+        <KeyBindings
+          page={Page.Workflow}
+          documentId={id}
+          catalogues={catalogues}
+        />
         <WorkflowPanel
           workflow={workflow}
           selection={selection}
           aiTools={aiTools}
-          canvasMode={canvasMode}
           imageName={imageName}
           sampleName={sampleName}
           onAddStep={handleAddStep}
@@ -260,32 +269,43 @@ export function WorkflowPage({
           onAddSources={handleAddSources}
           onRemoveSource={handleRemoveSource}
           onOutputChange={handleOutputChange}
-          onCanvasModeChange={handleCanvasModeChange}
-          onRun={handleRun}
+          onCanvasSizeChange={handleCanvasSizeChange}
         />
+        <WorkflowNotices workflowId={id} />
       </div>
-      {previewOpen && (
+      {sidePanelOpen && (
         <>
           <ResizeHandle
-            label="Resize step preview"
-            value={previewShare}
-            defaultValue={DEFAULT_WORKFLOW_PREVIEW_SHARE}
-            min={MIN_PREVIEW_SHARE}
-            max={MAX_PREVIEW_SHARE}
+            label="Resize side panel"
+            value={sidePanelShare}
+            defaultValue={DEFAULT_WORKFLOW_SIDE_PANEL_SHARE}
+            min={MIN_SIDE_PANEL_SHARE}
+            max={MAX_SIDE_PANEL_SHARE}
             panelSide="end"
             boundsRef={splitRef}
-            onChange={setPreviewShare}
+            onChange={setSidePanelShare}
           />
           <section
-            aria-label="Step preview"
+            aria-label="Side panel"
             className="relative min-w-0 shrink-0"
-            style={{ width: `${previewShare * 100}%` }}
+            style={{ width: `${sidePanelShare * 100}%` }}
           >
-            <WorkflowNodePreview
-              workflowId={id}
-              nodeId={previewNodeIdForSelection(selection)}
-              canvasMode={canvasMode}
-              name={previewName(workflow, selection)}
+            <WorkflowSidePanel
+              preview={
+                <WorkflowNodePreview
+                  workflowId={id}
+                  nodeId={previewNodeIdForSelection(selection)}
+                  name={previewName(workflow, selection)}
+                />
+              }
+              runs={
+                <RunsPanel
+                  workflowId={id}
+                  inputs={workflow.inputs}
+                  imageName={imageName}
+                  onRun={handleRun}
+                />
+              }
             />
           </section>
         </>

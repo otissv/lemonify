@@ -46,6 +46,7 @@ export const SCRATCH_ACCOUNTS = {
   groups: scratchAccount('groups', ['blur-default']),
   keys: scratchAccount('keys', ['blur-default']),
   canvas: scratchAccount('canvas', ['blur-default']),
+  runs: scratchAccount('runs', ['blur-default']),
 } as const
 
 export const E2E_USER = {

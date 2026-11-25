@@ -15,18 +15,37 @@ function keyList(raw: string): string[] {
     .filter((value) => value !== '')
 }
 
+/** Every action with the pages it applies on, so a script can tell which keys work where. */
+function actionList(): Array<{
+  id: string
+  label: string
+  group: string
+  contexts: ReadonlyArray<string>
+}> {
+  return ACTIONS.map(({ id, label, group, contexts }) => ({
+    id,
+    label,
+    group,
+    contexts,
+  }))
+}
+
 function describe(view: KeybindingsView): string {
   const lines: string[] = []
-  for (const { id, label } of ACTIONS) {
+  for (const { id, label, contexts } of ACTIONS) {
     const keys = view.effective[id] ?? []
     const shown =
       keys.length === 0
         ? '(none)'
         : keys.map((key) => formatBinding(key, false)).join(', ')
     const changed = Object.hasOwn(view.overrides.bindings, id) ? '  *' : ''
-    lines.push(`${id}  ${label}  ${shown}${changed}`)
+    lines.push(`${id}  ${label}  [${contexts.join(', ')}]  ${shown}${changed}`)
   }
-  lines.push('', '* changed by you; `keys reset` puts the defaults back.')
+  lines.push(
+    '',
+    '[...] the pages the action applies on: home, document, workflow.',
+    '* changed by you; `keys reset` puts the defaults back.',
+  )
   return lines.join('\n')
 }
 
@@ -34,15 +53,20 @@ export const keysListCommand = defineAppCommand({
   name: 'keys list',
   summary: 'List the key bindings in force',
   synopsis: '',
-  help: `Lists every action with the keys it has now: the defaults, with what you
-changed on top. A * marks an action you changed. With --json, prints the
-changes, the keys in force and when they were saved.
+  help: `Lists every action with the pages it applies on (home, document,
+workflow) and the keys it has now: the defaults, with what you changed on
+top. A key does nothing on a page its action does not apply on, and no two
+actions share a key. A * marks an action you changed. With --json, prints
+the actions, the changes, the keys in force and when they were saved.
 
 Keys are written as modifiers and a key joined by +, such as mod+shift+z.
 mod is Ctrl, or Cmd on a Mac.`,
   shape: {},
   async run({ app, actor }) {
-    return { keybindings: await app.keybindings.get(actor) }
+    return {
+      actions: actionList(),
+      keybindings: await app.keybindings.get(actor),
+    }
   },
   format: ({ keybindings }) => describe(keybindings),
 })

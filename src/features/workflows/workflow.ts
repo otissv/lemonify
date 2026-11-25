@@ -24,20 +24,21 @@ export const WorkflowNameSchema = z
 export const DEFAULT_WORKFLOW_CANVAS: Canvas = canvasOfSize(1920, 1080)
 
 /**
- * Which canvas a run draws on. `workflow` uses the canvas the workflow was
- * made with; `first-image` takes the size of each input image and keeps the
- * workflow's background.
+ * How big a workflow's canvas is for each input image. `match-input` takes
+ * the size of the image and keeps the canvas's background, as a document
+ * opened on that image would; `fixed` keeps the width and height set on the
+ * canvas for every image.
  */
-export const RunCanvasMode = {
-  Workflow: 'workflow',
-  FirstImage: 'first-image',
+export const CanvasSize = {
+  MatchInput: 'match-input',
+  Fixed: 'fixed',
 } as const
 
-export const RunCanvasModeSchema = z.enum([
-  RunCanvasMode.Workflow,
-  RunCanvasMode.FirstImage,
+export const CanvasSizeSchema = z.enum([
+  CanvasSize.MatchInput,
+  CanvasSize.Fixed,
 ])
-export type RunCanvasMode = z.infer<typeof RunCanvasModeSchema>
+export type CanvasSize = z.infer<typeof CanvasSizeSchema>
 
 const InputsSchema = z
   .array(z.string().min(1))
@@ -48,14 +49,15 @@ const InputsSchema = z
 
 const DefinitionShape = {
   pipeline: PipelineSchema,
+  canvasSize: CanvasSizeSchema,
   inputs: InputsSchema,
   output: OutputSettingsSchema,
 }
 
 /**
  * What a workflow is, and what a run copies: the same pipeline a document has
- * (canvas and steps), the library images it runs on, and how it writes its
- * results. Its input slots are the empty image layers in the pipeline.
+ * (canvas and steps), whether the canvas takes each input image's size, the
+ * library images it runs on, and how it writes its results. Its input slots are the empty image layers in the pipeline.
  */
 export const WorkflowDefinitionSchema = z.strictObject(DefinitionShape)
 
@@ -100,7 +102,7 @@ export function workflowNameProblem(
   return taken ? DUPLICATE_NAME : null
 }
 
-/** A new workflow: one empty image layer for the input, no steps, the default canvas and output. */
+/** A new workflow: one empty image layer for the input, no steps, a canvas that matches each input image, and the default output. */
 export function createWorkflow(
   name: string,
   canvas: Canvas = DEFAULT_WORKFLOW_CANVAS,
@@ -109,6 +111,7 @@ export function createWorkflow(
     id: crypto.randomUUID(),
     name,
     pipeline: createPipeline(canvas, [createImageLayerStep()]),
+    canvasSize: CanvasSize.MatchInput,
     inputs: [],
     output: defaultOutputSettings(),
   })

@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { z } from 'zod'
 
 import { canvasSchema } from '../../../src/features/pipeline/canvas.ts'
@@ -7,9 +9,9 @@ import {
   defaultOutputSettings,
 } from '../../../src/features/workflows/output-settings.ts'
 import {
+  CanvasSize,
+  CanvasSizeSchema,
   DEFAULT_WORKFLOW_CANVAS,
-  RunCanvasMode,
-  RunCanvasModeSchema,
 } from '../../../src/features/workflows/workflow.ts'
 import type { WorkflowDefinition } from '../../../src/features/workflows/workflow.ts'
 import {
@@ -37,8 +39,10 @@ const SOURCES_HELP =
   '--sources <ids>      Comma-separated source ids the workflow runs on'
 const OUTPUT_HELP =
   '--output <json>      Output settings: format, options, keepMetadata, widths, suffix'
-const CANVAS_HELP = `  --width <px>         Canvas width in pixels
-  --height <px>        Canvas height in pixels
+const CANVAS_HELP = `  --canvas-size <s>    match-input (the canvas takes each input image's size)
+                       or fixed (the width and height below, for every image)
+  --width <px>         Canvas width in pixels, for a fixed canvas
+  --height <px>        Canvas height in pixels, for a fixed canvas
   --background <c>     A colour like #ff8000, or transparent`
 
 function sourceIds(raw: string | undefined): string[] {
@@ -54,6 +58,7 @@ const BUILD_SHAPE = {
   steps: WorkflowStepSpecsSchema.optional(),
   output: OutputSettingsSchema.optional(),
   pipeline: PipelineSchema.optional(),
+  canvasSize: CanvasSizeSchema.optional(),
   width: dimension.optional(),
   height: dimension.optional(),
   background: z.string().optional(),
@@ -65,6 +70,7 @@ const BUILD_FLAGS = {
   steps: { type: 'string', json: true },
   output: { type: 'string', json: true },
   pipeline: { type: 'string', json: true },
+  'canvas-size': { type: 'string' },
   width: { type: 'string' },
   height: { type: 'string' },
   background: { type: 'string' },
@@ -76,6 +82,7 @@ type BuildOptions = {
   steps?: z.output<typeof WorkflowStepSpecsSchema>
   output?: z.output<typeof OutputSettingsSchema>
   pipeline?: z.output<typeof PipelineSchema>
+  canvasSize?: CanvasSize
   width?: number
   height?: number
   background?: string
@@ -102,6 +109,22 @@ function chosenCanvas(
   })
 }
 
+/**
+ * Whether the canvas takes each input image's size: --canvas-size when given;
+ * otherwise a width or height asks for a fixed canvas of that size, and
+ * without either a workflow keeps what it had and a new one matches its images.
+ */
+function chosenCanvasSize(
+  options: BuildOptions,
+  current: WorkflowView | undefined,
+): CanvasSize {
+  if (options.canvasSize !== undefined) return options.canvasSize
+  if (options.width !== undefined || options.height !== undefined) {
+    return CanvasSize.Fixed
+  }
+  return current?.canvasSize ?? CanvasSize.MatchInput
+}
+
 function withNewInputs(
   current: ReadonlyArray<string>,
   raw: string | undefined,
@@ -117,8 +140,8 @@ function withNewInputs(
  * The definition the flags describe. --pipeline is the whole pipeline (canvas
  * and steps). Otherwise --steps rebuilds the steps (after one empty image
  * layer for the input image), and without it a current workflow keeps its
- * pipeline. The canvas flags change the canvas, --sources adds input images and
- * --output replaces the Output settings.
+ * pipeline. The canvas flags change the canvas and its size mode, --sources
+ * adds input images and --output replaces the Output settings.
  */
 function chooseDefinition(
   options: BuildOptions,
@@ -133,6 +156,7 @@ function chooseDefinition(
     }
     return {
       pipeline,
+      canvasSize: chosenCanvasSize(options, current),
       inputs: withNewInputs(current?.inputs ?? [], sources, without),
       output: output ?? current?.output ?? defaultOutputSettings(),
     }
@@ -142,6 +166,7 @@ function chooseDefinition(
   if (current !== undefined && steps === undefined) {
     return {
       pipeline: { ...current.pipeline, canvas },
+      canvasSize: chosenCanvasSize(options, current),
       inputs,
       output: output ?? current.output,
     }
@@ -150,6 +175,7 @@ function chooseDefinition(
     inputs,
     steps: steps ?? [],
     canvas,
+    canvasSize: chosenCanvasSize(options, current),
     output: output ?? current?.output,
   })
 }
@@ -158,12 +184,13 @@ export const workflowCreateCommand = defineAppCommand({
   name: 'workflow create',
   summary: 'Create a workflow',
   synopsis:
-    '<name> [--width <px> --height <px> --background <c>] [--sources <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
+    '<name> [--canvas-size match-input|fixed] [--width <px> --height <px> --background <c>] [--sources <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
   help: `Creates a workflow: a pipeline, like a document's, that runs on each source.
 The pipeline has an empty image layer, which is where each source is drawn, and
 then --steps in order: {"op":"resize","options":{"width":800}} for a Sharp
-operation, {"tool":"upscale","settings":{...}} for an AI tool. The canvas is
-1920x1080 unless you size it. With --pipeline you give the whole pipeline
+operation, {"tool":"upscale","settings":{...}} for an AI tool. The canvas takes
+the size of each input image, as a document opened on it would, unless you give
+it a size (--width, --height) or --canvas-size fixed, which keeps 1920x1080. With --pipeline you give the whole pipeline
 ({canvas, steps}) yourself, with image layers and groups as in a document.
 
 Options:
@@ -210,10 +237,11 @@ export const workflowUpdateCommand = defineAppCommand({
   name: 'workflow update',
   summary: 'Change a workflow',
   synopsis:
-    '<id> [--name <name>] [--width <px> --height <px> --background <c>] [--sources <ids>] [--without <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
+    '<id> [--name <name>] [--canvas-size match-input|fixed] [--width <px> --height <px> --background <c>] [--sources <ids>] [--without <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
   help: `Changes a workflow as it is now, as one change in its Edit history (undo it
 with workflow undo). A new --name is a rename, which is not in it. The canvas flags change the canvas and what you
-leave out stays. --sources adds source images and --output replaces the Output
+leave out stays; a width or height makes the canvas fixed unless --canvas-size
+says otherwise. --sources adds source images and --output replaces the Output
 settings. --steps replaces the steps after one empty image layer. --pipeline
 replaces the whole pipeline.
 
@@ -345,28 +373,28 @@ export const workflowRunCommand = defineAppCommand({
   name: 'workflow run',
   summary: 'Run a workflow on its sources',
   synopsis:
-    '<id> [--canvas workflow|first-image] [--follow] [--out <folder>] [--existing <policy>] [--manifest]',
+    '<id> [--sources <ids>] [--follow] [--out <folder>] [--existing <policy>] [--manifest]',
   help: `Starts a run: one job per source, each source drawn in the workflow's input
-layer. By default every image is drawn on the workflow's canvas; --canvas
-first-image gives each image a canvas of its own size and the workflow's
-background. Without --follow the run is queued and this
+layer, on a canvas of its own size or the workflow's fixed one, as the
+workflow's canvas size says. --sources runs on some of the workflow's sources
+only; without it the run takes them all. Without --follow the run is queued and this
 returns at once; the server or a \`worker\` process does the work. With --follow
 this process does the work, waits for the run to end and, with --out, writes the
 images.
 
 Options:
-  --canvas <mode>      workflow (default) or first-image
+  --sources <ids>      Comma-separated ids of the workflow's sources to run on
   --follow             Do the work here and wait for the run to end
 ${OUTPUT_FLAG_HELP}`,
   shape: {
     id,
-    canvas: RunCanvasModeSchema.default(RunCanvasMode.Workflow),
+    sources: z.string().optional(),
     follow: z.boolean().default(false),
     ...OUTPUT_SHAPE,
   },
   positionals: ['id'],
   flags: {
-    canvas: { type: 'string' },
+    sources: { type: 'string' },
     follow: { type: 'boolean' },
     ...OUTPUT_FLAGS,
   },
@@ -376,9 +404,13 @@ ${OUTPUT_FLAG_HELP}`,
         '--out needs --follow, so the images exist when they are written.',
       )
     }
-    const started = await app.workflows.run(actor, options.id, {
-      canvas: options.canvas,
-    })
+    const started = await app.workflows.run(
+      actor,
+      options.id,
+      options.sources === undefined
+        ? {}
+        : { sourceIds: sourceIds(options.sources) },
+    )
     if (!options.follow) return { run: started }
     return withWorkers(app, async () => {
       const run = await waitForRun(app, actor, started.id)
@@ -391,7 +423,7 @@ export const workflowPreviewCommand = defineAppCommand({
   name: 'workflow preview',
   summary: 'Write the large picture of a workflow node to a file',
   synopsis:
-    '<id> --out <path> [--node <id>] [--canvas workflow|first-image] [--region <x,y,w,h>] [--width <px>]',
+    '<id> --out <path> [--node <id>] [--region <x,y,w,h>] [--width <px>]',
   help: `Writes the large picture the workflow page shows beside the diagram for a
 node, so it can be looked at without the website. It is the workflow's last
 source drawn in its input layer, through the steps up to and including the
@@ -403,14 +435,12 @@ whatever size the file is written at.
 Options:
   --out <path>         Where to write the picture (required)
   --node <id>          A step id, or canvas, inputs or output (default: output)
-  --canvas <mode>      workflow (default) or first-image, as for \`workflow run\`
   --region <x,y,w,h>   Only this part of the picture, as fractions from 0 to 1
   --width <px>         Shrink the picture to this width (never enlarged)`,
   shape: {
     id,
     out: z.string().min(1),
     node: z.string().min(1).optional(),
-    canvas: RunCanvasModeSchema.default(RunCanvasMode.Workflow),
     region: z.string().min(1).transform(parseRegion).optional(),
     width: z.coerce.number().int().positive().optional(),
   },
@@ -418,7 +448,6 @@ Options:
   flags: {
     out: { type: 'string' },
     node: { type: 'string' },
-    canvas: { type: 'string' },
     region: { type: 'string' },
     width: { type: 'string' },
   },
@@ -426,7 +455,6 @@ Options:
     withWorkers(app, async () => ({
       preview: await writeWorkflowPreview(app, actor, options.id, options.out, {
         nodeId: options.node,
-        canvasMode: options.canvas,
         region: options.region,
         width: options.width,
       }),
@@ -436,18 +464,37 @@ Options:
 export const workflowResultsCommand = defineAppCommand({
   name: 'workflow results',
   summary: 'Write what a run made to a folder',
-  synopsis: '<runId> --out <folder> [--existing <policy>] [--manifest]',
+  synopsis:
+    '<runId> (--out <folder> [--existing <policy>] [--manifest] | --zip <file>)',
   help: `Writes the finished images of a run into a folder, named as the workflow's
-Output settings named them. Items still running are left out.
+Output settings named them, or with --zip into one zip file, as the website's
+Download all does (two images of the same name are numbered). Items still
+running are left out.
 
 Options:
-${OUTPUT_FLAG_HELP}`,
-  shape: { runId: id, ...OUTPUT_SHAPE },
+${OUTPUT_FLAG_HELP}
+  --zip <file>         Write the images into this zip file instead`,
+  shape: { runId: id, zip: z.string().min(1).optional(), ...OUTPUT_SHAPE },
   positionals: ['runId'],
-  flags: OUTPUT_FLAGS,
+  flags: { zip: { type: 'string' }, ...OUTPUT_FLAGS },
   async run({ app, actor, options }) {
-    if (options.out === undefined)
-      throw new ValidationError('Give --out <folder>.')
+    if (options.zip !== undefined) {
+      if (options.out !== undefined) {
+        throw new ValidationError(
+          'Give --out <folder> or --zip <file>, not both.',
+        )
+      }
+      const destination = path.resolve(options.zip)
+      const archive = await app.workflows.writeRunArchive(
+        actor,
+        options.runId,
+        destination,
+      )
+      return { archive: { ...archive, path: destination } }
+    }
+    if (options.out === undefined) {
+      throw new ValidationError('Give --out <folder> or --zip <file>.')
+    }
     return {
       files: await written(app, actor, options.runId, options),
     }

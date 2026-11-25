@@ -12,6 +12,7 @@ import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { defaultOutputSettings } from '@/features/workflows/output-settings'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import {
+  CanvasSize,
   DEFAULT_WORKFLOW_CANVAS,
   WorkflowDefinitionSchema,
 } from '@/features/workflows/workflow'
@@ -34,6 +35,8 @@ export type WorkflowDefinitionSpec = {
   inputs: ReadonlyArray<string>
   steps: ReadonlyArray<WorkflowStepSpec>
   canvas?: Canvas
+  /** Whether the canvas takes each input image's size; a new workflow's does. */
+  canvasSize?: CanvasSize
   output?: OutputSettings
 }
 
@@ -55,6 +58,7 @@ export function workflowDefinitionFromSteps(
   }
   return WorkflowDefinitionSchema.parse({
     pipeline: createPipeline(spec.canvas ?? DEFAULT_WORKFLOW_CANVAS, steps),
+    canvasSize: spec.canvasSize ?? CanvasSize.MatchInput,
     inputs: [...new Set(spec.inputs)],
     output: spec.output ?? defaultOutputSettings(),
   })

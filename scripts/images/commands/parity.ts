@@ -122,6 +122,7 @@ export const DOCUMENT_CHANGE_COMMANDS = {
 export const WORKFLOW_CHANGE_COMMANDS = {
   'set-inputs': [workflowUpdateCommand],
   'set-output': [workflowUpdateCommand],
+  'set-canvas-size': [workflowUpdateCommand],
   replace: [workflowUpdateCommand],
 } as const satisfies Record<
   Exclude<WorkflowChange['type'], DocumentChange['type']>,
@@ -200,6 +201,8 @@ export const WORKFLOW_COMMANDS = {
   cancelRun: [workflowCancelCommand],
   deleteRun: [workflowRunDeleteCommand],
   runOutputs: [workflowResultsCommand],
+  writeRunArchive: [workflowResultsCommand],
+  openRunArchive: [workflowResultsCommand],
   onJobFinished: LIFECYCLE,
 } as const satisfies Record<keyof WorkflowService, Coverage>
 

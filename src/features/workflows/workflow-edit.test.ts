@@ -14,10 +14,10 @@ import {
 } from '@/features/workflows/workflow-edit'
 
 function base(): { workflow: WorkflowDefinition; slot: PipelineStep } {
-  const { pipeline, inputs, output } = createWorkflow('Test')
+  const { pipeline, inputs, output, canvasSize } = createWorkflow('Test')
   const slot = pipeline.steps[0]
   if (slot === undefined) throw new Error('expected the slot')
-  return { workflow: { pipeline, inputs, output }, slot }
+  return { workflow: { pipeline, inputs, output, canvasSize }, slot }
 }
 
 function made(

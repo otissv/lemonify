@@ -17,6 +17,8 @@ interface CanvasFormProps {
   disabled?: boolean
   /** The reason the last submit was refused elsewhere, such as by the server. */
   error?: string | undefined
+  /** Whether the width and height can be set; when not, the canvas keeps the size it has and only its background is set. */
+  sizeShown?: boolean
 }
 
 function colourOf(canvas: Canvas): string {
@@ -30,6 +32,7 @@ export function CanvasForm({
   onSubmit,
   disabled = false,
   error,
+  sizeShown = true,
 }: CanvasFormProps): React.JSX.Element {
   const [width, setWidth] = useState(String(initial.width))
   const [height, setHeight] = useState(String(initial.height))
@@ -73,30 +76,32 @@ export function CanvasForm({
   const shown = problem ?? error
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={widthId}>Width (px)</Label>
-          <Input
-            id={widthId}
-            inputMode="numeric"
-            autoComplete="off"
-            value={width}
-            disabled={disabled}
-            onChange={handleWidth}
-          />
+      {sizeShown && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={widthId}>Width (px)</Label>
+            <Input
+              id={widthId}
+              inputMode="numeric"
+              autoComplete="off"
+              value={width}
+              disabled={disabled}
+              onChange={handleWidth}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={heightId}>Height (px)</Label>
+            <Input
+              id={heightId}
+              inputMode="numeric"
+              autoComplete="off"
+              value={height}
+              disabled={disabled}
+              onChange={handleHeight}
+            />
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={heightId}>Height (px)</Label>
-          <Input
-            id={heightId}
-            inputMode="numeric"
-            autoComplete="off"
-            value={height}
-            disabled={disabled}
-            onChange={handleHeight}
-          />
-        </div>
-      </div>
+      )}
       <div className="flex items-center gap-2">
         <Switch
           id={transparentId}

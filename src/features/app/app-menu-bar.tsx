@@ -7,54 +7,79 @@ import {
   MenubarLabel,
   MenubarMenu,
   MenubarItem,
-  MenubarSeparator,
   MenubarTrigger,
 } from '@/components/ui/menubar'
 import { signOut } from '@/features/auth/auth-client'
-import {
-  ActionCheckboxItem,
-  ActionMenuItem,
-} from '@/features/keybindings/action-menu-items'
+import { ActionMenu } from '@/features/keybindings/action-menu-items'
+import type { ActionMenuEntry } from '@/features/keybindings/action-menu-items'
+import { Page } from '@/features/keybindings/actions'
 import { useActionContext } from '@/features/keybindings/use-action-context'
-import { useUiStore } from '@/store/ui-store'
+import { SidePanelTab, useUiStore } from '@/store/ui-store'
 
 const rootRoute = getRouteApi('__root__')
 
-const PANEL_ITEMS: ReadonlyArray<{ actionId: string; label: string }> = [
+type Sections = ReadonlyArray<ReadonlyArray<ActionMenuEntry>>
+
+const FILE_SECTIONS: Sections = [
+  [
+    { actionId: 'file.newDocument', label: 'New document…' },
+    { actionId: 'file.openImage' },
+    { actionId: 'file.openLibrary' },
+    { actionId: 'file.importDocument', label: 'Import document…' },
+  ],
+  [
+    { actionId: 'file.exportImage' },
+    { actionId: 'file.exportDocument', label: 'Export document…' },
+  ],
+  [{ actionId: 'file.close' }],
+]
+
+const PANEL_SECTION: ReadonlyArray<ActionMenuEntry> = [
   { actionId: 'panel.tools', label: 'Tools' },
   { actionId: 'panel.options', label: 'Options' },
   { actionId: 'panel.export', label: 'Export' },
   { actionId: 'panel.results', label: 'Results' },
 ]
 
+const HELP_SECTIONS: Sections = [
+  [{ actionId: 'help.shortcuts', label: 'Keyboard shortcuts…' }],
+]
+
 interface AppMenuBarProps {
   /** The document the edit and panel items act on; none on pages without one. */
   documentId?: string
-  /** The workflow whose page this is: its Edit history can be undone and redone, but nothing to edit as a document is offered. */
+  /** The workflow whose page this is; its menu offers what applies to a workflow. */
   workflowId?: string
+}
+
+function pageOf(props: AppMenuBarProps): Page {
+  if (props.documentId !== undefined) return Page.Document
+  if (props.workflowId !== undefined) return Page.Workflow
+  return Page.Home
 }
 
 /**
  * The application's menu: opening images, editing, the view and the account.
  * It sits at the top of the floating panel, so the page has no header of its
  * own and the image can fill the space. Each item does an action through the
- * same code as its key, and shows the key the User has for it.
+ * same code as its key and shows the key the User has for it, and only the
+ * actions that apply on the page are offered.
  */
-export function AppMenuBar({
-  documentId,
-  workflowId,
-}: AppMenuBarProps): React.JSX.Element {
+export function AppMenuBar(props: AppMenuBarProps): React.JSX.Element {
+  const { documentId, workflowId } = props
   const router = useRouter()
   const navigate = useNavigate()
   const { actor } = rootRoute.useRouteContext()
-  const context = useActionContext(documentId ?? workflowId)
+  const context = useActionContext(pageOf(props), documentId ?? workflowId)
   const showOriginal = useUiStore((state) =>
     documentId === undefined
       ? false
       : (state.showOriginal[documentId] ?? false),
   )
   const sidebarOpen = useUiStore((state) => state.sidebarOpen)
-  const stepPreviewOpen = useUiStore((state) => state.workflowPreviewOpen)
+  const sidePanelTab = useUiStore((state) =>
+    state.workflowSidePanelOpen ? state.workflowSidePanelTab : undefined,
+  )
 
   const handleSignOut = useCallback((): void => {
     void (async () => {
@@ -64,105 +89,40 @@ export function AppMenuBar({
     })()
   }, [router, navigate])
 
+  const editSections: Sections = [
+    [{ actionId: 'edit.undo' }, { actionId: 'edit.redo' }],
+    [
+      { actionId: 'edit.addImageLayer' },
+      { actionId: 'edit.insertImage' },
+      { actionId: 'edit.replaceImage' },
+    ],
+    [{ actionId: 'edit.setCanvas', label: 'Canvas size…' }],
+    [{ actionId: 'edit.showOriginal', checked: showOriginal }],
+  ]
+  const viewSections: Sections = [
+    PANEL_SECTION,
+    [
+      { actionId: 'view.sidebar', label: 'Sidebar', checked: sidebarOpen },
+      {
+        actionId: 'view.stepPreview',
+        label: 'Step preview',
+        checked: sidePanelTab === SidePanelTab.Preview,
+      },
+      {
+        actionId: 'view.runPanel',
+        label: 'Run panel',
+        checked: sidePanelTab === SidePanelTab.Runs,
+      },
+    ],
+  ]
+
   return (
     <div className="flex min-w-0 flex-col">
       <Menubar aria-label="Application">
-        <MenubarMenu>
-          <MenubarTrigger>File</MenubarTrigger>
-          <MenubarContent>
-            <ActionMenuItem
-              actionId="file.newDocument"
-              context={context}
-              label="New document…"
-            />
-            <ActionMenuItem actionId="file.openImage" context={context} />
-            <ActionMenuItem actionId="file.openLibrary" context={context} />
-            <ActionMenuItem
-              actionId="file.importDocument"
-              context={context}
-              label="Import document…"
-            />
-            {documentId !== undefined && (
-              <>
-                <MenubarSeparator />
-                <ActionMenuItem actionId="file.exportImage" context={context} />
-                <ActionMenuItem
-                  actionId="file.exportDocument"
-                  context={context}
-                  label="Export document…"
-                />
-              </>
-            )}
-            <MenubarSeparator />
-            <ActionMenuItem actionId="file.close" context={context} />
-          </MenubarContent>
-        </MenubarMenu>
-        <MenubarMenu>
-          <MenubarTrigger>Edit</MenubarTrigger>
-          <MenubarContent>
-            <ActionMenuItem actionId="edit.undo" context={context} />
-            <ActionMenuItem actionId="edit.redo" context={context} />
-            {workflowId === undefined && (
-              <>
-                <MenubarSeparator />
-                <ActionMenuItem
-                  actionId="edit.addImageLayer"
-                  context={context}
-                />
-                <ActionMenuItem actionId="edit.insertImage" context={context} />
-                <ActionMenuItem
-                  actionId="edit.replaceImage"
-                  context={context}
-                />
-                <MenubarSeparator />
-                <ActionCheckboxItem
-                  actionId="edit.showOriginal"
-                  context={context}
-                  checked={showOriginal}
-                />
-              </>
-            )}
-          </MenubarContent>
-        </MenubarMenu>
-        <MenubarMenu>
-          <MenubarTrigger>View</MenubarTrigger>
-          <MenubarContent>
-            {documentId !== undefined &&
-              PANEL_ITEMS.map(({ actionId, label }) => (
-                <ActionMenuItem
-                  key={actionId}
-                  actionId={actionId}
-                  context={context}
-                  label={label}
-                />
-              ))}
-            {documentId !== undefined && <MenubarSeparator />}
-            <ActionCheckboxItem
-              actionId="view.sidebar"
-              context={context}
-              label="Sidebar"
-              checked={sidebarOpen}
-            />
-            {workflowId !== undefined && (
-              <ActionCheckboxItem
-                actionId="view.stepPreview"
-                context={context}
-                label="Step preview"
-                checked={stepPreviewOpen}
-              />
-            )}
-          </MenubarContent>
-        </MenubarMenu>
-        <MenubarMenu>
-          <MenubarTrigger>Help</MenubarTrigger>
-          <MenubarContent>
-            <ActionMenuItem
-              actionId="help.shortcuts"
-              context={context}
-              label="Keyboard shortcuts…"
-            />
-          </MenubarContent>
-        </MenubarMenu>
+        <ActionMenu title="File" context={context} sections={FILE_SECTIONS} />
+        <ActionMenu title="Edit" context={context} sections={editSections} />
+        <ActionMenu title="View" context={context} sections={viewSections} />
+        <ActionMenu title="Help" context={context} sections={HELP_SECTIONS} />
         <MenubarMenu>
           <MenubarTrigger>Account</MenubarTrigger>
           <MenubarContent>

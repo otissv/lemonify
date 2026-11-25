@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import {
-  RunCanvasModeSchema,
+  MAX_WORKFLOW_INPUTS,
   WorkflowNameSchema,
 } from '@/features/workflows/workflow'
 import { WorkflowChangeSchema } from '@/features/workflows/workflow-change'
@@ -81,13 +81,21 @@ export const deleteWorkflow = createServerFn({ method: 'POST' })
     await app.workflows.delete(actor, data.id)
   })
 
-/** Starts a run over the input images of the workflow, on its canvas or on one the size of each image; follow it with `getWorkflowRun`. */
+/** Starts a run over the chosen input images of the workflow, or all of them; follow it with `getWorkflowRun`. */
 export const runWorkflow = createServerFn({ method: 'POST' })
   .middleware(protectedChain('queue'))
-  .validator(IdSchema.extend({ canvas: RunCanvasModeSchema.optional() }))
+  .validator(
+    IdSchema.extend({
+      sourceIds: z.array(z.string().min(1)).max(MAX_WORKFLOW_INPUTS).optional(),
+    }),
+  )
   .handler(async ({ context, data }): Promise<RunView> => {
     const { app, actor } = await appFor(context)
-    return app.workflows.run(actor, data.id, { canvas: data.canvas })
+    return app.workflows.run(
+      actor,
+      data.id,
+      data.sourceIds === undefined ? {} : { sourceIds: data.sourceIds },
+    )
   })
 
 export const getWorkflowRun = createServerFn({ method: 'GET' })

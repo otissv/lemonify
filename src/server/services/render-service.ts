@@ -13,7 +13,6 @@ import { writableExportFormats } from '@/features/export/server/export-formats'
 import type { AiToolRegistry } from '../ai/ai-tool-registry.ts'
 import type { DocumentDao, DocumentRecord } from '../dao/document-dao.ts'
 import type { WorkflowDao, WorkflowRecord } from '../dao/workflow-dao.ts'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 import { workflowPreviewNodeIds } from '@/features/workflows/workflow-graph-layout'
 import type { JobDao } from '../dao/job-dao.ts'
 import { ResultKind } from '../dao/result-dao.ts'
@@ -190,7 +189,6 @@ export class RenderService {
   async requestWorkflowThumbnails(
     actor: Actor,
     workflowId: string,
-    canvasMode: RunCanvasMode,
     nodeIds?: ReadonlyArray<string>,
   ): Promise<JobView> {
     const workflow = await this.#ownedWorkflow(actor, workflowId)
@@ -212,7 +210,6 @@ export class RenderService {
             kind: JobKind.WorkflowThumbnail,
             workflowId,
             revision: workflow.revision,
-            canvasMode,
             nodeIds: [...ids],
           },
           pool: WorkerPool.Cpu,
@@ -231,7 +228,6 @@ export class RenderService {
   async requestWorkflowPreview(
     actor: Actor,
     workflowId: string,
-    canvasMode: RunCanvasMode,
     nodeId: string,
   ): Promise<JobView> {
     const workflow = await this.#ownedWorkflow(actor, workflowId)
@@ -252,7 +248,6 @@ export class RenderService {
             kind: JobKind.WorkflowPreview,
             workflowId,
             revision: workflow.revision,
-            canvasMode,
             nodeId,
           },
           pool: WorkerPool.Cpu,
@@ -260,9 +255,7 @@ export class RenderService {
         },
       ],
       (payload) =>
-        payload.kind === JobKind.WorkflowPreview &&
-        payload.nodeId === nodeId &&
-        payload.canvasMode === canvasMode,
+        payload.kind === JobKind.WorkflowPreview && payload.nodeId === nodeId,
     )
   }
 

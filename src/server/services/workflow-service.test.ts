@@ -16,10 +16,11 @@ import {
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { defaultOutputSettings } from '@/features/workflows/output-settings'
 import type { OutputSettings } from '@/features/workflows/output-settings'
-import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import { CanvasSize, createWorkflow } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
 import type { WorkflowChange } from '@/features/workflows/workflow-change'
 
+import { openZip } from '../bundle/zip.ts'
 import { ResultKind } from '../dao/result-dao.ts'
 import { RunState } from '../dao/workflow-dao.ts'
 import { ConflictError, NotFoundError, ValidationError } from '../errors.ts'
@@ -41,7 +42,7 @@ afterEach(async () => {
   await t.close()
 })
 
-/** A workflow on `inputs`: one empty image layer for each input image, then `steps` in order. */
+/** A workflow on `inputs` with a fixed canvas: one empty image layer for each input image, then `steps` in order. */
 function definitionOf(
   inputs: string[],
   ...steps: PipelineStep[]
@@ -49,6 +50,7 @@ function definitionOf(
   const { pipeline, output } = createWorkflow('x')
   return {
     pipeline: createPipeline(CANVAS, [...pipeline.steps, ...steps]),
+    canvasSize: CanvasSize.Fixed,
     inputs,
     output,
   }
@@ -79,13 +81,9 @@ async function runFinished(runId: string, actor = t.ann): Promise<RunView> {
   throw new Error('The run did not finish in time.')
 }
 
-async function startRun(
-  definition: WorkflowDefinition,
-  canvas?: RunCanvasMode,
-  name = 'Flow',
-) {
+async function startRun(definition: WorkflowDefinition, name = 'Flow') {
   const workflow = await t.app.workflows.create(t.ann, name, definition)
-  const run = await t.app.workflows.run(t.ann, workflow.id, { canvas })
+  const run = await t.app.workflows.run(t.ann, workflow.id)
   await t.app.scheduler.start()
   return { workflow, run }
 }
@@ -332,6 +330,111 @@ describe('running a workflow', () => {
     ])
   })
 
+  it('runs on the chosen input images only, in the workflow’s order, and says which they were', async () => {
+    const a = await t.uploadImage(t.ann, '#111111', 'a.png')
+    const b = await t.uploadImage(t.ann, '#222222', 'b.png')
+    const c = await t.uploadImage(t.ann, '#333333', 'c.png')
+    const workflow = await t.app.workflows.create(
+      t.ann,
+      'Some',
+      definitionOf([a.id, b.id, c.id]),
+    )
+
+    const run = await t.app.workflows.run(t.ann, workflow.id, {
+      sourceIds: [c.id, a.id],
+    })
+    await t.app.scheduler.start()
+    const finished = await runFinished(run.id)
+
+    expect(run.sourceIds).toEqual([a.id, c.id])
+    expect(finished.jobs.total).toBe(2)
+    expect(
+      finished.items.map(({ sourceId, state, resultIds }) => [
+        sourceId,
+        state,
+        resultIds.length,
+      ]),
+    ).toEqual([
+      [a.id, 'done', 1],
+      [c.id, 'done', 1],
+    ])
+    const outputs = await t.app.workflows.runOutputs(t.ann, run.id)
+    expect(outputs.map(({ source }) => source.fileName)).toEqual([
+      'a.png',
+      'c.png',
+    ])
+  })
+
+  it('refuses a choice of images that is empty, repeats one, or names one the workflow does not have', async () => {
+    const a = await t.uploadImage(t.ann, '#111111', 'a.png')
+    const other = await t.uploadImage(t.ann, '#222222', 'other.png')
+    const workflow = await t.app.workflows.create(
+      t.ann,
+      'Choose',
+      definitionOf([a.id]),
+    )
+
+    for (const sourceIds of [[], [a.id, a.id], [other.id]]) {
+      await expect(
+        t.app.workflows.run(t.ann, workflow.id, { sourceIds }),
+      ).rejects.toBeInstanceOf(ValidationError)
+    }
+    expect(await t.app.workflows.listRuns(t.ann, workflow.id)).toEqual([])
+  })
+
+  it('writes a run’s images into one zip file, numbering names that would clash', async () => {
+    const a = await t.uploadImage(t.ann, '#111111', 'a.png')
+    const b = await t.uploadImage(t.ann, '#222222', 'a.jpg')
+    const definition = definitionOf([a.id, b.id])
+    const { run } = await startRun(definition, 'Zip me')
+    await runFinished(run.id)
+    const destination = path.join(t.directory, 'out.zip')
+
+    const written = await t.app.workflows.writeRunArchive(
+      t.ann,
+      run.id,
+      destination,
+    )
+
+    const archive = await openZip(destination)
+    expect(archive.entries.map(({ name }) => name)).toEqual([
+      'a.webp',
+      'a-1.webp',
+    ])
+    await archive.close()
+    expect(written).toMatchObject({ images: 2, fileName: 'Zip me.zip' })
+    expect(written.bytes).toBeGreaterThan(0)
+    await expect(
+      t.app.workflows.writeRunArchive(t.bob, run.id, destination),
+    ).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('opens a run’s zip file as a download, and refuses a run with nothing finished', async () => {
+    const source = await t.uploadImage(t.ann)
+    const { run } = await startRun(definitionOf([source.id]))
+    await runFinished(run.id)
+
+    const opened = await t.app.workflows.openRunArchive(t.ann, run.id)
+    const chunks: Buffer[] = []
+    for await (const chunk of opened.stream) chunks.push(chunk as Buffer)
+    expect(opened.mediaType).toBe('application/zip')
+    expect(Buffer.concat(chunks).length).toBe(opened.bytes)
+  })
+
+  it('refuses a zip file of a run that has finished nothing yet', async () => {
+    const source = await t.uploadImage(t.ann)
+    const workflow = await t.app.workflows.create(
+      t.ann,
+      'Idle',
+      definitionOf([source.id]),
+    )
+    const idle = await t.app.workflows.run(t.ann, workflow.id)
+
+    await expect(
+      t.app.workflows.openRunArchive(t.ann, idle.id),
+    ).rejects.toBeInstanceOf(ValidationError)
+  })
+
   it('has no outputs for a run that made none, and hides them from other Users', async () => {
     const source = await t.uploadImage(t.ann)
     const workflow = await t.app.workflows.create(
@@ -539,28 +642,27 @@ describe('image layers and canvases in a workflow', () => {
     ).rejects.toThrow()
   })
 
-  it('draws each input image on the workflow canvas by default', async () => {
+  it('draws each input image on the canvas the workflow sets when its size is fixed', async () => {
     const source = await t.uploadImage(t.ann, '#111111', 'cat.png')
     const { run } = await startRun(definitionOf([source.id]))
-    expect(run.canvasMode).toBe(RunCanvasMode.Workflow)
     await runFinished(run.id)
     const [request] = t.imageEngine.requests
     expect(request?.input).toEqual({ kind: 'canvas', canvas: CANVAS })
     expect(stepNames(request)).toEqual(['layer'])
   })
 
-  it('takes the size of the input image when the run asks for it, and keeps the background', async () => {
+  it('takes the size of the input image when the canvas matches each one, and keeps the background', async () => {
     const source = await t.uploadImage(t.ann, '#111111', 'cat.png')
     const definition = definitionOf([source.id])
     const coloured = {
       ...definition,
+      canvasSize: CanvasSize.MatchInput,
       pipeline: {
         ...definition.pipeline,
         canvas: { ...CANVAS, background: '#00ff00' },
       },
     }
-    const { run } = await startRun(coloured, RunCanvasMode.FirstImage)
-    expect(run.canvasMode).toBe(RunCanvasMode.FirstImage)
+    const { run } = await startRun(coloured)
     await runFinished(run.id)
     const input = t.imageEngine.requests[0]?.input
     expect(input).toMatchObject({

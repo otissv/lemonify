@@ -10,7 +10,7 @@ import {
 import { AiToolId } from '@/features/ai/ai-tools'
 import {
   DEFAULT_WORKFLOW_CANVAS,
-  RunCanvasMode,
+  CanvasSize,
   WorkflowDefinitionSchema,
   WorkflowSchema,
   createWorkflow,
@@ -77,6 +77,7 @@ describe('WorkflowSchema', () => {
     const created = createWorkflow('Test')
 
     expect(Object.keys(created).sort()).toEqual([
+      'canvasSize',
       'id',
       'inputs',
       'name',
@@ -203,8 +204,12 @@ describe('createWorkflow canvas', () => {
   })
 })
 
-describe('RunCanvasMode', () => {
-  it('is the workflow’s own canvas, or the size of the first image', () => {
-    expect(Object.values(RunCanvasMode)).toEqual(['workflow', 'first-image'])
+describe('CanvasSize', () => {
+  it('is each input image’s own size, or the size set on the canvas', () => {
+    expect(Object.values(CanvasSize)).toEqual(['match-input', 'fixed'])
+  })
+
+  it('matches each input image for a new workflow', () => {
+    expect(createWorkflow('Test').canvasSize).toBe(CanvasSize.MatchInput)
   })
 })

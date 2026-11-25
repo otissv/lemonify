@@ -17,7 +17,7 @@ import {
   planSegments,
   workflowProblem,
 } from '@/features/workflows/segments'
-import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import { CanvasSize, createWorkflow } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 const UPSCALE = {
@@ -91,25 +91,31 @@ describe('itemPipeline', () => {
   const layer = createImageLayerStep()
   const base = definition([layer])
 
-  it('keeps the workflow canvas by default', () => {
-    const pipeline = itemPipeline(base, RunCanvasMode.Workflow, image)
+  it('keeps the size set on the canvas for a fixed canvas', () => {
+    const pipeline = itemPipeline(
+      { ...base, canvasSize: CanvasSize.Fixed },
+      image,
+    )
 
     expect(pipeline.canvas).toEqual(base.pipeline.canvas)
     expect(pipeline.steps[0]).toMatchObject({ sourceId: 'src-9' })
   })
 
-  it('takes the size of the image, and keeps the background, for first-image', () => {
+  it('takes the size of the image, and keeps the background, when it matches each input image', () => {
     const coloured = {
       ...base,
+      canvasSize: CanvasSize.MatchInput,
       pipeline: {
         ...base.pipeline,
         canvas: { width: 10, height: 10, background: '#ff0000' },
       },
     }
 
-    expect(
-      itemPipeline(coloured, RunCanvasMode.FirstImage, image).canvas,
-    ).toEqual({ width: 640, height: 480, background: '#ff0000' })
+    expect(itemPipeline(coloured, image).canvas).toEqual({
+      width: 640,
+      height: 480,
+      background: '#ff0000',
+    })
   })
 })
 

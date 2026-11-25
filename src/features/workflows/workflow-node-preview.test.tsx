@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { followJob } from '@/features/jobs/follow-job'
 import { requestWorkflowPreview } from '@/features/render/render-functions'
-import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import { createWorkflow } from '@/features/workflows/workflow'
 import { WorkflowNodePreview } from '@/features/workflows/workflow-node-preview'
 import { JobKind, JobState } from '@/server/jobs/job-types'
 import type { JobView } from '@/server/services/job-service'
@@ -62,7 +62,6 @@ function renderPreview(nodeId = 'output'): ReturnType<typeof render> {
     <WorkflowNodePreview
       workflowId={WORKFLOW_ID}
       nodeId={nodeId}
-      canvasMode={RunCanvasMode.Workflow}
       name="Output"
     />,
   )
@@ -108,7 +107,6 @@ describe('WorkflowNodePreview', () => {
     expect(requestWorkflowPreview).toHaveBeenCalledWith({
       data: {
         workflowId: WORKFLOW_ID,
-        canvasMode: RunCanvasMode.Workflow,
         nodeId: 'output',
       },
     })
@@ -155,7 +153,6 @@ describe('WorkflowNodePreview', () => {
       <WorkflowNodePreview
         workflowId={WORKFLOW_ID}
         nodeId="canvas"
-        canvasMode={RunCanvasMode.Workflow}
         name="Canvas"
       />,
     )
@@ -164,7 +161,6 @@ describe('WorkflowNodePreview', () => {
       expect(requestWorkflowPreview).toHaveBeenLastCalledWith({
         data: {
           workflowId: WORKFLOW_ID,
-          canvasMode: RunCanvasMode.Workflow,
           nodeId: 'canvas',
         },
       })

@@ -10,7 +10,6 @@ import { RealtimeStatus } from '@/features/realtime/realtime-client'
 import type { PanelPosition } from '@/features/tools/panel-position'
 import { initialViewport } from '@/features/viewport/viewport'
 import type { ViewFrame, Viewport } from '@/features/viewport/viewport'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 import {
   NO_SELECTION,
   stepSelection,
@@ -32,8 +31,6 @@ export enum Tool {
   Document = 'document',
   /** A small view of the whole picture, to move around it and zoom. */
   Navigator = 'navigator',
-  /** Starting a workflow and following its runs. */
-  Run = 'run',
 }
 
 export enum SidebarTab {
@@ -43,7 +40,15 @@ export enum SidebarTab {
 
 export const MAX_RECENT_UPSCALE_MODELS = 10
 export const PREFERENCES_STORAGE_KEY = 'lemonify-preferences'
-export const DEFAULT_WORKFLOW_PREVIEW_SHARE = 0.5
+export const DEFAULT_WORKFLOW_SIDE_PANEL_SHARE = 0.5
+
+/** What the panel beside a workflow's diagram shows. */
+export enum SidePanelTab {
+  /** The large picture of the selected node. */
+  Preview = 'preview',
+  /** Starting runs and following them. */
+  Runs = 'runs',
+}
 
 type Keyed<T> = Readonly<Record<string, T | undefined>>
 
@@ -55,10 +60,12 @@ interface UiStateData {
   panelPosition: PanelPosition | null
   /** Whether the tools panel shows only its menu. */
   panelCollapsed: boolean
-  /** The share of a workflow page's width, from 0 to 1, that the large picture of the selected node takes beside the diagram. Not saved. */
-  workflowPreviewShare: number
-  /** Whether a workflow page shows the large picture of the selected node beside the diagram. Not saved. */
-  workflowPreviewOpen: boolean
+  /** The share of a workflow page's width, from 0 to 1, that the panel beside the diagram takes. Not saved. */
+  workflowSidePanelShare: number
+  /** Whether a workflow page shows the panel beside the diagram. Not saved. */
+  workflowSidePanelOpen: boolean
+  /** Which tab of that panel is shown. Not saved. */
+  workflowSidePanelTab: SidePanelTab
   activeTool: Tool
   recentUpscaleModels: ReadonlyArray<string>
   /** The lines drawn inside the box of a tool on the picture, such as extract. Kept in this browser. */
@@ -71,8 +78,6 @@ interface UiStateData {
   markedSteps: Keyed<ReadonlyArray<string>>
   /** The part of a workflow other than a step that its options panel shows, by workflow id. Selecting a step clears it, and focusing it clears the selected step, so one thing is selected at a time. */
   workflowFocus: Keyed<WorkflowFocus>
-  /** Which canvas each workflow's next run draws on. */
-  runCanvasModes: Keyed<RunCanvasMode>
   /** Groups drawn closed in the sidebar, by group id. Only about the screen: it is not saved. */
   collapsedGroups: Keyed<boolean>
   /** Tool categories open in the Tools list, by label, so they stay as left when the list is shown again. Not saved. */
@@ -101,8 +106,12 @@ interface UiStateActions {
   setSidebarTab: (tab: SidebarTab) => void
   setPanelPosition: (position: PanelPosition) => void
   setPanelCollapsed: (collapsed: boolean) => void
-  setWorkflowPreviewShare: (share: number) => void
-  setWorkflowPreviewOpen: (open: boolean) => void
+  setWorkflowSidePanelShare: (share: number) => void
+  setWorkflowSidePanelOpen: (open: boolean) => void
+  /** Opens the panel beside a workflow's diagram on `tab`. */
+  showWorkflowSidePanel: (tab: SidePanelTab) => void
+  /** Hides the panel when it shows `tab`; otherwise opens it on `tab`. */
+  toggleWorkflowSidePanel: (tab: SidePanelTab) => void
   setActiveTool: (tool: Tool) => void
   setOverlayGuide: (guide: OverlayGuide) => void
   setStepView: (documentId: string, part: StepViewPart) => void
@@ -116,7 +125,6 @@ interface UiStateActions {
   markSteps: (id: string, stepIds: ReadonlyArray<string>) => void
   /** Chooses what a workflow's options show: a step, its canvas, inputs or output, or nothing. */
   selectInWorkflow: (workflowId: string, selection: Selection) => void
-  setRunCanvasMode: (workflowId: string, mode: RunCanvasMode) => void
   setGroupCollapsed: (groupId: string, collapsed: boolean) => void
   setToolGroupOpen: (label: string, open: boolean) => void
   setExportSettings: (documentId: string, settings: ExportSettings) => void
@@ -137,8 +145,9 @@ export const INITIAL_UI_STATE: Readonly<UiStateData> = {
   sidebarTab: SidebarTab.Editor,
   panelPosition: null,
   panelCollapsed: false,
-  workflowPreviewShare: DEFAULT_WORKFLOW_PREVIEW_SHARE,
-  workflowPreviewOpen: true,
+  workflowSidePanelShare: DEFAULT_WORKFLOW_SIDE_PANEL_SHARE,
+  workflowSidePanelOpen: true,
+  workflowSidePanelTab: SidePanelTab.Preview,
   activeTool: Tool.Tools,
   recentUpscaleModels: [],
   overlayGuide: OverlayGuide.None,
@@ -147,7 +156,6 @@ export const INITIAL_UI_STATE: Readonly<UiStateData> = {
   selectedSteps: {},
   markedSteps: {},
   workflowFocus: {},
-  runCanvasModes: {},
   collapsedGroups: {},
   openToolGroups: {},
   showOriginal: {},
@@ -232,11 +240,21 @@ export const useUiStore = create<UiState>()(
       setPanelCollapsed: (panelCollapsed) => {
         set({ panelCollapsed })
       },
-      setWorkflowPreviewShare: (workflowPreviewShare) => {
-        set({ workflowPreviewShare })
+      setWorkflowSidePanelShare: (workflowSidePanelShare) => {
+        set({ workflowSidePanelShare })
       },
-      setWorkflowPreviewOpen: (workflowPreviewOpen) => {
-        set({ workflowPreviewOpen })
+      setWorkflowSidePanelOpen: (workflowSidePanelOpen) => {
+        set({ workflowSidePanelOpen })
+      },
+      showWorkflowSidePanel: (workflowSidePanelTab) => {
+        set({ workflowSidePanelOpen: true, workflowSidePanelTab })
+      },
+      toggleWorkflowSidePanel: (tab) => {
+        set(({ workflowSidePanelOpen, workflowSidePanelTab }) =>
+          workflowSidePanelOpen && workflowSidePanelTab === tab
+            ? { workflowSidePanelOpen: false }
+            : { workflowSidePanelOpen: true, workflowSidePanelTab: tab },
+        )
       },
       setActiveTool: (activeTool) => {
         set({ activeTool })
@@ -311,11 +329,6 @@ export const useUiStore = create<UiState>()(
           },
         }))
       },
-      setRunCanvasMode: (workflowId, mode) => {
-        set(({ runCanvasModes }) => ({
-          runCanvasModes: { ...runCanvasModes, [workflowId]: mode },
-        }))
-      },
       setGroupCollapsed: (groupId, collapsed) => {
         set(({ collapsedGroups }) => ({
           collapsedGroups: { ...collapsedGroups, [groupId]: collapsed },
@@ -356,7 +369,6 @@ export const useUiStore = create<UiState>()(
           selectedSteps: without(state.selectedSteps, id),
           markedSteps: without(state.markedSteps, id),
           workflowFocus: without(state.workflowFocus, id),
-          runCanvasModes: without(state.runCanvasModes, id),
           showOriginal: without(state.showOriginal, id),
           stepViews: without(state.stepViews, id),
           viewports: without(state.viewports, id),

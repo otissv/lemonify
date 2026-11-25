@@ -277,7 +277,7 @@ pnpm images upscale photo.jpg ./out --model-path ./my-models --model-name my-mod
 
 ### `keys`: key bindings
 
-`keys list`, `set`, `unset`, `reset`, `export` and `import` show and change the keys that do things in the editor, as the signed-in user (see `--user`). They reach the same feature as the Keyboard shortcuts dialog on the website: the defaults come from the repository, your changes are kept on the server, and the keys are written as `mod+shift+z` (`mod` is Ctrl, or Cmd on a Mac). A key the browser keeps, such as `mod+w`, or one another action already has is refused and the other action is named. The full guide is in [docs/keybindings.md](../docs/keybindings.md).
+`keys list`, `set`, `unset`, `reset`, `export` and `import` show and change the keys that do things in the editor, as the signed-in user (see `--user`). They reach the same feature as the Keyboard shortcuts dialog on the website: the defaults come from the repository, your changes are kept on the server, and the keys are written as `mod+shift+z` (`mod` is Ctrl, or Cmd on a Mac). A key the browser keeps, such as `mod+w`, or one another action already has is refused and the other action is named. `keys list` shows the pages each action applies on (`home`, `document`, `workflow`; `contexts` in `--json`); a key does nothing on a page its action does not apply on. The full guide is in [docs/keybindings.md](../docs/keybindings.md).
 
 ### `ai tools`, `ai catalogue` and `export formats`
 

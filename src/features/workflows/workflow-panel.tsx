@@ -12,18 +12,15 @@ import { ToolsList } from '@/features/tools/tools-browser'
 import type { AiToolEntry } from '@/features/workflows/ai-tool-entries'
 import type { NewStepChoice } from '@/features/workflows/new-workflow-step'
 import type { OutputSettings } from '@/features/workflows/output-settings'
-import type { Workflow } from '@/features/workflows/workflow'
+import type { CanvasSize, Workflow } from '@/features/workflows/workflow'
 import { WorkflowOptions } from '@/features/workflows/workflow-options'
 import type { Selection } from '@/features/workflows/workflow-selection'
-import { WorkflowRunTab } from '@/features/workflows/workflow-run-tab'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 import { Tool, useUiStore } from '@/store/ui-store'
 
 interface WorkflowPanelProps {
   workflow: Workflow
   selection: Selection
   aiTools: ReadonlyArray<AiToolEntry>
-  canvasMode: RunCanvasMode
   imageName: (sourceId: string) => string
   sampleName: string
   /** Adds a step after the selected one; returns why it could not be added. */
@@ -35,8 +32,7 @@ interface WorkflowPanelProps {
   onAddSources: (sourceIds: ReadonlyArray<string>) => void
   onRemoveSource: (sourceId: string) => void
   onOutputChange: (settings: OutputSettings) => void
-  onCanvasModeChange: (mode: RunCanvasMode) => void
-  onRun: () => void
+  onCanvasSizeChange: (canvasSize: CanvasSize) => void
 }
 
 interface LayerButtonsProps {
@@ -87,7 +83,7 @@ function LayerButtons({ onAdd }: LayerButtonsProps): React.JSX.Element {
   )
 }
 
-/** The floating panel of a workflow: the same panel a document has, with the tabs that apply to a workflow. Tools adds steps, Options shows the selected node (a step, the canvas, the input images or the output) and Run starts it. */
+/** The floating panel of a workflow: the same panel a document has, with the tabs that apply to a workflow. Tools adds steps and Options shows the selected node (a step, the canvas, the input images or the output); runs are in the side panel beside the diagram. */
 export function WorkflowPanel(props: WorkflowPanelProps): React.JSX.Element {
   const { workflow, selection, aiTools, onAddStep } = props
   const activeTool = useUiStore((state) => state.activeTool)
@@ -143,14 +139,7 @@ export function WorkflowPanel(props: WorkflowPanelProps): React.JSX.Element {
             onAddSources={props.onAddSources}
             onRemoveSource={props.onRemoveSource}
             onOutputChange={props.onOutputChange}
-          />
-        </TabsContent>
-        <TabsContent value={Tool.Run} className="min-w-0 overflow-y-auto">
-          <WorkflowRunTab
-            workflowId={workflow.id}
-            canvasMode={props.canvasMode}
-            onCanvasModeChange={props.onCanvasModeChange}
-            onRun={props.onRun}
+            onCanvasSizeChange={props.onCanvasSizeChange}
           />
         </TabsContent>
       </ToolTabs>

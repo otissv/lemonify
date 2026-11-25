@@ -8,7 +8,6 @@ import type { SourceStore } from '../tools/source-store.ts'
 import type { Pipeline, PlanStep } from '@/features/pipeline/pipeline'
 import type { Canvas } from '@/features/pipeline/canvas'
 import { inputSlots, itemPipeline } from '@/features/workflows/segments'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 
 export type WorkflowPlanOptions = {
   steps: ReadonlyArray<PlanStep>
@@ -63,11 +62,8 @@ export class WorkflowPlanner {
     )
   }
 
-  /** The pipeline with the workflow's last input image drawn in on the canvas `mode` gives, which is what its diagram pictures show. Left empty when it has no input image that can be found. */
-  async filled(
-    workflow: WorkflowRecord,
-    mode: RunCanvasMode,
-  ): Promise<FilledWorkflow> {
+  /** The pipeline with the workflow's last input image drawn in, on the canvas a run would give it, which is what its diagram pictures show. Left empty when it has no input image that can be found. */
+  async filled(workflow: WorkflowRecord): Promise<FilledWorkflow> {
     const { definition } = workflow
     const [firstSlot] = inputSlots(definition.pipeline)
     const shownSourceId = definition.inputs.at(-1)
@@ -79,7 +75,7 @@ export class WorkflowPlanner {
       pipeline:
         shownSourceId === undefined || image === undefined
           ? definition.pipeline
-          : itemPipeline(definition, mode, { id: shownSourceId, ...image }),
+          : itemPipeline(definition, { id: shownSourceId, ...image }),
       firstSlotId: firstSlot?.id,
     }
   }

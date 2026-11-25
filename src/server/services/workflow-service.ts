@@ -12,8 +12,6 @@ import {
 } from '@/features/pipeline/step-problems'
 import { planSegments, workflowProblem } from '@/features/workflows/segments'
 import {
-  RunCanvasMode,
-  RunCanvasModeSchema,
   WorkflowDefinitionSchema,
   WorkflowNameSchema,
   createWorkflow,
@@ -41,6 +39,17 @@ import { requireOwned } from '../domain/ownership.ts'
 import { ConflictError, ValidationError } from '../errors.ts'
 import { JobKind, JobState, isTerminal } from '../jobs/job-types.ts'
 import type { JobRecord } from '../jobs/job-types.ts'
+import {
+  openRunArchive,
+  runArchiveName,
+  writeRunArchive,
+} from '../workflows/run-archive.ts'
+import type {
+  OpenedRunArchive,
+  WrittenRunArchive,
+} from '../workflows/run-archive.ts'
+import { runItems } from '../workflows/run-items.ts'
+import type { RunItem } from '../workflows/run-items.ts'
 import { runWorkDirectory, segmentJobSpec } from '../workflows/run-jobs.ts'
 import type { SourceSummary } from '@/features/documents/document'
 import type { ChangePublisher } from '../realtime/change-publisher.ts'
@@ -52,8 +61,9 @@ const MISSING_WORKFLOW = 'That workflow does not exist.'
 const MISSING_RUN = 'That run does not exist.'
 const DUPLICATE_NAME = 'A workflow with this name already exists.'
 const MISSING_SOURCE = 'An image in this workflow no longer exists.'
-const UNKNOWN_CANVAS_MODE =
-  'Choose the canvas of the workflow, or the size of the first image.'
+const NOTHING_CHOSEN = 'Choose at least one image to run the workflow on.'
+const CHOSEN_TWICE = 'Each image can be chosen once.'
+const NOT_AN_INPUT = 'Choose images from the workflow’s input images.'
 const NOTHING_TO_UNDO = 'There is nothing to undo.'
 const NOTHING_TO_REDO = 'There is nothing to redo.'
 const CANCEL_PASSES = 3
@@ -81,7 +91,8 @@ export type RunJobCounts = {
 export type RunView = {
   id: string
   workflowId: string | null
-  canvasMode: RunCanvasMode
+  /** The input images the run was started on, in the workflow's order. */
+  sourceIds: string[]
   state: RunState
   createdAt: string
   finishedAt: string | null
@@ -90,6 +101,8 @@ export type RunView = {
   progress: number
   /** The plain-words reasons Jobs of the run failed, without repeats. */
   errors: string[]
+  /** Each image of the run, in the order of `sourceIds`, with where it has got to. */
+  items: RunItem[]
 }
 
 /** The images a run made from one Source, in the order of the Output's widths. */
@@ -135,6 +148,20 @@ function cleanName(raw: string): string {
     )
   }
   return parsed.data
+}
+
+/** The workflow with only the chosen input images, kept in its own order; the workflow as it is when none are chosen. */
+function chosenInputs(
+  definition: WorkflowDefinition,
+  sourceIds: ReadonlyArray<string> | undefined,
+): WorkflowDefinition {
+  if (sourceIds === undefined) return definition
+  if (sourceIds.length === 0) throw new ValidationError(NOTHING_CHOSEN)
+  const chosen = new Set(sourceIds)
+  if (chosen.size !== sourceIds.length) throw new ValidationError(CHOSEN_TWICE)
+  const inputs = definition.inputs.filter((id) => chosen.has(id))
+  if (inputs.length !== chosen.size) throw new ValidationError(NOT_AN_INPUT)
+  return { ...definition, inputs }
 }
 
 /** The Sources in the order the workflow lists them, so a run's outputs come back in that order whatever order its Jobs finished in. */
@@ -306,23 +333,19 @@ export class WorkflowService {
   }
 
   /**
-   * Starts a run: one Job per input image for the first segment. Everything
-   * that can be checked is checked first, so a run never starts half-valid.
-   * `canvas` says whether each image is drawn on the workflow's canvas (the
-   * default) or on one of its own size.
+   * Starts a run: one Job per input image for the first segment, each drawn on
+   * the canvas the workflow's canvas size gives it. `sourceIds` chooses some
+   * of the workflow's input images; without it the run takes them all.
+   * Everything that can be checked is checked first, so a run never starts
+   * half-valid.
    */
   async run(
     actor: Actor,
     id: string,
-    options: { canvas?: RunCanvasMode } = {},
+    options: { sourceIds?: ReadonlyArray<string> } = {},
   ): Promise<RunView> {
-    const mode = RunCanvasModeSchema.safeParse(
-      options.canvas ?? RunCanvasMode.Workflow,
-    )
-    if (!mode.success) throw new ValidationError(UNKNOWN_CANVAS_MODE)
-    const canvasMode = mode.data
     const workflow = await this.#owned(actor, id)
-    const { definition } = workflow
+    const definition = chosenInputs(workflow.definition, options.sourceIds)
     const problem = workflowProblem(definition)
     if (problem !== undefined) throw new ValidationError(problem)
     await this.#checkDefinition(actor, definition)
@@ -333,7 +356,6 @@ export class WorkflowService {
       workflowId: workflow.id,
       ownerId: actor.userId,
       definition,
-      canvasMode,
       state: RunState.Running,
       createdAt: isoNow(clock),
       finishedAt: null,
@@ -431,6 +453,33 @@ export class WorkflowService {
     )
   }
 
+  /** Writes every finished image of a run into one zip file at `destination`. */
+  async writeRunArchive(
+    actor: Actor,
+    runId: string,
+    destination: string,
+  ): Promise<WrittenRunArchive> {
+    const run = await this.#ownedRun(actor, runId)
+    const workflow =
+      run.workflowId === null
+        ? null
+        : await this.#deps.workflows.findById(run.workflowId)
+    return writeRunArchive(
+      this.#deps.results,
+      actor,
+      await this.runOutputs(actor, runId),
+      destination,
+      runArchiveName(workflow?.name, run.id),
+    )
+  }
+
+  /** A run's zip file as a download; the file is removed once it has been read. */
+  openRunArchive(actor: Actor, runId: string): Promise<OpenedRunArchive> {
+    return openRunArchive(this.#deps.workRoot, (destination) =>
+      this.writeRunArchive(actor, runId, destination),
+    )
+  }
+
   /** Called when a Job ends, so a run that has finished is closed and its work images removed. */
   async onJobFinished(job: JobRecord): Promise<void> {
     if (job.workflowRunId === null) return
@@ -512,19 +561,20 @@ export class WorkflowService {
     return {
       id: run.id,
       workflowId: run.workflowId,
-      canvasMode: run.canvasMode,
+      sourceIds: [...run.definition.inputs],
       state,
       createdAt: run.createdAt,
       finishedAt,
       jobs: counts,
       progress: jobs.length === 0 ? 1 : progress / jobs.length,
       errors: [...errors],
+      items: runItems(run.definition.inputs, jobs),
     }
   }
 
   #emptyDefinition(name: string): WorkflowDefinition {
-    const { pipeline, inputs, output } = createWorkflow(name)
-    return { pipeline, inputs, output }
+    const { pipeline, inputs, output, canvasSize } = createWorkflow(name)
+    return { pipeline, inputs, output, canvasSize }
   }
 
   #parseDefinition(definition: WorkflowDefinition): WorkflowDefinition {

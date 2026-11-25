@@ -144,14 +144,14 @@ function fitInside(image: Sharp, size: number): Sharp {
 function encodeExport(
   image: Sharp,
   target: Extract<EngineTarget, { kind: EngineTargetKind.Export }>,
-  original: string,
+  original: OriginalFormat,
 ): Sharp {
   const { settings, width } = target
   let next = settings.keepMetadata ? image.keepMetadata() : image
   if (width !== undefined) next = next.resize({ width })
   if (settings.format === ExportFormat.Original) {
-    const kept = next.toFormat(original as keyof FormatEnum)
-    return original === ExportFormat.Jpeg
+    const kept = next.toFormat(original.format, original.options)
+    return original.format === ExportFormat.Jpeg
       ? kept.flatten({ background: WHITE })
       : kept
   }
@@ -164,7 +164,11 @@ function encodeExport(
     : converted
 }
 
-function encode(image: Sharp, target: EngineTarget, original: string): Sharp {
+function encode(
+  image: Sharp,
+  target: EngineTarget,
+  original: OriginalFormat,
+): Sharp {
   switch (target.kind) {
     case EngineTargetKind.Preview:
       return fitInside(image, PREVIEW_MAX_SIZE).webp({
@@ -201,12 +205,36 @@ function baseImage(base: EngineBase): Sharp {
   })
 }
 
-/** The format "same as original" writes: that of the image it follows, when Sharp can write it, else PNG. */
-async function originalFormat(from: string | undefined): Promise<string> {
-  if (from === undefined) return FALLBACK_FORMAT
-  const { format } = await sharp(from).metadata()
-  if (format === undefined) return FALLBACK_FORMAT
-  return sharp.format[format]?.output.buffer ? format : FALLBACK_FORMAT
+/** The format "same as original" writes, with what it needs to write that file the same way. */
+type OriginalFormat = {
+  format: keyof FormatEnum
+  options: Record<string, unknown>
+}
+
+const FALLBACK_ORIGINAL: OriginalFormat = {
+  format: FALLBACK_FORMAT,
+  options: {},
+}
+
+function isWritableFormat(format: string): format is keyof FormatEnum {
+  return sharp.format[format as keyof FormatEnum]?.output.buffer === true
+}
+
+/**
+ * The format of the image an export follows, when Sharp can write it, else
+ * PNG. Sharp reads AVIF and HEIC both as `heif` and tells them apart by the
+ * compression, which it must be given back to write the same kind of file.
+ */
+async function originalFormat(
+  from: string | undefined,
+): Promise<OriginalFormat> {
+  if (from === undefined) return FALLBACK_ORIGINAL
+  const { format, compression } = await sharp(from).metadata()
+  if (format === undefined || !isWritableFormat(format)) {
+    return FALLBACK_ORIGINAL
+  }
+  if (format === 'heif') return { format, options: { compression } }
+  return { format, options: {} }
 }
 
 async function pixelsOf(image: Sharp): Promise<RawImage> {

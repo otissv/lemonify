@@ -12,14 +12,12 @@ import {
   useWorkflowNodePreview,
 } from '@/features/workflows/use-workflow-node-preview'
 import type { NodePreview } from '@/features/workflows/use-workflow-node-preview'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 import { cn } from '@/lib/utils'
 
 interface WorkflowNodePreviewProps {
   workflowId: string
   /** The diagram node whose picture is shown: a step, or the canvas, inputs or output. */
   nodeId: string
-  canvasMode: RunCanvasMode
   /** What the picture is of, for its text alternative. */
   name: string
 }
@@ -65,10 +63,9 @@ function PreviewNotice({
 export function WorkflowNodePreview({
   workflowId,
   nodeId,
-  canvasMode,
   name,
 }: WorkflowNodePreviewProps): React.JSX.Element {
-  const preview = useWorkflowNodePreview(workflowId, nodeId, canvasMode)
+  const preview = useWorkflowNodePreview(workflowId, nodeId)
   const { picture } = preview
 
   return (

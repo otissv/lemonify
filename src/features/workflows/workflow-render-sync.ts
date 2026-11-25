@@ -5,7 +5,6 @@ import {
 } from '@/features/render/render-functions'
 import { errorMessage } from '@/lib/error-message'
 import { JobKind, JobState } from '@/server/jobs/job-types'
-import type { RunCanvasMode } from '@/features/workflows/workflow'
 import { usePipelineStore } from '@/store/pipeline-store'
 
 const PREVIEW_FAILED = 'The picture could not be made.'
@@ -19,13 +18,10 @@ export type NodePreviewOutcome =
 /** Asks for small pictures under each workflow node; a node without one is left empty. */
 export async function refreshWorkflowThumbnails(
   workflowId: string,
-  canvasMode: RunCanvasMode,
   signal: AbortSignal,
 ): Promise<void> {
   try {
-    const queued = await requestWorkflowThumbnails({
-      data: { workflowId, canvasMode },
-    })
+    const queued = await requestWorkflowThumbnails({ data: { workflowId } })
     const ended = await followJob(queued.id, signal)
     const result = ended?.result
     if (
@@ -43,13 +39,12 @@ export async function refreshWorkflowThumbnails(
 /** Asks for the large picture of one workflow diagram node and waits for it. Undefined when `signal` aborted first. */
 export async function loadWorkflowNodePreview(
   workflowId: string,
-  canvasMode: RunCanvasMode,
   nodeId: string,
   signal: AbortSignal,
 ): Promise<NodePreviewOutcome | undefined> {
   try {
     const queued = await requestWorkflowPreview({
-      data: { workflowId, canvasMode, nodeId },
+      data: { workflowId, nodeId },
     })
     const ended = await followJob(queued.id, signal)
     if (ended === undefined) return undefined

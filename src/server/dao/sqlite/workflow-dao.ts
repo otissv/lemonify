@@ -1,14 +1,8 @@
 import type { Knex } from 'knex'
 
 import { WorkflowHistoryPatchSchema } from '@/features/workflows/workflow-change'
-import {
-  RunCanvasModeSchema,
-  WorkflowDefinitionSchema,
-} from '@/features/workflows/workflow'
-import type {
-  RunCanvasMode,
-  WorkflowDefinition,
-} from '@/features/workflows/workflow'
+import { WorkflowDefinitionSchema } from '@/features/workflows/workflow'
+import type { WorkflowDefinition } from '@/features/workflows/workflow'
 
 import {
   ConflictError,
@@ -49,7 +43,6 @@ type RunRow = {
   workflow_id: string | null
   owner_id: string
   definition: string
-  canvas_mode: string
   state: string
   created_at: string
   finished_at: string | null
@@ -71,14 +64,6 @@ function parseDefinition(text: string): WorkflowDefinition {
     throw new DataIntegrityError(UNREADABLE, { cause: definition.error })
   }
   return definition.data
-}
-
-function parseCanvasMode(text: string): RunCanvasMode {
-  const mode = RunCanvasModeSchema.safeParse(text)
-  if (!mode.success) {
-    throw new DataIntegrityError(UNREADABLE, { cause: mode.error })
-  }
-  return mode.data
 }
 
 function toWorkflow(row: WorkflowRow): WorkflowRecord {
@@ -145,7 +130,6 @@ function toRun(row: RunRow): WorkflowRunRecord {
     workflowId: row.workflow_id,
     ownerId: row.owner_id,
     definition: parseDefinition(row.definition),
-    canvasMode: parseCanvasMode(row.canvas_mode),
     state: row.state as RunState,
     createdAt: row.created_at,
     finishedAt: row.finished_at,
@@ -262,7 +246,6 @@ export class SqliteWorkflowDao implements WorkflowDao {
       workflow_id: run.workflowId,
       owner_id: run.ownerId,
       definition: JSON.stringify(run.definition),
-      canvas_mode: run.canvasMode,
       state: run.state,
       created_at: run.createdAt,
       finished_at: run.finishedAt,

@@ -362,6 +362,22 @@ describe('SharpImageEngine', () => {
       expect(await exportOriginal(input, 'same.png')).toBe('png')
     })
 
+    it('keeps AVIF as AVIF, which Sharp reads as HEIF with AV1 compression', async () => {
+      const avif = path.join(directory, 'first.avif')
+      await sharp({
+        create: { width: 4, height: 4, channels: 3, background: '#00ff00' },
+      })
+        .avif()
+        .toFile(avif)
+      const written = path.join(directory, 'same.avif')
+
+      expect(await exportOriginal(avif, 'same.avif')).toBe('heif')
+      expect(await sharp(written).metadata()).toMatchObject({
+        format: 'heif',
+        compression: 'av1',
+      })
+    })
+
     it('writes PNG when no image is drawn, since a blank canvas has no format of its own', async () => {
       expect(await exportOriginal(undefined, 'blank.png')).toBe('png')
     })

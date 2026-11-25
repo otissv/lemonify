@@ -5,6 +5,7 @@ import { AppSidebar } from '@/features/app/app-sidebar'
 import { ImageOpenerProvider } from '@/features/app/image-opener'
 import { NewDocumentDialog } from '@/features/documents/new-document-dialog'
 import { KeybindingsProvider } from '@/features/keybindings/keybindings-context'
+import { Page } from '@/features/keybindings/actions'
 import { KeyBindings } from '@/features/keybindings/key-bindings'
 import { ShortcutsDialog } from '@/features/keybindings/shortcuts-dialog'
 import { MenuPanel } from '@/features/app/menu-panel'
@@ -52,7 +53,7 @@ export function AppLayout(): React.JSX.Element {
             <main className="relative min-h-0 flex-1 overflow-hidden">
               <Outlet />
               {ownsPanel ? null : <MenuPanel />}
-              {ownsPanel ? null : <KeyBindings />}
+              {ownsPanel ? null : <KeyBindings page={Page.Home} />}
               <LiveStatus />
             </main>
           </SidebarInset>

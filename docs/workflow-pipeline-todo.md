@@ -17,6 +17,12 @@ Out of scope: batch steps, input steps, and layer kinds other than `image`.
 | Context rules per step kind | A step kind says where it may appear and how it behaves there. The differences between a document and a workflow live in the create-from functions, not in the pipeline.   |
 | Workflow as a group         | A workflow can be added as a group inside an existing document, as one undoable change.                                                                                    |
 | Preview                     | The workflow page previews the last image added.                                                                                                                           |
+| Action contexts             | Every action names the pages it applies on (`home`, `document`, `workflow`); there is no default. The menu hides items for other pages and their keys do nothing there.    |
+| One key, one action         | A key does the same thing on every page. No two actions share a key, whatever their contexts, so the conflict checks stay as they are.                                     |
+| Canvas size mode            | A workflow's canvas is either **Match each input image** (the default for a new workflow) or **Set size**, chosen in the Canvas node's options and saved with the workflow as an undoable change. It replaces the per-browser run canvas choice. |
+| Runs in the side panel      | The workflow page's right-hand panel has two tabs: **Preview** (the selected node's picture) and **Runs** (a new run with an image picker, and one row per run with progress, Stop, Download all and a `⋯` menu). Selecting a node shows Preview. View has **Step preview** (Alt+P) and **Run panel** (Alt+R); each opens the panel on its tab, and choosing the ticked one hides it. The floating panel has no Run tab. |
+| Runs on chosen images       | A run is started on a chosen subset of the workflow's input images (`workflow run --sources`). Progress is a count and a bar, not the step. A finished run's results download as one zip. |
+| Shortcuts by category       | The Keyboard shortcuts dialog lists every action by category (Edit, Step, View, Add tool…), never by page. Actions only a workflow has get a Workflow category.             |
 
 ## 1. Explicit canvas
 
@@ -54,14 +60,17 @@ Out of scope: batch steps, input steps, and layer kinds other than `image`.
 - [ ] The same for a group and for a sub-document as the source.
 - [ ] Canvas for a new document from a workflow: from the chosen image or library image; else from the first step's size settings; else the user sets it, on the website and the CLI.
 - [ ] CLI: `workflow create --from-document <id> [--group <stepId>]` and `document create --from-workflow <id>`, with parity entries.
-- [ ] Website: "New workflow from document / group / sub-document" and "New document from workflow".
-- [ ] Add a workflow as a group inside an existing document: an undoable `DocumentChange`, a CLI command, a website control and a parity entry.
+- [ ] Website: "New workflow from document / group / sub-document" and "New document from workflow", each with its key action (registry, runner, a default key where it makes sense) in the same change.
+- [ ] Add a workflow as a group inside an existing document: an undoable `DocumentChange`, a CLI command, a website control, its key action and a parity entry.
 - [ ] Document that going from a document to a workflow and back drops the images.
 
 ## 5. Shared shell and the workflow page
 
 - [ ] The floating panel and the menu take a context (`document` or `workflow`) and build their tabs and items from a list for it. Items that do not apply are not shown.
-- [ ] Workflow-specific tabs: inputs, run settings, run results.
+- [x] Canvas size mode on the Canvas node (see the decisions), with `workflow create|update` flags; `workflow run --canvas` and the per-browser choice go.
+- [x] Runs on chosen images (`workflow run --sources`) and a zip download of a run's results, on the website and the CLI.
+- [x] The Runs tab in the right-hand panel, and View > Run panel (Alt+R).
+- [x] Remove the Run tab from the floating panel; its Saved status and Undo/Redo go with it (undo stays in Edit, and a failed save shows as a notice over the diagram).
 - [x] Reuse the floating panel and the Tools browser on the workflow page.
 - [x] Remove the tool column on the left and the options column on the right; the diagram stays in the middle.
 - [x] Workflow page preview: the last image added, through the existing render path; an empty state until one is added.
@@ -70,9 +79,9 @@ Out of scope: batch steps, input steps, and layer kinds other than `image`.
 
 ## 6. Key bindings for the new work
 
-- [ ] A `contexts` field on actions in the registry; hide the actions that do not apply in the current context in the menu and the shortcuts dialog.
-- [ ] Register actions for each new feature (set canvas, new document, new workflow from, add workflow as group) with defaults where it makes sense, in the same change as the feature.
-- [ ] Update `docs/keybindings.md`.
+- [x] A `contexts` field on actions in the registry; the menu hides the items whose action does not apply on the page, and their keys do nothing there. The shortcuts dialog keeps every action, grouped by category. `keys list` shows each action's contexts.
+- [x] Register an action for setting the canvas (built in section 1, with no action yet), with a default key if it makes sense. New document already has `file.newDocument`; the create-from and add-as-group actions are built with their features in section 4.
+- [x] Update `docs/keybindings.md`.
 
 ## 7. Done when
 

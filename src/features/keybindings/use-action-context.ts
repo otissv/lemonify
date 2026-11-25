@@ -5,12 +5,14 @@ import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { useImageOpener } from '@/features/app/image-opener'
 import { previousVisit } from '@/features/documents/visit-trail'
 import type { ActionContext } from '@/features/keybindings/action-runner'
+import type { Page } from '@/features/keybindings/actions'
 import { useUiStore } from '@/store/ui-store'
 
 const rootRoute = getRouteApi('__root__')
 
 /** What actions need from the page they run on, so the menu and the keys do exactly the same thing. */
 export function useActionContext(
+  page: Page,
   documentId: string | undefined,
   catalogues?: AiCatalogues,
 ): ActionContext {
@@ -21,6 +23,7 @@ export function useActionContext(
 
   return useMemo<ActionContext>(
     () => ({
+      page,
       documentId,
       catalogues,
       opener,
@@ -43,6 +46,7 @@ export function useActionContext(
       },
     }),
     [
+      page,
       documentId,
       catalogues,
       opener,

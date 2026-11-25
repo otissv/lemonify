@@ -1,4 +1,3 @@
-import { RunCanvasModeSchema } from '@/features/workflows/workflow'
 import { shownForWorkflowNode } from '@/features/workflows/workflow-thumb-plan'
 
 import type { WorkflowDao } from '../../dao/workflow-dao.ts'
@@ -40,10 +39,7 @@ export class WorkflowThumbnailHandler implements JobHandler {
           payload.workflowId,
           payload.revision,
         )
-        const filled = await workflowPlanner.filled(
-          workflow,
-          RunCanvasModeSchema.parse(payload.canvasMode),
-        )
+        const filled = await workflowPlanner.filled(workflow)
         const thumbnails: Array<{ stepId: string; key: string | null }> = []
         for (const [done, nodeId] of payload.nodeIds.entries()) {
           context.setProgress(done / payload.nodeIds.length)

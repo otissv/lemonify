@@ -6,7 +6,6 @@ import {
   NO_SELECTION,
   stepSelection,
 } from '@/features/workflows/workflow-selection'
-import { RunCanvasMode } from '@/features/workflows/workflow'
 import { resetStores } from '@/store/reset-stores'
 import {
   MAX_RECENT_UPSCALE_MODELS,
@@ -257,19 +256,6 @@ describe('useUiStore', () => {
       expect(workflowSelectionOf(useUiStore.getState(), FIRST)).toEqual(
         stepSelection('s2'),
       )
-    })
-
-    it('keeps the canvas of the next run for each workflow, and forgets it with the workflow', () => {
-      const { setRunCanvasMode, forgetUi } = useUiStore.getState()
-
-      setRunCanvasMode(FIRST, RunCanvasMode.FirstImage)
-      expect(useUiStore.getState().runCanvasModes[FIRST]).toBe(
-        RunCanvasMode.FirstImage,
-      )
-      expect(useUiStore.getState().runCanvasModes[SECOND]).toBeUndefined()
-
-      forgetUi(FIRST)
-      expect(useUiStore.getState().runCanvasModes[FIRST]).toBeUndefined()
     })
   })
 

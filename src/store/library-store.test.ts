@@ -8,7 +8,6 @@ import {
   listResults,
 } from '@/features/results/result-functions'
 import { deleteSource, listSources } from '@/features/sources/source-functions'
-import { RunCanvasMode } from '@/features/workflows/workflow'
 import {
   cancelWorkflowRun,
   deleteWorkflowRun,
@@ -192,15 +191,24 @@ describe('the runs of a workflow', () => {
     expect(useLibraryStore.getState().runs.w2).toBeUndefined()
   })
 
-  it('start on the chosen canvas and are read again', async () => {
+  it('start on chosen input images', async () => {
     vi.mocked(runWorkflow).mockResolvedValue(RUN)
     vi.mocked(listWorkflowRuns).mockResolvedValue([RUN])
 
-    await useLibraryStore.getState().startRun('w1', RunCanvasMode.FirstImage)
+    await useLibraryStore.getState().startRun('w1', ['a', 'b'])
 
     expect(runWorkflow).toHaveBeenCalledWith({
-      data: { id: 'w1', canvas: RunCanvasMode.FirstImage },
+      data: { id: 'w1', sourceIds: ['a', 'b'] },
     })
+  })
+
+  it('start and are read again', async () => {
+    vi.mocked(runWorkflow).mockResolvedValue(RUN)
+    vi.mocked(listWorkflowRuns).mockResolvedValue([RUN])
+
+    await useLibraryStore.getState().startRun('w1')
+
+    expect(runWorkflow).toHaveBeenCalledWith({ data: { id: 'w1' } })
     expect(useLibraryStore.getState().runs.w1).toEqual([RUN])
     expect(useLibraryStore.getState().runErrors.w1).toBeUndefined()
   })
@@ -209,11 +217,11 @@ describe('the runs of a workflow', () => {
     vi.mocked(runWorkflow).mockRejectedValue(new Error('No images.'))
     vi.mocked(listWorkflowRuns).mockResolvedValue([])
 
-    await useLibraryStore.getState().startRun('w1', RunCanvasMode.Workflow)
+    await useLibraryStore.getState().startRun('w1')
     expect(useLibraryStore.getState().runErrors.w1).toBe('No images.')
 
     vi.mocked(runWorkflow).mockResolvedValue(RUN)
-    await useLibraryStore.getState().startRun('w1', RunCanvasMode.Workflow)
+    await useLibraryStore.getState().startRun('w1')
     expect(useLibraryStore.getState().runErrors.w1).toBeUndefined()
   })
 

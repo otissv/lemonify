@@ -126,19 +126,22 @@ function writeChunk(stream: Writable, chunk: Buffer): Promise<void> {
 export class ZipWriter {
   readonly #file: string
   readonly #stream: Writable
+  readonly #tooBig: string
   readonly #entries: WrittenEntry[] = []
   #offset = 0
 
-  private constructor(file: string, stream: Writable) {
+  private constructor(file: string, stream: Writable, tooBig: string) {
     this.#file = file
     this.#stream = stream
+    this.#tooBig = tooBig
     // A failed write reaches the caller through the write that failed; this
     // keeps the same error from also being thrown where nobody can catch it.
     stream.on('error', () => {})
   }
 
-  static async create(file: string): Promise<ZipWriter> {
-    return new ZipWriter(file, createWriteStream(file))
+  /** `tooBig` is what a file past the zip format's limits is refused with, naming what was being written. */
+  static async create(file: string, tooBig = TOO_BIG): Promise<ZipWriter> {
+    return new ZipWriter(file, createWriteStream(file), tooBig)
   }
 
   /** Gives up on the file: closes it and removes what was written. Safe to call after a failure. */
@@ -148,8 +151,10 @@ export class ZipWriter {
   }
 
   async #begin(entry: WrittenEntry): Promise<void> {
-    if (this.#entries.length >= MAX_ENTRIES) throw new LimitError(TOO_BIG)
-    if (entry.offset > MAX_BYTES) throw new LimitError(TOO_BIG)
+    if (this.#entries.length >= MAX_ENTRIES) {
+      throw new LimitError(this.#tooBig)
+    }
+    if (entry.offset > MAX_BYTES) throw new LimitError(this.#tooBig)
     await writeChunk(this.#stream, localHeader(entry))
     await writeChunk(this.#stream, entry.name)
     this.#offset += LOCAL_HEADER_BYTES + entry.name.length
@@ -166,7 +171,7 @@ export class ZipWriter {
       size: data.length,
       offset: this.#offset,
     }
-    if (data.length > MAX_BYTES) throw new LimitError(TOO_BIG)
+    if (data.length > MAX_BYTES) throw new LimitError(this.#tooBig)
     await this.#begin(entry)
     await writeChunk(this.#stream, packed)
     this.#offset += packed.length
@@ -176,7 +181,7 @@ export class ZipWriter {
   /** Adds a file from disk as it is, without compressing it. */
   async addFile(name: string, file: string): Promise<void> {
     const { size } = await stat(file)
-    if (size > MAX_BYTES) throw new LimitError(TOO_BIG)
+    if (size > MAX_BYTES) throw new LimitError(this.#tooBig)
     const entry: WrittenEntry = {
       name: checkName(name),
       method: STORED,

@@ -18,9 +18,9 @@ import type { UpscaleCatalogue } from '@/features/upscale/upscale-settings'
 import type { AiToolEntry } from '@/features/workflows/ai-tool-entries'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
-import { useUiStore } from '@/store/ui-store'
+import { SidePanelTab, useUiStore } from '@/store/ui-store'
 import {
-  RunCanvasMode,
+  CanvasSize,
   WorkflowSchema,
   createWorkflow,
 } from '@/features/workflows/workflow'
@@ -39,6 +39,7 @@ import {
   undoWorkflow,
 } from '@/features/workflows/workflow-functions'
 import { IMAGE_LAYER_KIND } from '@/features/pipeline/layer-kinds'
+import { redoEdit, undoEdit } from '@/features/pipeline/pipeline-sync'
 import { WorkflowPage } from '@/features/workflows/workflow-page'
 import {
   requestWorkflowPreview,
@@ -55,6 +56,7 @@ import type {
   WorkflowHistoryPatch,
 } from '@/features/workflows/workflow-change'
 import { RunState } from '@/server/dao/workflow-dao'
+import { RunItemState } from '@/server/workflows/run-items'
 import type { RunView, WorkflowView } from '@/server/services/workflow-service'
 import { resetStores } from '@/store/reset-stores'
 
@@ -132,8 +134,8 @@ const server: {
 } = { workflow: createWorkflow('Unset'), revision: 0, entries: [], cursor: 0 }
 
 function serverDefinition(): WorkflowDefinition {
-  const { pipeline, inputs, output } = server.workflow
-  return { pipeline, inputs, output }
+  const { pipeline, inputs, output, canvasSize } = server.workflow
+  return { pipeline, inputs, output, canvasSize }
 }
 
 function serverView(): WorkflowView {
@@ -208,7 +210,8 @@ function run(overrides: Partial<RunView>): RunView {
   return {
     id: 'run-1',
     workflowId: 'wf',
-    canvasMode: RunCanvasMode.Workflow,
+    sourceIds: [],
+    items: [],
     state: RunState.Done,
     createdAt: NOW,
     finishedAt: NOW,
@@ -273,9 +276,27 @@ function inspector(): HTMLElement {
   return screen.getByRole('tabpanel', { name: 'Options' })
 }
 
-/** The Run tab, which starts the workflow and lists its runs. */
-function runTab(): HTMLElement {
-  return openTab('Run')
+/** The floating panel over the diagram. */
+function floatingPanel(): HTMLElement {
+  return screen.getByRole('dialog', { name: 'Tools' })
+}
+
+/** The panel beside the diagram, with the large picture and the runs. */
+function sidePanel(): HTMLElement {
+  return screen.getByRole('region', { name: 'Side panel' })
+}
+
+/** The Runs tab of the side panel, which starts runs and lists them. */
+async function runsTab(): Promise<HTMLElement> {
+  const user = userEvent.setup()
+  await user.click(within(sidePanel()).getByRole('tab', { name: 'Runs' }))
+  return within(sidePanel()).getByRole('tabpanel', { name: 'Runs' })
+}
+
+/** The workflow taking both photos as inputs, with the library holding them so their names are known. */
+function withInputs(workflow: Workflow): Workflow {
+  useLibraryStore.setState({ sources: [PHOTO_A, PHOTO_B] })
+  return { ...workflow, inputs: [PHOTO_A.id, PHOTO_B.id] }
 }
 
 /** The kind of each step in the last save, with a Sharp step shown by its op. */
@@ -301,14 +322,6 @@ describe('WorkflowPage', () => {
     vi.mocked(requestWorkflowThumbnails).mockReturnValue(new Promise(() => {}))
     vi.mocked(requestWorkflowPreview).mockReturnValue(new Promise(() => {}))
     installServer()
-  })
-
-  it('names the workflow', async () => {
-    await renderPage(createWorkflow('Sharpen photos'))
-
-    expect(
-      within(runTab()).getByRole('heading', { name: 'Sharpen photos' }),
-    ).toBeInTheDocument()
   })
 
   it('says why the workflow could not be loaded', async () => {
@@ -348,13 +361,13 @@ describe('WorkflowPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  describe('step preview', () => {
+  describe('side panel', () => {
     function previewPanel(): HTMLElement {
-      return screen.getByRole('region', { name: 'Step preview' })
+      return sidePanel()
     }
 
     function resizeHandle(): HTMLElement {
-      return screen.getByRole('separator', { name: 'Resize step preview' })
+      return screen.getByRole('separator', { name: 'Resize side panel' })
     }
 
     it('leaves the whole width to the diagram while the preview is hidden', async () => {
@@ -362,14 +375,14 @@ describe('WorkflowPage', () => {
       expect(previewPanel()).toBeVisible()
 
       act(() => {
-        useUiStore.getState().setWorkflowPreviewOpen(false)
+        useUiStore.getState().setWorkflowSidePanelOpen(false)
       })
 
       expect(
-        screen.queryByRole('region', { name: 'Step preview' }),
+        screen.queryByRole('region', { name: 'Side panel' }),
       ).not.toBeInTheDocument()
       expect(
-        screen.queryByRole('separator', { name: 'Resize step preview' }),
+        screen.queryByRole('separator', { name: 'Resize side panel' }),
       ).not.toBeInTheDocument()
       expect(canvas()).toBeVisible()
     })
@@ -390,7 +403,6 @@ describe('WorkflowPage', () => {
         expect(requestWorkflowPreview).toHaveBeenLastCalledWith({
           data: {
             workflowId: workflow.id,
-            canvasMode: RunCanvasMode.Workflow,
             nodeId: 'output',
           },
         })
@@ -402,7 +414,6 @@ describe('WorkflowPage', () => {
         expect(requestWorkflowPreview).toHaveBeenLastCalledWith({
           data: {
             workflowId: workflow.id,
-            canvasMode: RunCanvasMode.Workflow,
             nodeId: 'canvas',
           },
         })
@@ -418,6 +429,39 @@ describe('WorkflowPage', () => {
       expect(previewPanel()).toHaveStyle({ width: '55%' })
     })
 
+    it('opens on the preview, and shows the runs on its Runs tab', async () => {
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      const tabs = within(sidePanel())
+
+      expect(tabs.getByRole('tab', { name: 'Preview' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      await user.click(tabs.getByRole('tab', { name: 'Runs' }))
+
+      expect(useUiStore.getState().workflowSidePanelTab).toBe(SidePanelTab.Runs)
+      expect(
+        within(tabs.getByRole('tabpanel', { name: 'Runs' })).getByRole(
+          'region',
+          { name: 'New run' },
+        ),
+      ).toBeVisible()
+    })
+
+    it('shows the preview again when a node is selected', async () => {
+      await renderPage(createWorkflow('Test'))
+      act(() => {
+        useUiStore.getState().showWorkflowSidePanel(SidePanelTab.Runs)
+      })
+
+      await clickStep('Canvas')
+
+      expect(
+        within(sidePanel()).getByRole('tab', { name: 'Preview' }),
+      ).toHaveAttribute('aria-selected', 'true')
+    })
+
     it('keeps the floating panel over the diagram, not the preview', async () => {
       await renderPage(createWorkflow('Test'))
 
@@ -427,12 +471,14 @@ describe('WorkflowPage', () => {
     })
   })
 
-  it('offers the workflow tabs only: Tools, Options and Run', async () => {
+  it('offers the workflow tabs only in the floating panel: Tools and Options', async () => {
     await renderPage(createWorkflow('Test'))
 
     expect(
-      screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-label')),
-    ).toEqual(['Tools', 'Options', 'Run'])
+      within(floatingPanel())
+        .getAllByRole('tab')
+        .map((tab) => tab.getAttribute('aria-label')),
+    ).toEqual(['Tools', 'Options'])
   })
 
   describe('output', () => {
@@ -1104,9 +1150,44 @@ describe('WorkflowPage', () => {
   })
 
   describe('canvas', () => {
-    it('changes the size and the background of the canvas', async () => {
+    function fixedWorkflow(): Workflow {
+      return { ...createWorkflow('Test'), canvasSize: CanvasSize.Fixed }
+    }
+
+    it('matches each input image for a new workflow, so only its background is set', async () => {
+      await renderPage(createWorkflow('Test'))
+      await clickStep('Canvas')
+      const panel = inspector()
+
+      expect(
+        within(panel).getByRole('combobox', { name: 'Canvas size' }),
+      ).toHaveTextContent('Match each input image')
+      expect(within(panel).queryByLabelText('Width (px)')).toBeNull()
+      expect(
+        within(panel).getByRole('switch', { name: 'Transparent background' }),
+      ).toBeInTheDocument()
+    })
+
+    it('sets a size of its own for every image, as one change, and shows the size to set', async () => {
       const user = userEvent.setup()
       await renderPage(createWorkflow('Test'))
+      await clickStep('Canvas')
+      const panel = inspector()
+
+      await user.click(
+        within(panel).getByRole('combobox', { name: 'Canvas size' }),
+      )
+      await user.click(screen.getByRole('option', { name: 'Set size' }))
+
+      await waitFor(() => {
+        expect(savedWorkflow().canvasSize).toBe(CanvasSize.Fixed)
+      })
+      expect(within(inspector()).getByLabelText('Width (px)')).toBeVisible()
+    })
+
+    it('changes the size and the background of a fixed canvas', async () => {
+      const user = userEvent.setup()
+      await renderPage(fixedWorkflow())
       await clickStep('Canvas')
       const panel = inspector()
 
@@ -1131,7 +1212,7 @@ describe('WorkflowPage', () => {
 
     it('refuses a canvas that is not valid, and saves nothing', async () => {
       const user = userEvent.setup()
-      await renderPage(createWorkflow('Test'))
+      await renderPage(fixedWorkflow())
       await clickStep('Canvas')
       const panel = inspector()
 
@@ -1147,20 +1228,18 @@ describe('WorkflowPage', () => {
     })
   })
 
-  describe('save status and the Edit history', () => {
-    it('says when the workflow is saved after a change', async () => {
+  describe('saving and the Edit history', () => {
+    it('saves a change with the revision it was made on', async () => {
       const user = userEvent.setup()
       await renderPage(createWorkflow('Test'))
-      expect(within(runTab()).getByRole('status')).toHaveTextContent('Saved')
 
       await user.click(
         within(palette()).getByRole('button', { name: 'Add Resize' }),
       )
 
       await waitFor(() => {
-        expect(changeWorkflow).toHaveBeenCalledTimes(1)
+        expect(server.entries).toHaveLength(1)
       })
-      await within(runTab()).findByText('Saved')
       expect(
         vi.mocked(changeWorkflow).mock.calls.at(-1)?.[0].data.revision,
       ).toBe(0)
@@ -1174,9 +1253,8 @@ describe('WorkflowPage', () => {
         within(palette()).getByRole('button', { name: 'Add Resize' }),
       )
       await waitFor(() => {
-        expect(changeWorkflow).toHaveBeenCalledTimes(1)
+        expect(server.entries).toHaveLength(1)
       })
-      await within(runTab()).findByText('Saved')
       await user.click(
         within(palette()).getByRole('button', { name: 'Add Rotate' }),
       )
@@ -1200,43 +1278,32 @@ describe('WorkflowPage', () => {
         within(palette()).getByRole('button', { name: 'Add Resize' }),
       )
 
-      expect(
-        await within(runTab()).findByText(
-          'Not saved: This workflow was changed somewhere else.',
-        ),
-      ).toBeInTheDocument()
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Not saved: This workflow was changed somewhere else.',
+      )
       await waitFor(() => {
         expect(within(canvas()).queryByText('Resize')).not.toBeInTheDocument()
       })
     })
 
-    it('undoes and redoes a change from the Edit history, and says when there is nothing to', async () => {
+    it('undoes and redoes a change from the Edit history', async () => {
       const user = userEvent.setup()
-      await renderPage(createWorkflow('Test'))
-      expect(
-        within(runTab()).getByRole('button', { name: 'Undo' }),
-      ).toBeDisabled()
-      expect(
-        within(runTab()).getByRole('button', { name: 'Redo' }),
-      ).toBeDisabled()
+      const workflow = await renderPage(createWorkflow('Test'))
 
       await user.click(
         within(palette()).getByRole('button', { name: 'Add Resize' }),
       )
       await within(canvas()).findByText('Resize')
-      await user.click(within(runTab()).getByRole('button', { name: 'Undo' }))
+      await act(() => undoEdit(workflow.id))
 
       await waitFor(() => {
         expect(within(canvas()).queryByText('Resize')).not.toBeInTheDocument()
       })
       expect(savedWorkflow().pipeline.steps).toHaveLength(1)
-      await user.click(within(runTab()).getByRole('button', { name: 'Redo' }))
+      await act(() => redoEdit(workflow.id))
 
       expect(await within(canvas()).findByText('Resize')).toBeInTheDocument()
       expect(savedWorkflow().pipeline.steps).toHaveLength(2)
-      expect(
-        within(runTab()).getByRole('button', { name: 'Redo' }),
-      ).toBeDisabled()
     })
 
     it('keeps changes that were not saved yet in the Edit history in order', async () => {
@@ -1258,19 +1325,24 @@ describe('WorkflowPage', () => {
   })
 
   describe('runs', () => {
-    it('saves, then starts a run', async () => {
+    it('saves, then starts a run on the chosen input images', async () => {
       vi.mocked(runWorkflow).mockResolvedValue(run({ state: RunState.Running }))
       const user = userEvent.setup()
-      await renderPage(createWorkflow('Test'))
+      const workflow = await renderPage(withInputs(createWorkflow('Test')))
       await user.click(
         within(palette()).getByRole('button', { name: 'Add Resize' }),
       )
+      const runs = await runsTab()
 
-      await user.click(within(runTab()).getByRole('button', { name: 'Run' }))
+      await user.click(within(runs).getByRole('checkbox', { name: 'b.png' }))
+      await user.click(
+        within(runs).getByRole('button', { name: 'Run on 1 image' }),
+      )
 
-      expect(changeWorkflow).toHaveBeenCalled()
-      expect(runWorkflow).toHaveBeenCalledWith({
-        data: { id: expect.any(String), canvas: RunCanvasMode.Workflow },
+      await waitFor(() => {
+        expect(runWorkflow).toHaveBeenCalledWith({
+          data: { id: workflow.id, sourceIds: [PHOTO_A.id] },
+        })
       })
       const saveOrder =
         vi.mocked(changeWorkflow).mock.invocationCallOrder[0] ?? 0
@@ -1278,100 +1350,88 @@ describe('WorkflowPage', () => {
       expect(saveOrder).toBeLessThan(runOrder)
     })
 
-    it('runs on a canvas the size of each image when asked to', async () => {
-      vi.mocked(runWorkflow).mockResolvedValue(run({ state: RunState.Running }))
-      const user = userEvent.setup()
-      await renderPage(createWorkflow('Test'))
-
-      await user.click(
-        within(runTab()).getByRole('combobox', { name: 'Run on' }),
-      )
-      await user.click(
-        screen.getByRole('option', { name: 'Size of each image' }),
-      )
-      await user.click(within(runTab()).getByRole('button', { name: 'Run' }))
-
-      await waitFor(() => {
-        expect(runWorkflow).toHaveBeenCalledWith({
-          data: { id: expect.any(String), canvas: RunCanvasMode.FirstImage },
-        })
-      })
-    })
-
     it('says why a run could not start', async () => {
       vi.mocked(runWorkflow).mockRejectedValue(
         new Error('Add at least one image to run the workflow on.'),
       )
       const user = userEvent.setup()
-      await renderPage(createWorkflow('Test'))
+      await renderPage(withInputs(createWorkflow('Test')))
+      const runs = await runsTab()
 
-      await user.click(within(runTab()).getByRole('button', { name: 'Run' }))
+      await user.click(
+        within(runs).getByRole('button', { name: 'Run on 2 images' }),
+      )
 
-      const runs = within(runTab()).getByRole('region', { name: 'Runs' })
       expect(await within(runs).findByRole('alert')).toHaveTextContent(
         'Add at least one image',
       )
     })
 
-    it('shows a running run with its progress and cancels it', async () => {
+    it('shows a running run with its progress and stops it', async () => {
       vi.mocked(listWorkflowRuns).mockResolvedValue([
         run({
           state: RunState.Running,
-          progress: 0.5,
-          jobs: {
-            total: 2,
-            waiting: 0,
-            running: 1,
-            done: 1,
-            failed: 0,
-            cancelled: 0,
-          },
+          sourceIds: [PHOTO_A.id, PHOTO_B.id],
+          items: [
+            {
+              sourceId: PHOTO_A.id,
+              state: RunItemState.Done,
+              resultIds: ['res-1'],
+            },
+            {
+              sourceId: PHOTO_B.id,
+              state: RunItemState.Running,
+              resultIds: [],
+            },
+          ],
         }),
       ])
       vi.mocked(cancelWorkflowRun).mockResolvedValue(
         run({ state: RunState.Cancelled }),
       )
       const user = userEvent.setup()
-      await renderPage(createWorkflow('Test'))
-      const runs = within(runTab()).getByRole('region', { name: 'Runs' })
+      await renderPage(withInputs(createWorkflow('Test')))
+      const runs = await runsTab()
+      const detail = await within(runs).findByRole('region', { name: 'Run 1' })
 
-      expect(await within(runs).findByText(/Running · 50%/)).toBeInTheDocument()
-      await user.click(within(runs).getByRole('button', { name: 'Cancel' }))
+      expect(within(detail).getByText('1 of 2 done')).toBeVisible()
+      await user.click(within(detail).getByRole('button', { name: 'Stop' }))
 
       expect(cancelWorkflowRun).toHaveBeenCalledWith({ data: { id: 'run-1' } })
     })
 
     it('offers the finished images to download, and deletes the run', async () => {
-      vi.mocked(listWorkflowRuns).mockResolvedValue([run({})])
-      vi.mocked(listResults).mockResolvedValue([
-        {
-          id: 'res-1',
-          kind: 'run-item',
-          fileName: 'a-480.webp',
-          mediaType: 'image/webp',
-          bytes: 10,
-          documentId: null,
-          stepId: null,
-          workflowRunId: 'run-1',
-          createdAt: NOW,
-        },
+      vi.mocked(listWorkflowRuns).mockResolvedValue([
+        run({
+          sourceIds: [PHOTO_A.id],
+          items: [
+            {
+              sourceId: PHOTO_A.id,
+              state: RunItemState.Done,
+              resultIds: ['res-1'],
+            },
+          ],
+        }),
       ])
       vi.mocked(deleteWorkflowRun).mockResolvedValue(undefined)
       const user = userEvent.setup()
-      await renderPage(createWorkflow('Test'))
-      const runs = within(runTab()).getByRole('region', { name: 'Runs' })
+      await renderPage(withInputs(createWorkflow('Test')))
+      const runs = await runsTab()
+      const detail = await within(runs).findByRole('region', { name: 'Run 1' })
+
+      expect(
+        within(detail).getByRole('link', { name: 'Download a.jpg' }),
+      ).toHaveAttribute('href', '/api/results/res-1')
+      expect(
+        within(detail).getByRole('link', { name: 'Download all' }),
+      ).toHaveAttribute('href', '/api/workflow-runs/run-1/archive')
 
       await user.click(
-        await within(runs).findByRole('button', { name: 'Show images' }),
+        within(detail).getByRole('button', { name: 'More actions for Run 1' }),
       )
-
-      const link = await within(runs).findByRole('link', {
-        name: 'a-480.webp',
-      })
-      expect(link).toHaveAttribute('href', '/api/results/res-1')
-      expect(link).toHaveAttribute('download', 'a-480.webp')
-
-      await user.click(within(runs).getByRole('button', { name: 'Delete' }))
+      await user.click(
+        await screen.findByRole('menuitem', { name: 'Delete run' }),
+      )
       expect(deleteWorkflowRun).toHaveBeenCalledWith({ data: { id: 'run-1' } })
     })
   })

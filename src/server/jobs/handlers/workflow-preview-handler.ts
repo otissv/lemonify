@@ -1,4 +1,3 @@
-import { RunCanvasModeSchema } from '@/features/workflows/workflow'
 import { shownForWorkflowNode } from '@/features/workflows/workflow-thumb-plan'
 
 import { RenderKind } from '../../tools/render-store.ts'
@@ -35,10 +34,7 @@ export class WorkflowPreviewHandler implements JobHandler {
           payload.workflowId,
           payload.revision,
         )
-        const filled = await workflowPlanner.filled(
-          workflow,
-          RunCanvasModeSchema.parse(payload.canvasMode),
-        )
+        const filled = await workflowPlanner.filled(workflow)
         const shown = shownForWorkflowNode(
           filled.pipeline,
           payload.nodeId,

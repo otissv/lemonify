@@ -10,7 +10,7 @@ import {
 } from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import type { AiStep, PipelineStep } from '@/features/pipeline/pipeline'
-import { RunCanvasMode, createWorkflow } from '@/features/workflows/workflow'
+import { CanvasSize, createWorkflow } from '@/features/workflows/workflow'
 import {
   CANVAS_NODE_ID,
   INPUTS_NODE_ID,
@@ -936,6 +936,7 @@ describe('workflow thumbnails', () => {
     const ai = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     const definition = {
       pipeline: createPipeline(canvasOfSize(40, 30), [layer, sharpen, ai]),
+      canvasSize: CanvasSize.Fixed,
       inputs: [source.id],
       output,
     }
@@ -943,7 +944,6 @@ describe('workflow thumbnails', () => {
     const queued = await t.app.renders.requestWorkflowThumbnails(
       t.ann,
       workflow.id,
-      RunCanvasMode.Workflow,
     )
     const done = await run(queued)
     if (done.result?.kind !== JobKind.WorkflowThumbnail) {
@@ -989,6 +989,7 @@ describe('workflow previews', () => {
     const ai = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     const workflow = await t.app.workflows.create(t.ann, 'Large', {
       pipeline: createPipeline(canvasOfSize(40, 30), [layer, sharpen, ai]),
+      canvasSize: CanvasSize.Fixed,
       inputs: [source.id],
       output,
     })
@@ -1000,7 +1001,6 @@ describe('workflow previews', () => {
     const queued = await t.app.renders.requestWorkflowPreview(
       t.ann,
       workflow.id,
-      RunCanvasMode.Workflow,
       sharpen.id,
     )
     expect(queued.kind).toBe(JobKind.WorkflowPreview)
@@ -1028,12 +1028,7 @@ describe('workflow previews', () => {
     ).toBe('image/webp')
 
     const afterAi = await run(
-      await t.app.renders.requestWorkflowPreview(
-        t.ann,
-        workflow.id,
-        RunCanvasMode.Workflow,
-        ai.id,
-      ),
+      await t.app.renders.requestWorkflowPreview(t.ann, workflow.id, ai.id),
     )
     if (afterAi.result?.kind !== JobKind.WorkflowPreview) {
       throw new Error('wrong result')
@@ -1045,12 +1040,7 @@ describe('workflow previews', () => {
   it('refuses a node the workflow does not have', async () => {
     const { workflow } = await previewWorkflow()
     await expect(
-      t.app.renders.requestWorkflowPreview(
-        t.ann,
-        workflow.id,
-        RunCanvasMode.Workflow,
-        'no-such-node',
-      ),
+      t.app.renders.requestWorkflowPreview(t.ann, workflow.id, 'no-such-node'),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
@@ -1059,20 +1049,17 @@ describe('workflow previews', () => {
     const first = await t.app.renders.requestWorkflowPreview(
       t.ann,
       workflow.id,
-      RunCanvasMode.Workflow,
       sharpen.id,
     )
     const again = await t.app.renders.requestWorkflowPreview(
       t.ann,
       workflow.id,
-      RunCanvasMode.Workflow,
       sharpen.id,
     )
     expect(again.id).toBe(first.id)
     const other = await t.app.renders.requestWorkflowPreview(
       t.ann,
       workflow.id,
-      RunCanvasMode.Workflow,
       CANVAS_NODE_ID,
     )
     expect(other.id).not.toBe(first.id)
@@ -1085,12 +1072,7 @@ describe('workflow previews', () => {
   it("does not show one person another person's workflow", async () => {
     const { workflow, sharpen } = await previewWorkflow()
     await expect(
-      t.app.renders.requestWorkflowPreview(
-        t.bob,
-        workflow.id,
-        RunCanvasMode.Workflow,
-        sharpen.id,
-      ),
+      t.app.renders.requestWorkflowPreview(t.bob, workflow.id, sharpen.id),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 })

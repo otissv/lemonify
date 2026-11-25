@@ -4,7 +4,6 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import type { WorkerPool } from '@/features/ai/ai-tools'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
 import { pictureSizeSchema } from '@/features/pipeline/canvas'
-import { RunCanvasModeSchema } from '@/features/workflows/workflow'
 
 export enum JobKind {
   Preview = 'preview',
@@ -67,14 +66,12 @@ export const JobPayloadSchema = z.discriminatedUnion('kind', [
     kind: z.literal(JobKind.WorkflowThumbnail),
     workflowId: id,
     revision,
-    canvasMode: RunCanvasModeSchema,
     nodeIds: z.array(id),
   }),
   z.strictObject({
     kind: z.literal(JobKind.WorkflowPreview),
     workflowId: id,
     revision,
-    canvasMode: RunCanvasModeSchema,
     /** The diagram node whose picture is shown: a step, or the canvas, inputs or output. */
     nodeId: id,
   }),

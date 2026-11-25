@@ -30,3 +30,8 @@ export function workflowThumbnailImageUrl(
 export function resultDownloadUrl(resultId: string): string {
   return `/api/results/${encodeURIComponent(resultId)}`
 }
+
+/** Every finished image of a workflow run, in one zip file. */
+export function runArchiveUrl(runId: string): string {
+  return `/api/workflow-runs/${encodeURIComponent(runId)}/archive`
+}

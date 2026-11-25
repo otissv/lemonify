@@ -2,7 +2,7 @@ import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import type { ImageOpener } from '@/features/app/image-opener'
 import { canRedoNow, canUndoNow } from '@/features/pipeline/pipeline-session'
 import { redoEdit, undoEdit } from '@/features/pipeline/pipeline-sync'
-import { actionById } from '@/features/keybindings/actions'
+import { Page, actionById } from '@/features/keybindings/actions'
 import {
   PipelineStepKind,
   groupableSteps,
@@ -22,16 +22,18 @@ import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import { addTool } from '@/features/tools/add-tool'
 import { PAN_STEPS, panDistance } from '@/features/viewport/pan-step'
 import { viewportActionsFor } from '@/features/viewport/use-viewport'
-import { Tool, useUiStore } from '@/store/ui-store'
+import { CANVAS_SELECTION } from '@/features/workflows/workflow-selection'
+import { SidePanelTab, Tool, useUiStore } from '@/store/ui-store'
 import {
   currentPipeline,
   documentSession,
   usePipelineStore,
-  workflowSession,
 } from '@/store/pipeline-store'
 
 /** What an action needs from the page it runs on. */
 export interface ActionContext {
+  /** The kind of page, which decides the actions that apply on it. */
+  page: Page
   /** The document on screen; none on pages without one. */
   documentId: string | undefined
   /** What the AI tools offer; known on a document's page. Actions that add an AI tool need it. */
@@ -170,6 +172,7 @@ function documentEnabled(id: string, now: Snapshot): boolean {
 export function canRunAction(id: string, context: ActionContext): boolean {
   const definition = actionById(id)
   if (definition === undefined) return false
+  if (!definition.contexts.includes(context.page)) return false
   const { documentId, opener } = context
   switch (id) {
     case 'file.newDocument':
@@ -180,15 +183,12 @@ export function canRunAction(id: string, context: ActionContext): boolean {
       return !opener.importing
     case 'file.openLibrary':
     case 'view.sidebar':
+    case 'view.stepPreview':
+    case 'view.runPanel':
     case 'help.shortcuts':
       return true
   }
   if (documentId === undefined) return false
-  if (id === 'view.stepPreview') {
-    return (
-      workflowSession(usePipelineStore.getState(), documentId) !== undefined
-    )
-  }
   const now = snapshot(documentId)
   if (definition.tool !== undefined) {
     if (!now.hasSession) return false
@@ -210,11 +210,6 @@ function runViewAction(id: string, documentId: string): void {
     return
   }
   switch (id) {
-    case 'view.stepPreview': {
-      const store = useUiStore.getState()
-      store.setWorkflowPreviewOpen(!store.workflowPreviewOpen)
-      return
-    }
     case 'view.zoomIn':
       view.zoomIn()
       return
@@ -279,6 +274,17 @@ function runStepAction(id: string, now: Snapshot): void {
   }
 }
 
+/** Where the canvas size is set: a document's Document panel, or a workflow's Canvas in Options. */
+function showCanvasSize(id: string, page: Page): void {
+  const store = useUiStore.getState()
+  if (page === Page.Workflow) {
+    store.selectInWorkflow(id, CANVAS_SELECTION)
+    store.setActiveTool(Tool.Options)
+    return
+  }
+  store.setActiveTool(Tool.Document)
+}
+
 function runDocumentAction(
   id: string,
   documentId: string,
@@ -316,6 +322,9 @@ function runDocumentAction(
     case 'file.close':
       context.closeDocument(documentId)
       return
+    case 'edit.setCanvas':
+      showCanvasSize(documentId, context.page)
+      return
   }
   const panel = PANELS[id]
   if (panel !== undefined) store.setActiveTool(panel)
@@ -341,6 +350,12 @@ export function runAction(id: string, context: ActionContext): boolean {
       return true
     case 'view.sidebar':
       store.setSidebarOpen(!store.sidebarOpen)
+      return true
+    case 'view.stepPreview':
+      store.toggleWorkflowSidePanel(SidePanelTab.Preview)
+      return true
+    case 'view.runPanel':
+      store.toggleWorkflowSidePanel(SidePanelTab.Runs)
       return true
     case 'help.shortcuts':
       store.setShortcutsOpen(!store.shortcutsOpen)

@@ -127,7 +127,7 @@ export class RunItemHandler implements JobHandler {
     if (source === null || source.ownerId !== job.ownerId) {
       throw new ValidationError(MISSING_SOURCE)
     }
-    const pipeline = itemPipeline(run.definition, run.canvasMode, source)
+    const pipeline = itemPipeline(run.definition, source)
     const segments = planSegments(pipeline)
     const segment = segments[payload.segment]
     if (segment === undefined) throw new ValidationError(NO_SEGMENT)

@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { AI_TOOL_IDS } from '@/features/ai/ai-tools'
 import {
   ACTIONS,
+  Page,
   actionById,
   isActionId,
   toolActionId,
 } from '@/features/keybindings/actions'
+import { DEFAULT_KEYBINDINGS } from '@/features/keybindings/defaults'
 import { toolGroups } from '@/features/tools/tool-catalogue'
 
 describe('the actions', () => {
@@ -39,6 +41,36 @@ describe('the actions', () => {
     expect(isActionId('edit.nope')).toBe(false)
     expect(isActionId('__proto__')).toBe(false)
     expect(isActionId('constructor')).toBe(false)
+  })
+
+  it('each name the pages they apply on', () => {
+    for (const action of ACTIONS) {
+      expect(action.contexts.length, action.id).toBeGreaterThan(0)
+    }
+    const everywhere = [Page.Home, Page.Document, Page.Workflow]
+    const editing = [Page.Document, Page.Workflow]
+    expect(actionById('help.shortcuts')?.contexts).toEqual(everywhere)
+    expect(actionById('file.newDocument')?.contexts).toEqual(everywhere)
+    expect(actionById('view.sidebar')?.contexts).toEqual(everywhere)
+    expect(actionById('edit.undo')?.contexts).toEqual(editing)
+    expect(actionById('step.delete')?.contexts).toEqual(editing)
+    expect(actionById('view.zoomIn')?.contexts).toEqual(editing)
+    expect(actionById('panel.tools')?.contexts).toEqual(editing)
+    expect(actionById('file.close')?.contexts).toEqual(editing)
+    expect(actionById(toolActionId('sharp', 'blur'))?.contexts).toEqual(editing)
+    expect(actionById('edit.insertImage')?.contexts).toEqual([Page.Document])
+    expect(actionById('edit.showOriginal')?.contexts).toEqual([Page.Document])
+    expect(actionById('file.exportImage')?.contexts).toEqual([Page.Document])
+    expect(actionById('panel.navigator')?.contexts).toEqual([Page.Document])
+    expect(actionById('view.stepPreview')?.contexts).toEqual([Page.Workflow])
+  })
+
+  it('include setting the canvas size, on documents and workflows', () => {
+    const setCanvas = actionById('edit.setCanvas')
+    expect(setCanvas?.label).toBe('Canvas size')
+    expect(setCanvas?.group).toBe('Edit')
+    expect(setCanvas?.contexts).toEqual([Page.Document, Page.Workflow])
+    expect(DEFAULT_KEYBINDINGS.bindings['edit.setCanvas']).toEqual(['alt+c'])
   })
 
   it('say which actions repeat while the key is held', () => {

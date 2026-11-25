@@ -29,12 +29,12 @@ describe('KeybindingService', () => {
   it('saves a change and gives it back, for that User only', async () => {
     const saved = await t.app.keybindings.save(
       t.ann,
-      file({ 'edit.redo': ['alt+r'] }),
+      file({ 'edit.redo': ['alt+y'] }),
     )
-    expect(saved.effective['edit.redo']).toEqual(['alt+r'])
+    expect(saved.effective['edit.redo']).toEqual(['alt+y'])
     expect(saved.updatedAt).not.toBeNull()
     expect((await t.app.keybindings.get(t.ann)).effective['edit.redo']).toEqual(
-      ['alt+r'],
+      ['alt+y'],
     )
     expect((await t.app.keybindings.get(t.bob)).effective['edit.redo']).toEqual(
       ['mod+shift+z', 'mod+y'],

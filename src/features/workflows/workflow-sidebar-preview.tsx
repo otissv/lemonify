@@ -5,7 +5,6 @@ import { workflowThumbnailImageUrl } from '@/features/documents/image-urls'
 import { useWorkflow } from '@/features/workflows/use-workflow'
 import { useWorkflowThumbnails } from '@/features/workflows/use-workflow-thumbnails'
 import { previewNodeIdForUi } from '@/features/workflows/workflow-selection'
-import { RunCanvasMode } from '@/features/workflows/workflow'
 import { usePipelineStore } from '@/store/pipeline-store'
 import { useUiStore } from '@/store/ui-store'
 
@@ -18,10 +17,7 @@ export function WorkflowSidebarPreview({
   const { id: openId } = useParams({ strict: false })
   const onPage = openId === workflowId
   useWorkflow(workflowId)
-  const canvasMode = useUiStore(
-    (state) => state.runCanvasModes[workflowId] ?? RunCanvasMode.Workflow,
-  )
-  useWorkflowThumbnails(workflowId, canvasMode, !onPage)
+  useWorkflowThumbnails(workflowId, !onPage)
   const focus = useUiStore((state) => state.workflowFocus[workflowId])
   const stepId = useUiStore((state) => state.selectedSteps[workflowId])
   const nodeId = previewNodeIdForUi(focus, stepId)

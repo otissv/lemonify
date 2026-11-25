@@ -312,6 +312,7 @@ describe('a workflow session', () => {
           kind: 'workflow',
           definition: {
             pipeline: view.pipeline,
+            canvasSize: view.canvasSize,
             inputs: view.inputs,
             output: view.output,
           },

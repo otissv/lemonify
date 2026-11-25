@@ -3,12 +3,22 @@ import { EDITING_OP_NAMES } from '@/features/pipeline/pipeline'
 import type { ToolChoice } from '@/features/tools/tool-catalogue'
 import { SHARP_OP_GROUPS, opLabel } from '@/features/workflows/sharp-op-fields'
 
+/** The kinds of page an action can be done on. */
+export enum Page {
+  /** No document or workflow is open. */
+  Home = 'home',
+  Document = 'document',
+  Workflow = 'workflow',
+}
+
 /** Something a key can do. The id is what bindings are saved under, so it never changes once shipped. */
 export interface ActionDefinition {
   id: string
   label: string
   /** The heading it is listed under. */
   group: string
+  /** The pages it applies on. On any other its menu item is hidden and its key does nothing; a key still belongs to one action on every page. */
+  contexts: ReadonlyArray<Page>
   /** Whether holding the key does it again and again. */
   repeats: boolean
   /** The tool this action adds as a step, for the actions that add one. */
@@ -22,13 +32,23 @@ const VIEW = 'View'
 const PANELS = 'Panels'
 const HELP = 'Help'
 
+const EVERYWHERE: ReadonlyArray<Page> = [
+  Page.Home,
+  Page.Document,
+  Page.Workflow,
+]
+const EDITING: ReadonlyArray<Page> = [Page.Document, Page.Workflow]
+const DOCUMENT_ONLY: ReadonlyArray<Page> = [Page.Document]
+const WORKFLOW_ONLY: ReadonlyArray<Page> = [Page.Workflow]
+
 function action(
   id: string,
   label: string,
   group: string,
+  contexts: ReadonlyArray<Page>,
   repeats = false,
 ): ActionDefinition {
-  return { id, label, group, repeats }
+  return { id, label, group, contexts, repeats }
 }
 
 function toolAction(
@@ -40,54 +60,62 @@ function toolAction(
     id: toolActionId(tool.kind, tool.value),
     label,
     group,
+    contexts: EDITING,
     repeats: false,
     tool,
   }
 }
 
 const STATIC_ACTIONS: ReadonlyArray<ActionDefinition> = [
-  action('edit.undo', 'Undo', EDIT),
-  action('edit.redo', 'Redo', EDIT),
-  action('edit.addImageLayer', 'Add image layer', EDIT),
-  action('edit.insertImage', 'Insert image', EDIT),
-  action('edit.replaceImage', 'Replace image', EDIT),
-  action('edit.showOriginal', 'Show original', EDIT),
-  action('file.newDocument', 'New document', FILE),
-  action('file.openImage', 'Open image', FILE),
-  action('file.openLibrary', 'Open library image', FILE),
-  action('file.importDocument', 'Import document', FILE),
-  action('file.exportImage', 'Export image', FILE),
-  action('file.exportDocument', 'Export document', FILE),
-  action('file.close', 'Close document', FILE),
-  action('step.group', 'Group the selected steps', STEP),
-  action('step.ungroup', 'Ungroup the selected group', STEP),
-  action('step.delete', 'Delete the selected step', STEP),
-  action('step.toggle', 'Hide or show the selected step', STEP),
-  action('step.moveUp', 'Move the selected step up', STEP, true),
-  action('step.moveDown', 'Move the selected step down', STEP, true),
-  action('step.selectUp', 'Select the step above', STEP, true),
-  action('step.selectDown', 'Select the step below', STEP, true),
-  action('view.zoomIn', 'Zoom in', VIEW, true),
-  action('view.zoomOut', 'Zoom out', VIEW, true),
-  action('view.fit', 'Fit the picture to the window', VIEW),
-  action('view.actualSize', 'Actual size', VIEW),
-  action('view.panLeft', 'Move the picture left', VIEW, true),
-  action('view.panRight', 'Move the picture right', VIEW, true),
-  action('view.panUp', 'Move the picture up', VIEW, true),
-  action('view.panDown', 'Move the picture down', VIEW, true),
-  action('view.panLeftFar', 'Move the picture far left', VIEW, true),
-  action('view.panRightFar', 'Move the picture far right', VIEW, true),
-  action('view.panUpFar', 'Move the picture far up', VIEW, true),
-  action('view.panDownFar', 'Move the picture far down', VIEW, true),
-  action('view.sidebar', 'Show or hide the sidebar', VIEW),
-  action('view.stepPreview', 'Show or hide the step preview', VIEW),
-  action('panel.tools', 'Show Tools', PANELS),
-  action('panel.options', 'Show Options', PANELS),
-  action('panel.export', 'Show Export', PANELS),
-  action('panel.results', 'Show Results', PANELS),
-  action('panel.document', 'Show Document', PANELS),
-  action('panel.navigator', 'Show Navigator', PANELS),
-  action('help.shortcuts', 'Show keyboard shortcuts', HELP),
+  action('edit.undo', 'Undo', EDIT, EDITING),
+  action('edit.redo', 'Redo', EDIT, EDITING),
+  action('edit.addImageLayer', 'Add image layer', EDIT, EDITING),
+  action('edit.insertImage', 'Insert image', EDIT, DOCUMENT_ONLY),
+  action('edit.replaceImage', 'Replace image', EDIT, DOCUMENT_ONLY),
+  action('edit.setCanvas', 'Canvas size', EDIT, EDITING),
+  action('edit.showOriginal', 'Show original', EDIT, DOCUMENT_ONLY),
+  action('file.newDocument', 'New document', FILE, EVERYWHERE),
+  action('file.openImage', 'Open image', FILE, EVERYWHERE),
+  action('file.openLibrary', 'Open library image', FILE, EVERYWHERE),
+  action('file.importDocument', 'Import document', FILE, EVERYWHERE),
+  action('file.exportImage', 'Export image', FILE, DOCUMENT_ONLY),
+  action('file.exportDocument', 'Export document', FILE, DOCUMENT_ONLY),
+  action('file.close', 'Close document', FILE, EDITING),
+  action('step.group', 'Group the selected steps', STEP, EDITING),
+  action('step.ungroup', 'Ungroup the selected group', STEP, EDITING),
+  action('step.delete', 'Delete the selected step', STEP, EDITING),
+  action('step.toggle', 'Hide or show the selected step', STEP, EDITING),
+  action('step.moveUp', 'Move the selected step up', STEP, EDITING, true),
+  action('step.moveDown', 'Move the selected step down', STEP, EDITING, true),
+  action('step.selectUp', 'Select the step above', STEP, EDITING, true),
+  action('step.selectDown', 'Select the step below', STEP, EDITING, true),
+  action('view.zoomIn', 'Zoom in', VIEW, EDITING, true),
+  action('view.zoomOut', 'Zoom out', VIEW, EDITING, true),
+  action('view.fit', 'Fit the picture to the window', VIEW, EDITING),
+  action('view.actualSize', 'Actual size', VIEW, EDITING),
+  action('view.panLeft', 'Move the picture left', VIEW, EDITING, true),
+  action('view.panRight', 'Move the picture right', VIEW, EDITING, true),
+  action('view.panUp', 'Move the picture up', VIEW, EDITING, true),
+  action('view.panDown', 'Move the picture down', VIEW, EDITING, true),
+  action('view.panLeftFar', 'Move the picture far left', VIEW, EDITING, true),
+  action('view.panRightFar', 'Move the picture far right', VIEW, EDITING, true),
+  action('view.panUpFar', 'Move the picture far up', VIEW, EDITING, true),
+  action('view.panDownFar', 'Move the picture far down', VIEW, EDITING, true),
+  action('view.sidebar', 'Show or hide the sidebar', VIEW, EVERYWHERE),
+  action(
+    'view.stepPreview',
+    'Show or hide the step preview',
+    VIEW,
+    WORKFLOW_ONLY,
+  ),
+  action('view.runPanel', 'Show or hide the run panel', VIEW, WORKFLOW_ONLY),
+  action('panel.tools', 'Show Tools', PANELS, EDITING),
+  action('panel.options', 'Show Options', PANELS, EDITING),
+  action('panel.export', 'Show Export', PANELS, DOCUMENT_ONLY),
+  action('panel.results', 'Show Results', PANELS, DOCUMENT_ONLY),
+  action('panel.document', 'Show Document', PANELS, DOCUMENT_ONLY),
+  action('panel.navigator', 'Show Navigator', PANELS, DOCUMENT_ONLY),
+  action('help.shortcuts', 'Show keyboard shortcuts', HELP, EVERYWHERE),
 ]
 
 const TOOL_GROUP_PREFIX = 'Add tool: '

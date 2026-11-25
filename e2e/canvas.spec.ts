@@ -25,6 +25,8 @@ async function pictureSize(page: Page): Promise<[number, number]> {
 
 async function newDocument(page: Page, name: string): Promise<void> {
   await page.goto('/')
+  // The page answers clicks once React has hydrated it.
+  await page.waitForLoadState('networkidle')
   await page.getByRole('menuitem', { name: 'File' }).click()
   await page.getByRole('menuitem', { name: /New document/ }).click()
   const dialog = page.getByRole('dialog', { name: 'New document' })
@@ -49,6 +51,7 @@ test('File > New document makes a blank document on the canvas chosen', async ({
 
 test('the key for New document opens the dialog', async ({ page }) => {
   await page.goto('/')
+  await page.waitForLoadState('networkidle')
   await page.keyboard.press('Alt+n')
 
   await expect(page.getByRole('dialog', { name: 'New document' })).toBeVisible()

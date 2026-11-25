@@ -6,6 +6,7 @@ import path from 'node:path'
 import sharp from 'sharp'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { openZip } from '../../src/server/bundle/zip.ts'
 import { COMMANDS } from './commands/index.ts'
 import { dispatch } from './dispatch.ts'
 
@@ -522,7 +523,7 @@ describe('workflows through the CLI', () => {
     ).rejects.toThrow(/--pipeline on its own/)
   })
 
-  it('runs on a canvas the size of each image with --canvas first-image', async () => {
+  it('runs on a canvas the size of each image once --canvas-size match-input is set', async () => {
     const { source } = await cli<{ source: { id: string } }>(
       'source',
       'add',
@@ -547,27 +548,98 @@ describe('workflows through the CLI', () => {
         suffix: '',
       }),
     )
-    const folder = path.join(workDir, 'first-image')
-    const ran = await cli<{ run: { state: string; canvasMode: string } }>(
+    const fixed = await cli<{ workflow: { canvasSize: string } }>(
+      'workflow',
+      'show',
+      workflow.id,
+    )
+    expect(fixed.workflow.canvasSize).toBe('fixed')
+    const matched = await cli<{ workflow: { canvasSize: string } }>(
+      'workflow',
+      'update',
+      workflow.id,
+      '--canvas-size',
+      'match-input',
+    )
+    expect(matched.workflow.canvasSize).toBe('match-input')
+    const folder = path.join(workDir, 'match-input')
+    const ran = await cli<{ run: { state: string } }>(
       'workflow',
       'run',
       workflow.id,
-      '--canvas',
-      'first-image',
       '--follow',
       '--out',
       folder,
     )
-    expect(ran.run).toMatchObject({ state: 'done', canvasMode: 'first-image' })
+    expect(ran.run).toMatchObject({ state: 'done' })
     const meta = await sharp(path.join(folder, 'wide.png')).metadata()
     const original = await sharp(await makeImage('wide2.png')).metadata()
     expect([meta.width, meta.height]).toEqual([original.width, original.height])
   })
 
-  it('refuses a canvas mode it does not know', async () => {
+  it('runs on the chosen sources with --sources, and writes the run’s images as one zip with --zip', async () => {
+    const ids: string[] = []
+    for (const [name, background] of [
+      ['one.png', '#d33'],
+      ['two.png', '#3d3'],
+    ]) {
+      const file = path.join(workDir, name ?? '')
+      await sharp({
+        create: { width: 64, height: 48, channels: 3, background },
+      })
+        .png()
+        .toFile(file)
+      const { source } = await cli<{ source: { id: string } }>(
+        'source',
+        'add',
+        file,
+      )
+      ids.push(source.id)
+    }
+    const { workflow } = await cli<{ workflow: { id: string } }>(
+      'workflow',
+      'create',
+      'Chosen',
+      '--sources',
+      ids.join(','),
+    )
+    const ran = await cli<{ run: { id: string; sourceIds: string[] } }>(
+      'workflow',
+      'run',
+      workflow.id,
+      '--sources',
+      ids[1] ?? '',
+      '--follow',
+    )
+    expect(ran.run.sourceIds).toEqual([ids[1]])
+
+    const zip = path.join(workDir, 'chosen.zip')
+    const results = await cli<{ archive: { images: number; path: string } }>(
+      'workflow',
+      'results',
+      ran.run.id,
+      '--zip',
+      zip,
+    )
+    expect(results.archive).toMatchObject({ images: 1, path: zip })
+    const archive = await openZip(zip)
+    expect(archive.entries.map(({ name }) => name)).toEqual(['two.png'])
+    await archive.close()
     await expect(
-      cli('workflow', 'run', 'nope', '--canvas', 'huge'),
+      cli('workflow', 'run', workflow.id, '--sources', 'nope'),
+    ).rejects.toThrow(/input images/)
+  })
+
+  it('refuses a canvas size it does not know, and matches each input image for a new workflow', async () => {
+    await expect(
+      cli('workflow', 'create', 'Huge', '--canvas-size', 'huge'),
     ).rejects.toThrow()
+    const created = await cli<{ workflow: { canvasSize: string } }>(
+      'workflow',
+      'create',
+      'Plain',
+    )
+    expect(created.workflow.canvasSize).toBe('match-input')
   })
 
   it('refuses --out without --follow', async () => {
@@ -1185,6 +1257,12 @@ describe('looking at part of a document through the CLI', () => {
 
 describe('keys', () => {
   type Keys = {
+    actions?: ReadonlyArray<{
+      id: string
+      label: string
+      group: string
+      contexts: ReadonlyArray<string>
+    }>
     keybindings: {
       overrides: { bindings: Record<string, string[]> }
       effective: Record<string, string[]>
@@ -1194,6 +1272,12 @@ describe('keys', () => {
   it('lists the defaults, then shows a change, then goes back', async () => {
     const first = await cli<Keys>('keys', 'list')
     expect(first.keybindings.effective['edit.undo']).toEqual(['mod+z'])
+    expect(first.actions).toContainEqual({
+      id: 'view.stepPreview',
+      label: 'Show or hide the step preview',
+      group: 'View',
+      contexts: ['workflow'],
+    })
     expect(first.keybindings.overrides.bindings).toEqual({})
 
     const set = await cli<Keys>('keys', 'set', 'view.fit', 'alt+z,alt+shift+z')

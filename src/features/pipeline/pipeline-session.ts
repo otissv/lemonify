@@ -97,7 +97,12 @@ function applyToPipeline(pipeline: Pipeline, change: WorkflowChange): Pipeline {
 }
 
 function definitionOf(view: WorkflowView): WorkflowDefinition {
-  return { pipeline: view.pipeline, inputs: view.inputs, output: view.output }
+  return {
+    pipeline: view.pipeline,
+    canvasSize: view.canvasSize,
+    inputs: view.inputs,
+    output: view.output,
+  }
 }
 
 /**

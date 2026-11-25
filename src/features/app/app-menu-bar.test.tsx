@@ -84,6 +84,22 @@ vi.mock('@/features/jobs/job-functions', () => ({ cancelJob: vi.fn() }))
 
 const BLUR = createSharpStep('blur')
 
+/** What a menu item says, without the key shown beside it. */
+function itemLabel(item: HTMLElement): string {
+  const shortcut = item.querySelector('[data-slot="menubar-shortcut"]')
+  const text = item.textContent ?? ''
+  return shortcut === null ? text : text.replace(shortcut.textContent ?? '', '')
+}
+
+/** What each item of an open menu says, ticked items included. */
+function itemLabels(menu: HTMLElement): string[] {
+  return [
+    ...menu.querySelectorAll<HTMLElement>(
+      '[role="menuitem"], [role="menuitemcheckbox"]',
+    ),
+  ].map(itemLabel)
+}
+
 async function openMenu(
   user: ReturnType<typeof userEvent.setup>,
   name: string,
@@ -120,7 +136,7 @@ describe('AppMenuBar', () => {
         within(panel)
           .getAllByRole('menuitem')
           .map((item) => item.textContent),
-      ).toEqual(['File', 'Edit', 'View', 'Help', 'Account'])
+      ).toEqual(['File', 'View', 'Help', 'Account'])
     })
 
     it('draws no line under the menu, since nothing is below it, and adds no padding', async () => {
@@ -220,29 +236,23 @@ describe('AppMenuBar', () => {
       })
     })
 
-    it('has nothing to export, undo, redo or compare', async () => {
+    it('shows only what applies with nothing open: no Edit menu, nothing to export or close', async () => {
       const user = userEvent.setup()
       await renderApp()
 
       const file = await openMenu(user, 'File')
+      expect(within(file).getAllByRole('menuitem').map(itemLabel)).toEqual([
+        'New document…',
+        'Open image',
+        'Open library image',
+        'Import document…',
+      ])
       expect(
-        within(file).queryByRole('menuitem', { name: 'Export image' }),
+        within(file).queryAllByRole('separator', { hidden: true }),
+      ).toHaveLength(0)
+      expect(
+        screen.queryByRole('menuitem', { name: 'Edit' }),
       ).not.toBeInTheDocument()
-      expect(
-        within(file).getByRole('menuitem', { name: 'Close document' }),
-      ).toHaveAttribute('aria-disabled', 'true')
-      await user.keyboard('{Escape}')
-
-      const edit = await openMenu(user, 'Edit')
-      for (const name of ['Undo', 'Redo']) {
-        expect(within(edit).getByRole('menuitem', { name })).toHaveAttribute(
-          'aria-disabled',
-          'true',
-        )
-      }
-      expect(
-        within(edit).getByRole('menuitemcheckbox', { name: 'Show original' }),
-      ).toHaveAttribute('aria-disabled', 'true')
     })
 
     it('shows and hides the sidebar from the View menu', async () => {
@@ -303,19 +313,13 @@ describe('AppMenuBar', () => {
       fileName: 'other.png',
     }
 
-    it('keeps Insert image and Replace image in Edit, greyed out without a document', async () => {
+    it('offers Insert image and Replace image only where a document is open', async () => {
       const user = userEvent.setup()
       await renderApp()
 
-      const edit = await openMenu(user, 'Edit')
-
-      for (const name of ['Insert image', 'Replace image']) {
-        expect(within(edit).getByRole('menuitem', { name })).toHaveAttribute(
-          'aria-disabled',
-          'true',
-        )
-      }
-      await user.keyboard('{Escape}')
+      expect(
+        screen.queryByRole('menuitem', { name: 'Edit' }),
+      ).not.toBeInTheDocument()
       const file = await openMenu(user, 'File')
       for (const name of ['Insert image', 'Replace image']) {
         expect(
@@ -575,6 +579,29 @@ describe('AppMenuBar', () => {
       expect(children[closeIndex - 1]).toHaveAttribute('role', 'separator')
     })
 
+    it('opens the canvas size of a document from the Edit menu', async () => {
+      vi.mocked(getDocument).mockResolvedValue(documentView())
+      const user = userEvent.setup()
+      await renderApp(`/documents/${DOCUMENT_ID}`)
+      await screen.findByRole('dialog', { name: 'Tools' })
+
+      const edit = await openMenu(user, 'Edit')
+      expect(itemLabels(edit)).toEqual([
+        'Undo',
+        'Redo',
+        'Add image layer',
+        'Insert image',
+        'Replace image',
+        'Canvas size…',
+        'Show original',
+      ])
+      await user.click(
+        within(edit).getByRole('menuitem', { name: /Canvas size/ }),
+      )
+
+      expect(useUiStore.getState().activeTool).toBe(Tool.Document)
+    })
+
     it('offers neither undo nor redo for a document with no history', async () => {
       vi.mocked(getDocument).mockResolvedValue(documentView())
       const user = userEvent.setup()
@@ -816,11 +843,58 @@ describe('AppMenuBar', () => {
       )
     })
 
+    it('offers the edits and panels a workflow has, and hides a document’s', async () => {
+      const user = userEvent.setup()
+      await renderApp(`/workflows/${WORKFLOW_ID}`)
+      await screen.findByRole('region', { name: 'Side panel' })
+
+      const edit = await openMenu(user, 'Edit')
+      expect(itemLabels(edit)).toEqual([
+        'Undo',
+        'Redo',
+        'Add image layer',
+        'Canvas size…',
+      ])
+      await user.keyboard('{Escape}')
+
+      const view = await openMenu(user, 'View')
+      expect(itemLabels(view)).toEqual([
+        'Tools',
+        'Options',
+        'Sidebar',
+        'Step preview',
+        'Run panel',
+      ])
+      await user.keyboard('{Escape}')
+
+      const file = await openMenu(user, 'File')
+      expect(
+        within(file).queryByRole('menuitem', { name: /Export/ }),
+      ).not.toBeInTheDocument()
+      expect(
+        within(file).getByRole('menuitem', { name: /Close document/ }),
+      ).toBeVisible()
+    })
+
+    it('shows the canvas size of a workflow from the Edit menu', async () => {
+      const user = userEvent.setup()
+      await renderApp(`/workflows/${WORKFLOW_ID}`)
+      await screen.findByRole('region', { name: 'Side panel' })
+
+      const edit = await openMenu(user, 'Edit')
+      const item = within(edit).getByRole('menuitem', { name: /Canvas size/ })
+      expect(item).toHaveTextContent('Alt+C')
+      await user.click(item)
+
+      expect(useUiStore.getState().workflowFocus[WORKFLOW_ID]).toBe('canvas')
+      expect(useUiStore.getState().activeTool).toBe(Tool.Options)
+    })
+
     it('shows and hides the step preview from the View menu', async () => {
       const user = userEvent.setup()
       await renderApp(`/workflows/${WORKFLOW_ID}`)
       expect(
-        await screen.findByRole('region', { name: 'Step preview' }),
+        await screen.findByRole('region', { name: 'Side panel' }),
       ).toBeVisible()
 
       let view = await openMenu(user, 'View')
@@ -830,9 +904,9 @@ describe('AppMenuBar', () => {
       expect(toggle).toBeChecked()
       await user.click(toggle)
 
-      expect(useUiStore.getState().workflowPreviewOpen).toBe(false)
+      expect(useUiStore.getState().workflowSidePanelOpen).toBe(false)
       expect(
-        screen.queryByRole('region', { name: 'Step preview' }),
+        screen.queryByRole('region', { name: 'Side panel' }),
       ).not.toBeInTheDocument()
 
       view = await openMenu(user, 'View')
@@ -840,8 +914,30 @@ describe('AppMenuBar', () => {
         within(view).getByRole('menuitemcheckbox', { name: 'Step preview' }),
       )
       expect(
-        await screen.findByRole('region', { name: 'Step preview' }),
+        await screen.findByRole('region', { name: 'Side panel' }),
       ).toBeVisible()
+    })
+
+    it('opens the side panel on its Runs tab from View, ticking Run panel instead of Step preview', async () => {
+      const user = userEvent.setup()
+      await renderApp(`/workflows/${WORKFLOW_ID}`)
+      await screen.findByRole('region', { name: 'Side panel' })
+
+      let view = await openMenu(user, 'View')
+      await user.click(
+        within(view).getByRole('menuitemcheckbox', { name: 'Run panel' }),
+      )
+
+      expect(
+        await screen.findByRole('tab', { name: 'Runs', selected: true }),
+      ).toBeVisible()
+      view = await openMenu(user, 'View')
+      expect(
+        within(view).getByRole('menuitemcheckbox', { name: 'Run panel' }),
+      ).toBeChecked()
+      expect(
+        within(view).getByRole('menuitemcheckbox', { name: 'Step preview' }),
+      ).not.toBeChecked()
     })
   })
 })
