@@ -53,6 +53,8 @@ export const SCRATCH_ACCOUNTS = {
   workflowEditing: scratchAccount('workflow-editing', ['blur-default']),
   workflowRuns: scratchAccount('workflow-runs', ['blur-default']),
   workflowParity: scratchAccount('workflow-parity', ['blur-default']),
+  api: scratchAccount('api', ['blur-default']),
+  apiOther: scratchAccount('api-other', ['blur-default']),
 } as const
 
 export const E2E_USER = {

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiSourcesRouteImport } from './routes/api/sources'
 import { Route as DocumentsIdRouteImport } from './routes/documents.$id'
 import { Route as WorkflowsIdRouteImport } from './routes/workflows.$id'
@@ -37,6 +38,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSplatRoute = ApiSplatRouteImport.update({
+  id: '/api/$',
+  path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSourcesRoute = ApiSourcesRouteImport.update({
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/sources': typeof ApiSourcesRouteWithChildren
   '/documents/$id': typeof DocumentsIdRoute
   '/workflows/$id': typeof WorkflowsIdRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/sources': typeof ApiSourcesRouteWithChildren
   '/documents/$id': typeof DocumentsIdRoute
   '/workflows/$id': typeof WorkflowsIdRoute
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/sources': typeof ApiSourcesRouteWithChildren
   '/documents/$id': typeof DocumentsIdRoute
   '/workflows/$id': typeof WorkflowsIdRoute
@@ -153,6 +162,7 @@ export interface FileRouteTypes {
     | '/'
     | '/reset-password'
     | '/sign-in'
+    | '/api/$'
     | '/api/sources'
     | '/documents/$id'
     | '/workflows/$id'
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/'
     | '/reset-password'
     | '/sign-in'
+    | '/api/$'
     | '/api/sources'
     | '/documents/$id'
     | '/workflows/$id'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/'
     | '/reset-password'
     | '/sign-in'
+    | '/api/$'
     | '/api/sources'
     | '/documents/$id'
     | '/workflows/$id'
@@ -202,6 +214,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignInRoute: typeof SignInRoute
+  ApiSplatRoute: typeof ApiSplatRoute
   ApiSourcesRoute: typeof ApiSourcesRouteWithChildren
   DocumentsIdRoute: typeof DocumentsIdRoute
   WorkflowsIdRoute: typeof WorkflowsIdRoute
@@ -235,6 +248,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sources': {
@@ -333,6 +353,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignInRoute: SignInRoute,
+  ApiSplatRoute: ApiSplatRoute,
   ApiSourcesRoute: ApiSourcesRouteWithChildren,
   DocumentsIdRoute: DocumentsIdRoute,
   WorkflowsIdRoute: WorkflowsIdRoute,

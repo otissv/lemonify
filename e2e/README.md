@@ -31,6 +31,10 @@ The workflow specs cover every workflow feature on both front doors, since the w
 
 `e2e/workflow-parity.spec.ts` runs the command line on the test server's own data folder as the account the browser is signed in as, and checks that each front door sees what the other did: a workflow made on the command line opens on the website, a change made on the website is in `workflow show` and `workflow undo` takes it back, and a run started on either side is followed on the other.
 
+## The API
+
+`e2e/api.spec.ts` calls every route under `/api` over HTTP, as three callers: the owner, another signed-in User and someone not signed in. For each route it checks what the owner gets (status, content type, the bytes, the download name and the caching and security headers), that someone not signed in gets 401 and another User gets the same 404 as an address that does not exist, so ownership never leaks, and that requests the route cannot take are refused with 422: an upload of the wrong type, bytes that are not the type they claim, no file name, a document file that is not one, a run with nothing finished. Every failure must be `{ data: [], error }` with no stack trace, path or SQL in it. A method a route does not have gets 405 with an `Allow` header, and an address under `/api` that no route has gets 404, both in the same shape. The renders' addresses are read from the pages that ask for them, and the run, its results and a run that fails are made with the command line, so the spec needs no other way into the server.
+
 ## A fast, quiet server
 
 Global setup opens the home page and a document once before the specs start, so the development server has compiled those pages and the first specs do not wait past their timeouts. `vite.config.ts` does not watch `e2e/.data`, `e2e/.run`, `.data` or `.claude`, which are written to all the time during a run.

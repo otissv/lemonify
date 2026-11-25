@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+import { onlyMethods } from '@/server/http/api-methods'
 import { protectedRoute } from '@/server/http/route-guard'
 import { streamResponse } from '@/server/http/stream-response'
 
@@ -19,5 +20,5 @@ const serveResult = protectedRoute<{ id: string }>(
 )
 
 export const Route = createFileRoute('/api/results/$id')({
-  server: { handlers: { GET: serveResult } },
+  server: { handlers: onlyMethods({ GET: serveResult }) },
 })

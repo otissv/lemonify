@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+import { onlyMethods } from '@/server/http/api-methods'
 import { protectedRoute } from '@/server/http/route-guard'
 import { streamResponse } from '@/server/http/stream-response'
 
@@ -19,5 +20,5 @@ const serveRunArchive = protectedRoute<{ id: string }>(
 )
 
 export const Route = createFileRoute('/api/workflow-runs/$id/archive')({
-  server: { handlers: { GET: serveRunArchive } },
+  server: { handlers: onlyMethods({ GET: serveRunArchive }) },
 })

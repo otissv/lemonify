@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 
 import { NotFoundError } from '@/server/errors'
+import { onlyMethods } from '@/server/http/api-methods'
 import { protectedRoute } from '@/server/http/route-guard'
 import { streamResponse } from '@/server/http/stream-response'
 import { RenderKind } from '@/server/tools/render-store'
@@ -26,5 +27,5 @@ const serveRender = protectedRoute<{ id: string; kind: string; key: string }>(
 )
 
 export const Route = createFileRoute('/api/documents/$id/renders/$kind/$key')({
-  server: { handlers: { GET: serveRender } },
+  server: { handlers: onlyMethods({ GET: serveRender }) },
 })

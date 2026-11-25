@@ -18,6 +18,8 @@ import {
 } from './workflow-page.ts'
 
 const RUN_TIMEOUT = 60_000
+/** A new run shows once the runs list reloads, which waits behind the CLI's writes to the same database. */
+const START_TIMEOUT = 15_000
 
 test.use({ storageState: SCRATCH_ACCOUNTS.workflowRuns.authFile })
 test.describe.configure({ timeout: 120_000 })
@@ -75,7 +77,9 @@ test('chooses the images a run goes over: search, select all and a Shift range',
 
   await picker.getByRole('button', { name: 'Run on 3 images' }).click()
   const run = runs.getByRole('region', { name: 'Run 1' })
-  await expect(run.getByText(/^3 images · started/)).toBeVisible()
+  await expect(run.getByText(/^3 images · started/)).toBeVisible({
+    timeout: START_TIMEOUT,
+  })
   await expect(run.getByText('3 done', { exact: true })).toBeVisible({
     timeout: RUN_TIMEOUT,
   })
@@ -117,7 +121,9 @@ test('says which images failed and why, retries them, runs again and deletes a r
 
   await moreActions(page, first, 'Run 1', 'Retry failed')
   const retry = runs.getByRole('region', { name: 'Run 2' })
-  await expect(retry.getByText(/^1 image · started/)).toBeVisible()
+  await expect(retry.getByText(/^1 image · started/)).toBeVisible({
+    timeout: START_TIMEOUT,
+  })
   await expect(
     retry.getByText('0 done, 1 failed', { exact: true }),
   ).toBeVisible({
@@ -133,7 +139,9 @@ test('says which images failed and why, retries them, runs again and deletes a r
     'Run again',
   )
   const again = runs.getByRole('region', { name: 'Run 3' })
-  await expect(again.getByText(/^2 images · started/)).toBeVisible()
+  await expect(again.getByText(/^2 images · started/)).toBeVisible({
+    timeout: START_TIMEOUT,
+  })
   await expect(
     again.getByText('1 done, 1 failed', { exact: true }),
   ).toBeVisible({

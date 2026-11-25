@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { guardBundleUpload } from '@/server/http/bundle-upload-guard'
+import { onlyMethods } from '@/server/http/api-methods'
 import { protectedRoute } from '@/server/http/route-guard'
 
 const CREATED = 201
@@ -20,5 +21,5 @@ const importDocument = protectedRoute<Record<string, never>>(
 )
 
 export const Route = createFileRoute('/api/documents/import')({
-  server: { handlers: { POST: importDocument } },
+  server: { handlers: onlyMethods({ POST: importDocument }) },
 })

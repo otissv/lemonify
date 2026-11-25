@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { guardUpload } from '@/server/http/upload-guard'
+import { onlyMethods } from '@/server/http/api-methods'
 import { protectedRoute } from '@/server/http/route-guard'
 import { toSourceSummary } from '@/server/services/source-service'
 
@@ -21,5 +22,5 @@ const uploadSource = protectedRoute<Record<string, never>>(
 )
 
 export const Route = createFileRoute('/api/sources')({
-  server: { handlers: { POST: uploadSource } },
+  server: { handlers: onlyMethods({ POST: uploadSource }) },
 })
