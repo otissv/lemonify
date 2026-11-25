@@ -20,10 +20,16 @@ import { createSharpStep } from '@/features/pipeline/pipeline'
 import {
   requestPreview,
   requestThumbnails,
+  requestWorkflowPreview,
+  requestWorkflowThumbnails,
 } from '@/features/render/render-functions'
 import { listSources } from '@/features/sources/source-functions'
 import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
-import { listWorkflows } from '@/features/workflows/workflow-functions'
+import {
+  getWorkflow,
+  listWorkflowRuns,
+  listWorkflows,
+} from '@/features/workflows/workflow-functions'
 import { Tool, useUiStore } from '@/store/ui-store'
 import { documentSession, usePipelineStore } from '@/store/pipeline-store'
 import {
@@ -35,6 +41,7 @@ import {
 } from '@/test/document-fixtures'
 import { renderApp } from '@/test/render-app'
 import { pipelineOf } from '@/test/pipelines'
+import { workflowView } from '@/test/workflow-fixtures'
 import { resetStores } from '@/store/reset-stores'
 
 vi.mock('@/features/auth/auth-client', () => ({ signOut: vi.fn() }))
@@ -62,11 +69,15 @@ vi.mock('@/features/sources/source-functions', () => ({
 }))
 vi.mock('@/features/workflows/workflow-functions', () => ({
   listWorkflows: vi.fn(),
+  getWorkflow: vi.fn(),
+  listWorkflowRuns: vi.fn(),
 }))
 vi.mock('@/features/render/render-functions', () => ({
   requestPreview: vi.fn(),
   requestThumbnails: vi.fn(),
   requestAiStep: vi.fn(),
+  requestWorkflowThumbnails: vi.fn(),
+  requestWorkflowPreview: vi.fn(),
 }))
 vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
 vi.mock('@/features/jobs/job-functions', () => ({ cancelJob: vi.fn() }))
@@ -254,6 +265,16 @@ describe('AppMenuBar', () => {
         within(view).getByRole('menuitemcheckbox', { name: 'Sidebar' }),
       )
       expect(useUiStore.getState().sidebarOpen).toBe(true)
+    })
+
+    it('offers the step preview in the View menu only on a workflow’s page', async () => {
+      const user = userEvent.setup()
+      await renderApp()
+
+      const view = await openMenu(user, 'View')
+      expect(
+        within(view).queryByRole('menuitemcheckbox', { name: 'Step preview' }),
+      ).not.toBeInTheDocument()
     })
 
     it('names the signed-in user and signs out', async () => {
@@ -778,6 +799,49 @@ describe('AppMenuBar', () => {
         await user.click(within(view).getByRole('menuitem', { name }))
         expect(useUiStore.getState().activeTool).toBe(tool)
       }
+    })
+  })
+
+  describe('on a workflow’s page', () => {
+    const WORKFLOW_ID = 'w1'
+
+    beforeEach(() => {
+      vi.mocked(getWorkflow).mockResolvedValue(workflowView(WORKFLOW_ID))
+      vi.mocked(listWorkflowRuns).mockResolvedValue([])
+      vi.mocked(requestWorkflowThumbnails).mockReturnValue(
+        new Promise(() => undefined),
+      )
+      vi.mocked(requestWorkflowPreview).mockReturnValue(
+        new Promise(() => undefined),
+      )
+    })
+
+    it('shows and hides the step preview from the View menu', async () => {
+      const user = userEvent.setup()
+      await renderApp(`/workflows/${WORKFLOW_ID}`)
+      expect(
+        await screen.findByRole('region', { name: 'Step preview' }),
+      ).toBeVisible()
+
+      let view = await openMenu(user, 'View')
+      const toggle = within(view).getByRole('menuitemcheckbox', {
+        name: 'Step preview',
+      })
+      expect(toggle).toBeChecked()
+      await user.click(toggle)
+
+      expect(useUiStore.getState().workflowPreviewOpen).toBe(false)
+      expect(
+        screen.queryByRole('region', { name: 'Step preview' }),
+      ).not.toBeInTheDocument()
+
+      view = await openMenu(user, 'View')
+      await user.click(
+        within(view).getByRole('menuitemcheckbox', { name: 'Step preview' }),
+      )
+      expect(
+        await screen.findByRole('region', { name: 'Step preview' }),
+      ).toBeVisible()
     })
   })
 })

@@ -43,6 +43,7 @@ export enum SidebarTab {
 
 export const MAX_RECENT_UPSCALE_MODELS = 10
 export const PREFERENCES_STORAGE_KEY = 'lemonify-preferences'
+export const DEFAULT_WORKFLOW_PREVIEW_SHARE = 0.5
 
 type Keyed<T> = Readonly<Record<string, T | undefined>>
 
@@ -54,6 +55,10 @@ interface UiStateData {
   panelPosition: PanelPosition | null
   /** Whether the tools panel shows only its menu. */
   panelCollapsed: boolean
+  /** The share of a workflow page's width, from 0 to 1, that the large picture of the selected node takes beside the diagram. Not saved. */
+  workflowPreviewShare: number
+  /** Whether a workflow page shows the large picture of the selected node beside the diagram. Not saved. */
+  workflowPreviewOpen: boolean
   activeTool: Tool
   recentUpscaleModels: ReadonlyArray<string>
   /** The lines drawn inside the box of a tool on the picture, such as extract. Kept in this browser. */
@@ -96,6 +101,8 @@ interface UiStateActions {
   setSidebarTab: (tab: SidebarTab) => void
   setPanelPosition: (position: PanelPosition) => void
   setPanelCollapsed: (collapsed: boolean) => void
+  setWorkflowPreviewShare: (share: number) => void
+  setWorkflowPreviewOpen: (open: boolean) => void
   setActiveTool: (tool: Tool) => void
   setOverlayGuide: (guide: OverlayGuide) => void
   setStepView: (documentId: string, part: StepViewPart) => void
@@ -130,6 +137,8 @@ export const INITIAL_UI_STATE: Readonly<UiStateData> = {
   sidebarTab: SidebarTab.Editor,
   panelPosition: null,
   panelCollapsed: false,
+  workflowPreviewShare: DEFAULT_WORKFLOW_PREVIEW_SHARE,
+  workflowPreviewOpen: true,
   activeTool: Tool.Tools,
   recentUpscaleModels: [],
   overlayGuide: OverlayGuide.None,
@@ -222,6 +231,12 @@ export const useUiStore = create<UiState>()(
       },
       setPanelCollapsed: (panelCollapsed) => {
         set({ panelCollapsed })
+      },
+      setWorkflowPreviewShare: (workflowPreviewShare) => {
+        set({ workflowPreviewShare })
+      },
+      setWorkflowPreviewOpen: (workflowPreviewOpen) => {
+        set({ workflowPreviewOpen })
       },
       setActiveTool: (activeTool) => {
         set({ activeTool })

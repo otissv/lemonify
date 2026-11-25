@@ -50,6 +50,7 @@ function thumbnailStepIds(pipeline: Pipeline): string[] {
 const ONE_STEP_VIEW =
   'Ask for the picture before a step or through it, not both.'
 const NO_SUCH_STEP = 'The document has no such step.'
+const NO_SUCH_NODE = 'The workflow has no such node.'
 const NOT_AN_AI_STEP = 'That step is not an AI step that is switched on.'
 const ALREADY_RUN = 'This AI step has already been run.'
 const EARLIER_FIRST = 'Run the earlier AI steps first.'
@@ -221,6 +222,50 @@ export class RenderService {
     )
   }
 
+  /**
+   * Queues the large picture of one workflow diagram node: a step, or the
+   * canvas, inputs or output. A newer request for another node or revision
+   * replaces older ones (latest wins); asking again for the same node returns
+   * the Job already queued.
+   */
+  async requestWorkflowPreview(
+    actor: Actor,
+    workflowId: string,
+    canvasMode: RunCanvasMode,
+    nodeId: string,
+  ): Promise<JobView> {
+    const workflow = await this.#ownedWorkflow(actor, workflowId)
+    const nodeIds = workflowPreviewNodeIds({
+      id: workflow.id,
+      name: workflow.name,
+      ...workflow.definition,
+    })
+    if (!nodeIds.includes(nodeId)) throw new ValidationError(NO_SUCH_NODE)
+    return this.#latestOnlyWorkflow(
+      actor,
+      workflow,
+      JobKind.WorkflowPreview,
+      async () => [
+        {
+          kind: JobKind.WorkflowPreview,
+          payload: {
+            kind: JobKind.WorkflowPreview,
+            workflowId,
+            revision: workflow.revision,
+            canvasMode,
+            nodeId,
+          },
+          pool: WorkerPool.Cpu,
+          groupKey: workflowId,
+        },
+      ],
+      (payload) =>
+        payload.kind === JobKind.WorkflowPreview &&
+        payload.nodeId === nodeId &&
+        payload.canvasMode === canvasMode,
+    )
+  }
+
   /** Queues an AI step to run; the earlier AI steps must have Results already. */
   async requestAiStep(
     actor: Actor,
@@ -321,7 +366,7 @@ export class RenderService {
     return this.#openRender(kind, key)
   }
 
-  /** A stored workflow diagram thumbnail. */
+  /** A stored workflow diagram thumbnail or node preview. */
   async fetchWorkflow(
     actor: Actor,
     workflowId: string,
@@ -361,6 +406,7 @@ export class RenderService {
     workflow: WorkflowRecord,
     kind: JobKind,
     build: () => Promise<Parameters<JobService['enqueue']>[1]>,
+    asked: (payload: JobPayload) => boolean = () => true,
   ): Promise<JobView> {
     const { jobDao, clock, jobs } = this.#deps
     const active = (await jobDao.listActive({ kinds: [kind] })).filter(
@@ -372,8 +418,9 @@ export class RenderService {
     let current: JobRecord | undefined
     for (const job of active) {
       const revision = 'revision' in job.payload ? job.payload.revision : NO_MAX
-      if (revision === workflow.revision) current ??= job
-      else await jobDao.requestCancel(job.id, isoNow(clock))
+      if (revision === workflow.revision && asked(job.payload)) {
+        current ??= job
+      } else await jobDao.requestCancel(job.id, isoNow(clock))
     }
     if (current !== undefined) return toView(current)
     const [queued] = await jobs.enqueue(actor, await build())

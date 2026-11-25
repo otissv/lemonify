@@ -67,6 +67,7 @@ import {
   workflowCreateCommand,
   workflowDeleteCommand,
   workflowListCommand,
+  workflowPreviewCommand,
   workflowRedoCommand,
   workflowRenameCommand,
   workflowResultsCommand,
@@ -209,10 +210,11 @@ export const RENDER_COMMANDS = {
   clearUnusedResults: [resultClearUnusedCommand],
   requestPreview: [documentPreviewCommand],
   requestThumbnails: { screenOnly: 'the small pictures in the step list' },
+  requestWorkflowPreview: [workflowPreviewCommand],
   requestWorkflowThumbnails: {
     screenOnly: 'the small pictures under each workflow node',
   },
-  fetchWorkflow: { screenOnly: 'serving workflow diagram thumbnails' },
+  fetchWorkflow: { screenOnly: 'serving workflow diagram pictures' },
   fetch: { screenOnly: 'serves a rendered picture to the page' },
 } as const satisfies Record<keyof RenderService, Coverage>
 

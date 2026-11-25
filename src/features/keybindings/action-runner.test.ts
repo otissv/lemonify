@@ -179,6 +179,23 @@ describe('actions on a workflow, which is a pipeline with an Edit history', () =
     return view
   }
 
+  it('show and hide the step preview, which only a workflow has', () => {
+    openWorkflow()
+    const workflow = context({ documentId: WORKFLOW_ID })
+
+    expect(useUiStore.getState().workflowPreviewOpen).toBe(true)
+    expect(runAction('view.stepPreview', workflow)).toBe(true)
+    expect(useUiStore.getState().workflowPreviewOpen).toBe(false)
+    runAction('view.stepPreview', workflow)
+    expect(useUiStore.getState().workflowPreviewOpen).toBe(true)
+
+    loadDocumentIntoEditor(documentView())
+    expect(canRunAction('view.stepPreview', context())).toBe(false)
+    expect(
+      canRunAction('view.stepPreview', context({ documentId: undefined })),
+    ).toBe(false)
+  })
+
   it('undo and redo only when its Edit history has something to undo or redo', () => {
     openWorkflow(true, false)
     const workflow = context({ documentId: WORKFLOW_ID })

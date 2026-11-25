@@ -132,6 +132,7 @@ describe('COMMANDS', () => {
       'workflow redo',
       'workflow delete',
       'workflow run',
+      'workflow preview',
       'workflow results',
       'workflow runs',
       'workflow cancel',

@@ -20,13 +20,14 @@ import {
 } from '@/features/pipeline/pipeline-actions'
 import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import { addTool } from '@/features/tools/add-tool'
-import { FAR_PAN_MULTIPLIER, KEY_PAN_STEP } from '@/features/viewport/pan-step'
+import { PAN_STEPS, panDistance } from '@/features/viewport/pan-step'
 import { viewportActionsFor } from '@/features/viewport/use-viewport'
 import { Tool, useUiStore } from '@/store/ui-store'
 import {
   currentPipeline,
   documentSession,
   usePipelineStore,
+  workflowSession,
 } from '@/store/pipeline-store'
 
 /** What an action needs from the page it runs on. */
@@ -47,19 +48,6 @@ const PANELS: Readonly<Record<string, Tool>> = {
   'panel.results': Tool.Results,
   'panel.document': Tool.Document,
   'panel.navigator': Tool.Navigator,
-}
-
-type PanStep = readonly [dx: number, dy: number, far: boolean]
-
-const PANS: Readonly<Record<string, PanStep>> = {
-  'view.panLeft': [1, 0, false],
-  'view.panRight': [-1, 0, false],
-  'view.panUp': [0, 1, false],
-  'view.panDown': [0, -1, false],
-  'view.panLeftFar': [1, 0, true],
-  'view.panRightFar': [-1, 0, true],
-  'view.panUpFar': [0, 1, true],
-  'view.panDownFar': [0, -1, true],
 }
 
 type Snapshot = {
@@ -196,13 +184,18 @@ export function canRunAction(id: string, context: ActionContext): boolean {
       return true
   }
   if (documentId === undefined) return false
+  if (id === 'view.stepPreview') {
+    return (
+      workflowSession(usePipelineStore.getState(), documentId) !== undefined
+    )
+  }
   const now = snapshot(documentId)
   if (definition.tool !== undefined) {
     if (!now.hasSession) return false
     return definition.tool.kind === 'sharp' || context.catalogues !== undefined
   }
   if (id.startsWith('step.')) return stepKeyEnabled(id, now)
-  if (id in PANS || id.startsWith('view.')) {
+  if (id in PAN_STEPS || id.startsWith('view.')) {
     return useUiStore.getState().viewFrames[documentId] !== undefined
   }
   return documentEnabled(id, now)
@@ -210,14 +203,18 @@ export function canRunAction(id: string, context: ActionContext): boolean {
 
 function runViewAction(id: string, documentId: string): void {
   const view = viewportActionsFor(documentId)
-  const pan = PANS[id]
+  const pan = PAN_STEPS[id]
   if (pan !== undefined) {
-    const [dx, dy, far] = pan
-    const step = far ? KEY_PAN_STEP * FAR_PAN_MULTIPLIER : KEY_PAN_STEP
-    view.panBy(dx * step, dy * step)
+    const [dx, dy] = panDistance(pan)
+    view.panBy(dx, dy)
     return
   }
   switch (id) {
+    case 'view.stepPreview': {
+      const store = useUiStore.getState()
+      store.setWorkflowPreviewOpen(!store.workflowPreviewOpen)
+      return
+    }
     case 'view.zoomIn':
       view.zoomIn()
       return

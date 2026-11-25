@@ -41,6 +41,7 @@ import { ExportHandler } from './jobs/handlers/export-handler.ts'
 import { RunItemHandler } from './jobs/handlers/run-item-handler.ts'
 import { PreviewHandler } from './jobs/handlers/preview-handler.ts'
 import { ThumbnailHandler } from './jobs/handlers/thumbnail-handler.ts'
+import { WorkflowPreviewHandler } from './jobs/handlers/workflow-preview-handler.ts'
 import { WorkflowThumbnailHandler } from './jobs/handlers/workflow-thumbnail-handler.ts'
 import { JobKind } from './jobs/job-types.ts'
 import type { JobRecord } from './jobs/job-types.ts'
@@ -310,6 +311,14 @@ export async function createApp(
         logger,
       }),
       [JobKind.WorkflowThumbnail]: new WorkflowThumbnailHandler({
+        planner,
+        renders: renderStore,
+        engine: imageEngine,
+        logger,
+        workflows: workflowDao,
+        workflowPlanner,
+      }),
+      [JobKind.WorkflowPreview]: new WorkflowPreviewHandler({
         planner,
         renders: renderStore,
         engine: imageEngine,

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
+import { ResizeHandle } from '@/components/ui/resize-handle'
 import { MenuPanel } from '@/features/app/menu-panel'
 import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { KeyBindings } from '@/features/keybindings/key-bindings'
@@ -20,6 +21,7 @@ import { useWorkflow } from '@/features/workflows/use-workflow'
 import { RunCanvasMode } from '@/features/workflows/workflow'
 import type { Workflow } from '@/features/workflows/workflow'
 import { WorkflowCanvas } from '@/features/workflows/workflow-canvas'
+import { WorkflowNodePreview } from '@/features/workflows/workflow-node-preview'
 import {
   addInputsChange,
   addStepChange,
@@ -29,11 +31,18 @@ import {
 import { WorkflowPanel } from '@/features/workflows/workflow-panel'
 import {
   NO_SELECTION,
+  previewNodeIdForSelection,
   stepSelection,
 } from '@/features/workflows/workflow-selection'
 import type { Selection } from '@/features/workflows/workflow-selection'
 import { sourceFileName, useLibraryStore } from '@/store/library-store'
-import { Tool, useUiStore } from '@/store/ui-store'
+import { findStep } from '@/features/pipeline/pipeline'
+import { stepLabel } from '@/features/workflows/workflow-steps'
+import {
+  DEFAULT_WORKFLOW_PREVIEW_SHARE,
+  Tool,
+  useUiStore,
+} from '@/store/ui-store'
 
 interface WorkflowPageProps {
   id: string
@@ -41,6 +50,28 @@ interface WorkflowPageProps {
 }
 
 const SAMPLE_NAME = 'photo.jpg'
+const MIN_PREVIEW_SHARE = 0.2
+const MAX_PREVIEW_SHARE = 0.8
+
+const FOCUS_LABELS = {
+  canvas: 'Canvas',
+  inputs: 'Input images',
+  output: 'Output',
+} as const
+
+/** What the large picture is of, for its text alternative: the selected step or part, or the output. */
+function previewName(workflow: Workflow, selection: Selection): string {
+  switch (selection.kind) {
+    case 'none':
+      return FOCUS_LABELS.output
+    case 'step': {
+      const found = findStep(workflow.pipeline, selection.id)?.step
+      return found === undefined ? FOCUS_LABELS.output : stepLabel(found)
+    }
+    default:
+      return FOCUS_LABELS[selection.kind]
+  }
+}
 
 function cataloguesOf(aiTools: ReadonlyArray<AiToolEntry>): AiCatalogues {
   return aiTools.map(({ tool, catalogue }) => ({ tool: tool.id, catalogue }))
@@ -63,7 +94,7 @@ function PageMessage({
   )
 }
 
-/** A workflow as a diagram in the middle of the page, and the same floating panel a document has. Selecting a node shows its options in the panel, and tools are added there. It is held and edited in the store like a document: every change is one entry in its Edit history, shown at once and saved in order. */
+/** A workflow as a diagram on the left of the page, with the same floating panel a document has over it, and the large picture of the selected node on the right, which takes half the width until its left border is dragged. Selecting a node shows its options in the panel and its picture on the right, and tools are added there. It is held and edited in the store like a document: every change is one entry in its Edit history, shown at once and saved in order. */
 export function WorkflowPage({
   id,
   aiTools,
@@ -82,6 +113,10 @@ export function WorkflowPage({
   const selectInWorkflow = useUiStore((state) => state.selectInWorkflow)
   const setRunCanvasMode = useUiStore((state) => state.setRunCanvasMode)
   const visitItem = useUiStore((state) => state.visitItem)
+  const previewShare = useUiStore((state) => state.workflowPreviewShare)
+  const setPreviewShare = useUiStore((state) => state.setWorkflowPreviewShare)
+  const previewOpen = useUiStore((state) => state.workflowPreviewOpen)
+  const splitRef = useRef<HTMLDivElement>(null)
   const catalogues = useMemo(() => cataloguesOf(aiTools), [aiTools])
 
   useEffect(() => {
@@ -201,32 +236,60 @@ export function WorkflowPage({
     firstSource === undefined ? SAMPLE_NAME : imageName(firstSource)
 
   return (
-    <div data-slot="tools-panel-bounds" className="relative size-full">
-      <WorkflowCanvas
-        workflow={workflow}
-        selection={selection}
-        onSelect={handleSelect}
-        onRemoveStep={handleRemove}
-        imageName={imageName}
-      />
-      <KeyBindings documentId={id} catalogues={catalogues} />
-      <WorkflowPanel
-        workflow={workflow}
-        selection={selection}
-        aiTools={aiTools}
-        canvasMode={canvasMode}
-        imageName={imageName}
-        sampleName={sampleName}
-        onAddStep={handleAddStep}
-        onChange={handleChange}
-        onRemove={handleRemove}
-        onMove={handleMove}
-        onAddSources={handleAddSources}
-        onRemoveSource={handleRemoveSource}
-        onOutputChange={handleOutputChange}
-        onCanvasModeChange={handleCanvasModeChange}
-        onRun={handleRun}
-      />
+    <div ref={splitRef} className="flex size-full">
+      <div data-slot="tools-panel-bounds" className="relative min-w-0 flex-1">
+        <WorkflowCanvas
+          workflow={workflow}
+          selection={selection}
+          onSelect={handleSelect}
+          onRemoveStep={handleRemove}
+          imageName={imageName}
+        />
+        <KeyBindings documentId={id} catalogues={catalogues} />
+        <WorkflowPanel
+          workflow={workflow}
+          selection={selection}
+          aiTools={aiTools}
+          canvasMode={canvasMode}
+          imageName={imageName}
+          sampleName={sampleName}
+          onAddStep={handleAddStep}
+          onChange={handleChange}
+          onRemove={handleRemove}
+          onMove={handleMove}
+          onAddSources={handleAddSources}
+          onRemoveSource={handleRemoveSource}
+          onOutputChange={handleOutputChange}
+          onCanvasModeChange={handleCanvasModeChange}
+          onRun={handleRun}
+        />
+      </div>
+      {previewOpen && (
+        <>
+          <ResizeHandle
+            label="Resize step preview"
+            value={previewShare}
+            defaultValue={DEFAULT_WORKFLOW_PREVIEW_SHARE}
+            min={MIN_PREVIEW_SHARE}
+            max={MAX_PREVIEW_SHARE}
+            panelSide="end"
+            boundsRef={splitRef}
+            onChange={setPreviewShare}
+          />
+          <section
+            aria-label="Step preview"
+            className="relative min-w-0 shrink-0"
+            style={{ width: `${previewShare * 100}%` }}
+          >
+            <WorkflowNodePreview
+              workflowId={id}
+              nodeId={previewNodeIdForSelection(selection)}
+              canvasMode={canvasMode}
+              name={previewName(workflow, selection)}
+            />
+          </section>
+        </>
+      )}
     </div>
   )
 }

@@ -12,6 +12,14 @@ export function thumbnailImageUrl(documentId: string, key: string): string {
   return `/api/documents/${encodeURIComponent(documentId)}/renders/thumbnail/${encodeURIComponent(key)}`
 }
 
+/** The large picture of a workflow diagram node, shown beside the diagram. */
+export function workflowPreviewImageUrl(
+  workflowId: string,
+  key: string,
+): string {
+  return `/api/workflows/${encodeURIComponent(workflowId)}/renders/preview/${encodeURIComponent(key)}`
+}
+
 export function workflowThumbnailImageUrl(
   workflowId: string,
   key: string,

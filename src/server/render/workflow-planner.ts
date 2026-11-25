@@ -5,12 +5,21 @@ import { planPipeline } from './plan-pipeline.ts'
 import type { PipelinePlan } from './plan-pipeline.ts'
 import type { PlanLookups } from './plan-pipeline.ts'
 import type { SourceStore } from '../tools/source-store.ts'
-import type { PlanStep } from '@/features/pipeline/pipeline'
+import type { Pipeline, PlanStep } from '@/features/pipeline/pipeline'
 import type { Canvas } from '@/features/pipeline/canvas'
+import { inputSlots, itemPipeline } from '@/features/workflows/segments'
+import type { RunCanvasMode } from '@/features/workflows/workflow'
 
 export type WorkflowPlanOptions = {
   steps: ReadonlyArray<PlanStep>
   canvas: Canvas
+}
+
+/** A workflow's pipeline as its pictures show it: with its last input image drawn in, when it has one. */
+export type FilledWorkflow = {
+  pipeline: Pipeline
+  /** The first input slot, from the workflow before an image is placed in it. */
+  firstSlotId: string | undefined
 }
 
 export type WorkflowPlannerDependencies = {
@@ -47,7 +56,32 @@ export class WorkflowPlanner {
     workflow: WorkflowRecord,
     shown: WorkflowPlanOptions,
   ): Promise<PipelinePlan> {
-    return planPipeline(shown.canvas, shown.steps, this.#lookups(workflow.ownerId))
+    return planPipeline(
+      shown.canvas,
+      shown.steps,
+      this.#lookups(workflow.ownerId),
+    )
+  }
+
+  /** The pipeline with the workflow's last input image drawn in on the canvas `mode` gives, which is what its diagram pictures show. Left empty when it has no input image that can be found. */
+  async filled(
+    workflow: WorkflowRecord,
+    mode: RunCanvasMode,
+  ): Promise<FilledWorkflow> {
+    const { definition } = workflow
+    const [firstSlot] = inputSlots(definition.pipeline)
+    const shownSourceId = definition.inputs.at(-1)
+    const image =
+      shownSourceId === undefined
+        ? undefined
+        : await this.sourceSize(workflow.ownerId, shownSourceId)
+    return {
+      pipeline:
+        shownSourceId === undefined || image === undefined
+          ? definition.pipeline
+          : itemPipeline(definition, mode, { id: shownSourceId, ...image }),
+      firstSlotId: firstSlot?.id,
+    }
   }
 
   async sourceSize(

@@ -10,6 +10,7 @@ export enum JobKind {
   Preview = 'preview',
   Thumbnail = 'thumbnail',
   WorkflowThumbnail = 'workflow-thumbnail',
+  WorkflowPreview = 'workflow-preview',
   AiStep = 'ai-step',
   Export = 'export',
   RunItem = 'run-item',
@@ -34,6 +35,7 @@ export const JOB_PRIORITY: Readonly<Record<JobKind, number>> = {
   [JobKind.Preview]: 0,
   [JobKind.Thumbnail]: 1,
   [JobKind.WorkflowThumbnail]: 1,
+  [JobKind.WorkflowPreview]: 0,
   [JobKind.Export]: 2,
   [JobKind.AiStep]: 2,
   [JobKind.RunItem]: 3,
@@ -67,6 +69,14 @@ export const JobPayloadSchema = z.discriminatedUnion('kind', [
     revision,
     canvasMode: RunCanvasModeSchema,
     nodeIds: z.array(id),
+  }),
+  z.strictObject({
+    kind: z.literal(JobKind.WorkflowPreview),
+    workflowId: id,
+    revision,
+    canvasMode: RunCanvasModeSchema,
+    /** The diagram node whose picture is shown: a step, or the canvas, inputs or output. */
+    nodeId: id,
   }),
   z.strictObject({
     kind: z.literal(JobKind.AiStep),
@@ -134,6 +144,18 @@ export const JobResultSchema = z.discriminatedUnion('kind', [
     thumbnails: z.array(
       z.strictObject({ stepId: id, key: z.string().min(1).nullable() }),
     ),
+  }),
+  z.strictObject({
+    kind: z.literal(JobKind.WorkflowPreview),
+    nodeId: id,
+    /** The render and the size of the picture in its own pixels, before the preview shrank it; null when the node's steps cannot make one. */
+    picture: z
+      .strictObject({
+        key: z.string().min(1),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
+      .nullable(),
   }),
   z.strictObject({ kind: z.literal(JobKind.AiStep), resultId: id }),
   z.strictObject({ kind: z.literal(JobKind.Export), resultId: id }),

@@ -23,6 +23,8 @@ import type { WorkflowView } from '../../../src/server/services/workflow-service
 import type { App } from '../../../src/server/composition.ts'
 import { defineAppCommand } from '../app-command.ts'
 import { withWorkers } from '../in-process-workers.ts'
+import { writeWorkflowPreview } from '../preview-workflow.ts'
+import { parseRegion } from '../region.ts'
 import { EXISTING_FILES, writeRunOutputs } from '../write-outputs.ts'
 import type { ExistingFiles } from '../write-outputs.ts'
 
@@ -383,6 +385,52 @@ ${OUTPUT_FLAG_HELP}`,
       return { run, files: await written(app, actor, run.id, options) }
     })
   },
+})
+
+export const workflowPreviewCommand = defineAppCommand({
+  name: 'workflow preview',
+  summary: 'Write the large picture of a workflow node to a file',
+  synopsis:
+    '<id> --out <path> [--node <id>] [--canvas workflow|first-image] [--region <x,y,w,h>] [--width <px>]',
+  help: `Writes the large picture the workflow page shows beside the diagram for a
+node, so it can be looked at without the website. It is the workflow's last
+source drawn in its input layer, through the steps up to and including the
+node; AI steps are left out, as in the diagram's small pictures. The file type
+follows the extension of --out (.webp, .png, .jpg); a folder uses the
+workflow's name. Prints the file and the picture's size in its own pixels,
+whatever size the file is written at.
+
+Options:
+  --out <path>         Where to write the picture (required)
+  --node <id>          A step id, or canvas, inputs or output (default: output)
+  --canvas <mode>      workflow (default) or first-image, as for \`workflow run\`
+  --region <x,y,w,h>   Only this part of the picture, as fractions from 0 to 1
+  --width <px>         Shrink the picture to this width (never enlarged)`,
+  shape: {
+    id,
+    out: z.string().min(1),
+    node: z.string().min(1).optional(),
+    canvas: RunCanvasModeSchema.default(RunCanvasMode.Workflow),
+    region: z.string().min(1).transform(parseRegion).optional(),
+    width: z.coerce.number().int().positive().optional(),
+  },
+  positionals: ['id'],
+  flags: {
+    out: { type: 'string' },
+    node: { type: 'string' },
+    canvas: { type: 'string' },
+    region: { type: 'string' },
+    width: { type: 'string' },
+  },
+  run: ({ app, actor, options }) =>
+    withWorkers(app, async () => ({
+      preview: await writeWorkflowPreview(app, actor, options.id, options.out, {
+        nodeId: options.node,
+        canvasMode: options.canvas,
+        region: options.region,
+        width: options.width,
+      }),
+    })),
 })
 
 export const workflowResultsCommand = defineAppCommand({

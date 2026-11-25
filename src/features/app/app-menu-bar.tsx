@@ -54,6 +54,7 @@ export function AppMenuBar({
       : (state.showOriginal[documentId] ?? false),
   )
   const sidebarOpen = useUiStore((state) => state.sidebarOpen)
+  const stepPreviewOpen = useUiStore((state) => state.workflowPreviewOpen)
 
   const handleSignOut = useCallback((): void => {
     void (async () => {
@@ -142,6 +143,14 @@ export function AppMenuBar({
               label="Sidebar"
               checked={sidebarOpen}
             />
+            {workflowId !== undefined && (
+              <ActionCheckboxItem
+                actionId="view.stepPreview"
+                context={context}
+                label="Step preview"
+                checked={stepPreviewOpen}
+              />
+            )}
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>

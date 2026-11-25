@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -17,6 +18,7 @@ import type { UpscaleCatalogue } from '@/features/upscale/upscale-settings'
 import type { AiToolEntry } from '@/features/workflows/ai-tool-entries'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import { INITIAL_LIBRARY_STATE, useLibraryStore } from '@/store/library-store'
+import { useUiStore } from '@/store/ui-store'
 import {
   RunCanvasMode,
   WorkflowSchema,
@@ -38,6 +40,10 @@ import {
 } from '@/features/workflows/workflow-functions'
 import { IMAGE_LAYER_KIND } from '@/features/pipeline/layer-kinds'
 import { WorkflowPage } from '@/features/workflows/workflow-page'
+import {
+  requestWorkflowPreview,
+  requestWorkflowThumbnails,
+} from '@/features/render/render-functions'
 
 import {
   WorkflowChangeSchema,
@@ -81,6 +87,11 @@ vi.mock('@/features/results/result-functions', () => ({
 
 vi.mock('@/features/export/export-functions', () => ({
   getExportFormats: vi.fn(),
+}))
+
+vi.mock('@/features/render/render-functions', () => ({
+  requestWorkflowThumbnails: vi.fn(),
+  requestWorkflowPreview: vi.fn(),
 }))
 
 const PHOTO_A = {
@@ -220,10 +231,11 @@ function savedWorkflow(): Workflow {
   return server.workflow
 }
 
-async function renderPage(workflow: Workflow): Promise<void> {
+async function renderPage(workflow: Workflow): Promise<Workflow> {
   seedServer(workflow)
   render(<WorkflowPage id={workflow.id} aiTools={AI_TOOL_ENTRIES} />)
   await screen.findByRole('dialog', { name: 'Tools' })
+  return workflow
 }
 
 function canvas(): HTMLElement {
@@ -286,6 +298,8 @@ describe('WorkflowPage', () => {
     vi.mocked(listSources).mockResolvedValue([PHOTO_A, PHOTO_B])
     vi.mocked(listWorkflowRuns).mockResolvedValue([])
     vi.mocked(listResults).mockResolvedValue([])
+    vi.mocked(requestWorkflowThumbnails).mockReturnValue(new Promise(() => {}))
+    vi.mocked(requestWorkflowPreview).mockReturnValue(new Promise(() => {}))
     installServer()
   })
 
@@ -332,6 +346,85 @@ describe('WorkflowPage', () => {
     expect(
       screen.queryByRole('region', { name: 'Workflow steps' }),
     ).not.toBeInTheDocument()
+  })
+
+  describe('step preview', () => {
+    function previewPanel(): HTMLElement {
+      return screen.getByRole('region', { name: 'Step preview' })
+    }
+
+    function resizeHandle(): HTMLElement {
+      return screen.getByRole('separator', { name: 'Resize step preview' })
+    }
+
+    it('leaves the whole width to the diagram while the preview is hidden', async () => {
+      await renderPage(createWorkflow('Test'))
+      expect(previewPanel()).toBeVisible()
+
+      act(() => {
+        useUiStore.getState().setWorkflowPreviewOpen(false)
+      })
+
+      expect(
+        screen.queryByRole('region', { name: 'Step preview' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('separator', { name: 'Resize step preview' }),
+      ).not.toBeInTheDocument()
+      expect(canvas()).toBeVisible()
+    })
+
+    it('shows a large picture beside the diagram, taking half the width', async () => {
+      await renderPage(createWorkflow('Test'))
+
+      expect(previewPanel()).toHaveStyle({ width: '50%' })
+      expect(resizeHandle()).toHaveAttribute('aria-valuenow', '50')
+      expect(previewPanel().compareDocumentPosition(canvas())).toBe(
+        Node.DOCUMENT_POSITION_PRECEDING,
+      )
+    })
+
+    it('shows the output until a node is selected, then that node', async () => {
+      const workflow = await renderPage(createWorkflow('Test'))
+      await waitFor(() => {
+        expect(requestWorkflowPreview).toHaveBeenLastCalledWith({
+          data: {
+            workflowId: workflow.id,
+            canvasMode: RunCanvasMode.Workflow,
+            nodeId: 'output',
+          },
+        })
+      })
+
+      await clickStep('Canvas')
+
+      await waitFor(() => {
+        expect(requestWorkflowPreview).toHaveBeenLastCalledWith({
+          data: {
+            workflowId: workflow.id,
+            canvasMode: RunCanvasMode.Workflow,
+            nodeId: 'canvas',
+          },
+        })
+      })
+    })
+
+    it('is resized by its left border', async () => {
+      await renderPage(createWorkflow('Test'))
+
+      fireEvent.keyDown(resizeHandle(), { key: 'ArrowLeft' })
+
+      expect(resizeHandle()).toHaveAttribute('aria-valuenow', '55')
+      expect(previewPanel()).toHaveStyle({ width: '55%' })
+    })
+
+    it('keeps the floating panel over the diagram, not the preview', async () => {
+      await renderPage(createWorkflow('Test'))
+
+      expect(
+        within(previewPanel()).queryByRole('dialog', { name: 'Tools' }),
+      ).not.toBeInTheDocument()
+    })
   })
 
   it('offers the workflow tabs only: Tools, Options and Run', async () => {

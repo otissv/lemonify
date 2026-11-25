@@ -68,6 +68,26 @@ export const requestWorkflowThumbnails = createServerFn({ method: 'POST' })
     )
   })
 
+const WorkflowPreviewSchema = z.object({
+  workflowId: z.string().min(1),
+  canvasMode: RunCanvasModeSchema,
+  nodeId: z.string().min(1),
+})
+
+/** Queues the large picture of one workflow diagram node. */
+export const requestWorkflowPreview = createServerFn({ method: 'POST' })
+  .middleware(protectedChain('queue'))
+  .validator(WorkflowPreviewSchema)
+  .handler(async ({ context, data }): Promise<JobView> => {
+    const { app, actor } = await appFor(context)
+    return app.renders.requestWorkflowPreview(
+      actor,
+      data.workflowId,
+      data.canvasMode,
+      data.nodeId,
+    )
+  })
+
 export const requestAiStep = createServerFn({ method: 'POST' })
   .middleware(protectedChain('queue'))
   .validator(DocumentSchema.extend({ stepId: z.string().min(1) }))

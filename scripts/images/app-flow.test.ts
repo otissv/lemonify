@@ -355,6 +355,65 @@ describe('workflows through the CLI', () => {
     expect(existsSync(path.join(folder, 'manifest.json'))).toBe(true)
   })
 
+  it('writes the large picture of a node with `workflow preview`', async () => {
+    const { source } = await cli<{ source: { id: string } }>(
+      'source',
+      'add',
+      await makeImage('cat.png'),
+    )
+    const { workflow } = await cli<{
+      workflow: { id: string; pipeline: { steps: Array<{ id: string }> } }
+    }>(
+      'workflow',
+      'create',
+      'Looked at',
+      '--width',
+      '64',
+      '--height',
+      '48',
+      '--sources',
+      source.id,
+      '--steps',
+      '[{"op":"flop"}]',
+    )
+    const flop = workflow.pipeline.steps.at(-1)
+    const file = path.join(workDir, 'node.png')
+
+    const { preview } = await cli<{
+      preview: {
+        path: string
+        format: string
+        nodeId: string
+        size: { width: number; height: number } | null
+      }
+    }>(
+      'workflow',
+      'preview',
+      workflow.id,
+      '--out',
+      file,
+      '--node',
+      flop?.id ?? '',
+    )
+
+    expect(preview).toMatchObject({
+      path: file,
+      format: 'png',
+      nodeId: flop?.id,
+      size: { width: 64, height: 48 },
+    })
+    expect((await sharp(file).metadata()).format).toBe('png')
+
+    const output = await cli<{ preview: { nodeId: string } }>(
+      'workflow',
+      'preview',
+      workflow.id,
+      '--out',
+      path.join(workDir, 'output.webp'),
+    )
+    expect(output.preview.nodeId).toBe('output')
+  })
+
   it('makes a pipeline with a canvas and one empty image layer, and changes the canvas', async () => {
     const { workflow } = await cli<{
       workflow: {

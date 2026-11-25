@@ -34,6 +34,7 @@
     "view.panUpFar": ["shift+arrowup"],
     "view.panDownFar": ["shift+arrowdown"],
     "view.sidebar": ["alt+0"],
+    "view.stepPreview": ["alt+p"],
     "panel.tools": ["alt+1"],
     "panel.options": ["alt+2"],
     "panel.export": ["alt+3"],

@@ -979,6 +979,122 @@ describe('workflow thumbnails', () => {
   })
 })
 
+describe('workflow previews', () => {
+  async function previewWorkflow() {
+    const source = await t.uploadImage(t.ann)
+    const { pipeline, output } = createWorkflow('Large')
+    const layer = pipeline.steps[0]
+    if (layer === undefined) throw new Error('missing layer')
+    const sharpen = createSharpStep('sharpen')
+    const ai = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
+    const workflow = await t.app.workflows.create(t.ann, 'Large', {
+      pipeline: createPipeline(canvasOfSize(40, 30), [layer, sharpen, ai]),
+      inputs: [source.id],
+      output,
+    })
+    return { workflow, sharpen, ai }
+  }
+
+  it('renders a display-sized picture of one node, with its size, and does not run AI', async () => {
+    const { workflow, sharpen, ai } = await previewWorkflow()
+    const queued = await t.app.renders.requestWorkflowPreview(
+      t.ann,
+      workflow.id,
+      RunCanvasMode.Workflow,
+      sharpen.id,
+    )
+    expect(queued.kind).toBe(JobKind.WorkflowPreview)
+    const done = await run(queued)
+    if (done.result?.kind !== JobKind.WorkflowPreview) {
+      throw new Error('wrong result')
+    }
+    expect(done.result.nodeId).toBe(sharpen.id)
+    expect(done.result.picture).toEqual({
+      key: expect.stringMatching(/^[0-9a-f]{64}$/),
+      ...FAKE_PICTURE_SIZE,
+    })
+    expect(t.imageEngine.requests.at(-1)?.target.kind).toBe(
+      EngineTargetKind.Preview,
+    )
+    expect(
+      (
+        await t.app.renders.fetchWorkflow(
+          t.ann,
+          workflow.id,
+          RenderKind.Preview,
+          done.result.picture?.key ?? '',
+        )
+      ).mediaType,
+    ).toBe('image/webp')
+
+    const afterAi = await run(
+      await t.app.renders.requestWorkflowPreview(
+        t.ann,
+        workflow.id,
+        RunCanvasMode.Workflow,
+        ai.id,
+      ),
+    )
+    if (afterAi.result?.kind !== JobKind.WorkflowPreview) {
+      throw new Error('wrong result')
+    }
+    expect(afterAi.result.picture?.key).toBe(done.result.picture?.key)
+    expect(t.aiEngine.batches).toHaveLength(0)
+  })
+
+  it('refuses a node the workflow does not have', async () => {
+    const { workflow } = await previewWorkflow()
+    await expect(
+      t.app.renders.requestWorkflowPreview(
+        t.ann,
+        workflow.id,
+        RunCanvasMode.Workflow,
+        'no-such-node',
+      ),
+    ).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  it('keeps one request per node and drops an older one for another node (latest wins)', async () => {
+    const { workflow, sharpen } = await previewWorkflow()
+    const first = await t.app.renders.requestWorkflowPreview(
+      t.ann,
+      workflow.id,
+      RunCanvasMode.Workflow,
+      sharpen.id,
+    )
+    const again = await t.app.renders.requestWorkflowPreview(
+      t.ann,
+      workflow.id,
+      RunCanvasMode.Workflow,
+      sharpen.id,
+    )
+    expect(again.id).toBe(first.id)
+    const other = await t.app.renders.requestWorkflowPreview(
+      t.ann,
+      workflow.id,
+      RunCanvasMode.Workflow,
+      CANVAS_NODE_ID,
+    )
+    expect(other.id).not.toBe(first.id)
+    expect((await t.app.jobs.get(t.ann, first.id)).state).toBe(
+      JobState.Cancelled,
+    )
+    expect((await run(other)).state).toBe(JobState.Done)
+  })
+
+  it("does not show one person another person's workflow", async () => {
+    const { workflow, sharpen } = await previewWorkflow()
+    await expect(
+      t.app.renders.requestWorkflowPreview(
+        t.bob,
+        workflow.id,
+        RunCanvasMode.Workflow,
+        sharpen.id,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError)
+  })
+})
+
 describe('exportFormats', () => {
   it('lists the formats this machine can write, starting with the original', async () => {
     const formats = await t.app.renders.exportFormats()

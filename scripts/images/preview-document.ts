@@ -1,17 +1,13 @@
-import { stat } from 'node:fs/promises'
-import path from 'node:path'
-import { Readable } from 'node:stream'
-
-import sharp from 'sharp'
+import type { Readable } from 'node:stream'
 
 import { JobKind } from '../../src/server/jobs/job-types.ts'
 import { RenderKind } from '../../src/server/tools/render-store.ts'
 import type { App } from '../../src/server/composition.ts'
 import type { Actor } from '../../src/server/domain/actor.ts'
 import { ValidationError } from '../../src/server/errors.ts'
-import { cropBox } from './region.ts'
 import type { Region } from './region.ts'
-import { writeAtomically } from './save-result.ts'
+import { formatFor, writePicture } from './write-picture.ts'
+import type { PictureFormat } from './write-picture.ts'
 
 export type PreviewOptions = {
   /** The image as opened, before any step, as the editor's "show original" does. */
@@ -39,37 +35,6 @@ export type PreviewPicture = {
   pending: string[]
   /** Steps left out of the picture, with why. */
   problems: Array<{ stepId: string; message: string }>
-}
-
-const PICTURE_FORMATS = {
-  '.webp': 'webp',
-  '.png': 'png',
-  '.jpg': 'jpeg',
-  '.jpeg': 'jpeg',
-} as const
-
-type PictureFormat = (typeof PICTURE_FORMATS)[keyof typeof PICTURE_FORMATS]
-
-/** The preview is made as WebP, so that is what is written when nothing asks otherwise. */
-const NATIVE_FORMAT: PictureFormat = 'webp'
-const NAME_UNSAFE = /[\\/:*?"<>|\0]/g
-
-function formatFor(destination: string): PictureFormat | undefined {
-  const extension = path.extname(destination).toLowerCase()
-  if (extension === '') return undefined
-  const format = (PICTURE_FORMATS as Record<string, PictureFormat>)[extension]
-  if (format === undefined) {
-    throw new ValidationError(
-      `Write the picture as ${Object.keys(PICTURE_FORMATS).join(', ')}.`,
-    )
-  }
-  return format
-}
-
-async function collect(stream: Readable): Promise<Buffer> {
-  const chunks: Buffer[] = []
-  for await (const chunk of stream) chunks.push(Buffer.from(chunk))
-  return Buffer.concat(chunks)
 }
 
 async function renderedPicture(
@@ -152,7 +117,7 @@ export async function writePreview(
   destination: string,
   options: PreviewOptions = {},
 ): Promise<PreviewPicture> {
-  const format = formatFor(destination)
+  formatFor(destination)
   const original = options.original === true
   if (original && options.beforeStepId !== undefined) {
     throw new ValidationError(
@@ -168,41 +133,15 @@ export async function writePreview(
       }
     : await renderedPicture(app, actor, documentId, options.beforeStepId)
 
-  const wanted = format ?? NATIVE_FORMAT
-  const unchanged =
-    !original &&
-    wanted === NATIVE_FORMAT &&
-    options.width === undefined &&
-    options.region === undefined
-  let content: Readable = picture.stream
-  if (!unchanged) {
-    let image = sharp(await collect(picture.stream))
-    if (options.region !== undefined) {
-      const { width, height } = await image.metadata()
-      if (width === undefined || height === undefined) {
-        throw new Error('The picture has no size to take a region of.')
-      }
-      image = sharp(await image.toBuffer()).extract(
-        cropBox(options.region, width, height),
-      )
-    }
-    if (options.width !== undefined) {
-      image = image.resize({ width: options.width, withoutEnlargement: true })
-    }
-    content = Readable.from(await image.toFormat(wanted).toBuffer())
-  }
-
   const name = (await app.documents.get(actor, documentId)).name
-  const written = await writeAtomically(
+  const written = await writePicture(
+    { stream: picture.stream, rendered: !original },
     destination,
-    `${name.replace(NAME_UNSAFE, '_')}.${wanted === 'jpeg' ? 'jpg' : wanted}`,
-    content,
+    name,
+    { region: options.region, width: options.width },
   )
-  const { size } = await stat(written)
   return {
-    path: written,
-    bytes: size,
-    format: wanted,
+    ...written,
     original,
     beforeStepId: options.beforeStepId ?? null,
     size: picture.size,

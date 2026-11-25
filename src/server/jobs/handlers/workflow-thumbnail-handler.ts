@@ -1,5 +1,4 @@
 import { RunCanvasModeSchema } from '@/features/workflows/workflow'
-import { inputSlots, itemPipeline } from '@/features/workflows/segments'
 import { shownForWorkflowNode } from '@/features/workflows/workflow-thumb-plan'
 
 import type { WorkflowDao } from '../../dao/workflow-dao.ts'
@@ -35,37 +34,29 @@ export class WorkflowThumbnailHandler implements JobHandler {
         if (payload.kind !== JobKind.WorkflowThumbnail) {
           throw new WrongJobKindError(job)
         }
-        const workflow = await this.#deps.workflowPlanner.loadForJob(
+        const { workflowPlanner } = this.#deps
+        const workflow = await workflowPlanner.loadForJob(
           job.ownerId,
           payload.workflowId,
           payload.revision,
         )
-        const { definition } = workflow
-        const mode = RunCanvasModeSchema.parse(payload.canvasMode)
-        const previewSourceId = definition.inputs.at(-1)
-        const [firstSlot] = inputSlots(definition.pipeline)
-        let filled = definition.pipeline
-        if (previewSourceId !== undefined) {
-          const image = await this.#deps.workflowPlanner.sourceSize(
-            job.ownerId,
-            previewSourceId,
-          )
-          if (image !== undefined) {
-            filled = itemPipeline(definition, mode, {
-              id: previewSourceId,
-              ...image,
-            })
-          }
-        }
+        const filled = await workflowPlanner.filled(
+          workflow,
+          RunCanvasModeSchema.parse(payload.canvasMode),
+        )
         const thumbnails: Array<{ stepId: string; key: string | null }> = []
         for (const [done, nodeId] of payload.nodeIds.entries()) {
           context.setProgress(done / payload.nodeIds.length)
-          const shown = shownForWorkflowNode(filled, nodeId, firstSlot?.id)
+          const shown = shownForWorkflowNode(
+            filled.pipeline,
+            nodeId,
+            filled.firstSlotId,
+          )
           if (shown === undefined) {
             thumbnails.push({ stepId: nodeId, key: null })
             continue
           }
-          const plan = await this.#deps.workflowPlanner.plan(workflow, shown)
+          const plan = await workflowPlanner.plan(workflow, shown)
           if (plan.skipped.length > 0) {
             thumbnails.push({ stepId: nodeId, key: null })
             continue

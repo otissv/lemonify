@@ -80,6 +80,7 @@ const STATIC_ACTIONS: ReadonlyArray<ActionDefinition> = [
   action('view.panUpFar', 'Move the picture far up', VIEW, true),
   action('view.panDownFar', 'Move the picture far down', VIEW, true),
   action('view.sidebar', 'Show or hide the sidebar', VIEW),
+  action('view.stepPreview', 'Show or hide the step preview', VIEW),
   action('panel.tools', 'Show Tools', PANELS),
   action('panel.options', 'Show Options', PANELS),
   action('panel.export', 'Show Export', PANELS),
