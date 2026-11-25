@@ -2,7 +2,7 @@
 
 A list of what needs doing, not a plan. Every item is built test first, and every feature gets its CLI command, its website control and its `parity.ts` entry in the same change (see `CLAUDE.md`). Nothing keeps old behaviour: no migration, no compatibility code, no `BUNDLE_VERSION` bump. An old `.lemon` file gets the ordinary validation error.
 
-Out of scope: batch steps, input steps, and layer kinds other than `image`.
+Out of scope: batch steps, input steps, and layer kinds other than `image`, `document` and `workflow`.
 
 ## Decisions already made
 
@@ -10,12 +10,12 @@ Out of scope: batch steps, input steps, and layer kinds other than `image`.
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Explicit canvas             | A document stores its own width, height and background. Nothing derives the canvas from an image after creation.                                                           |
 | Image layer                 | `layer` is renamed `image layer`. It may be empty, keeps all its settings and draws nothing until it has an image.                                                         |
-| Layer kinds                 | A layer has a `kind`; `image` is the only one. A registry owns validation, image ownership, planning and sidebar display. No consumer checks for `image` directly.         |
+| Layer kinds                 | A layer has a `kind`: `image`, and in section 4 `document` and `workflow`. A registry owns validation, image ownership, planning and sidebar display. No consumer checks for a kind directly. |
 | One placement definition    | Fit, scale, rotation, anchor, x, y, opacity and blend are defined once and reused by every layer kind and by groups.                                                       |
-| Workflow is a pipeline      | A workflow stores the same step model as a document, including groups and sub-documents, plus its input slots and output settings. Empty image layers are the input slots. |
-| Create from, not convert    | "New document from workflow", "New workflow from document", and the same for a group or sub-document. The source is never changed.                                         |
+| Workflow is a pipeline      | A workflow stores the same step model as a document, including groups and embedded document layers, plus its input slot and output settings. The input slot is set by section 4's decision 17, input slot. |
+| Create from, not convert    | "New document from workflow", "New workflow from document", and the same for a group or embedded document layer. The source is never changed.                                         |
 | Context rules per step kind | A step kind says where it may appear and how it behaves there. The differences between a document and a workflow live in the create-from functions, not in the pipeline.   |
-| Workflow as a group         | A workflow can be added as a group inside an existing document, as one undoable change.                                                                                    |
+| Workflow as a group         | A workflow can be added inside an existing document as an embedded document layer (a copy), or as a workflow layer that uses it, each as one undoable change. See section 4.    |
 | Preview                     | The workflow page previews the last image added.                                                                                                                           |
 | Action contexts             | Every action names the pages it applies on (`home`, `document`, `workflow`); there is no default. The menu hides items for other pages and their keys do nothing there.    |
 | One key, one action         | A key does the same thing on every page. No two actions share a key, whatever their contexts, so the conflict checks stay as they are.                                     |
@@ -52,17 +52,50 @@ Out of scope: batch steps, input steps, and layer kinds other than `image`.
 - [x] Drop the Composite tool from workflows, after checking that image layers cover what it did.
 - [x] Update the workflow service, DAO, server functions, CLI commands, `parity.ts`, `schema` and docs for the new model.
 
-## 4. Context rules and create-from
+## 4. Nested documents, document and workflow layers, and create-from
 
-- [ ] Context rules on the step-kind registry: where a kind may appear and what it does in each place.
-- [ ] Pure function: pipeline to a new workflow pipeline (clear the layer images, keep their settings).
-- [ ] Pure function: pipeline to a new document pipeline (keep layers and settings).
-- [ ] The same for a group and for a sub-document as the source.
-- [ ] Canvas for a new document from a workflow: from the chosen image or library image; else from the first step's size settings; else the user sets it, on the website and the CLI.
-- [ ] CLI: `workflow create --from-document <id> [--group <stepId>]` and `document create --from-workflow <id>`, with parity entries.
-- [ ] Website: "New workflow from document / group / sub-document" and "New document from workflow", each with its key action (registry, runner, a default key where it makes sense) in the same change.
-- [ ] Add a workflow as a group inside an existing document: an undoable `DocumentChange`, a CLI command, a website control, its key action and a parity entry.
-- [ ] Document that going from a document to a workflow and back drops the images.
+### Section 4 decisions
+
+Each decision is cited by its number and short name, for example "decision 9, nesting". The words are defined in [the glossary](glossary.md).
+
+| #   | Short name                  | Decided                                                                                                                                                                                                                                                                                 |
+| --- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Context rules               | Each step kind's registry entry says how a step of that kind is copied into a document and into a workflow. Every kind is allowed in both; there is no allow-list until a kind needs one.                                                                                              |
+| 2   | Workflow from a document    | Creating a workflow from a document asks what to do with the images: keep them all, remove them all, or remove only the input image (the first image layer's).                                                                                                                         |
+| 3   | Its canvas and inputs       | The new workflow's canvas size mode is **Set size**, with the document's canvas. The images removed by decision 2 become the workflow's inputs. Output settings are the defaults, since a document stores none.                                                                       |
+| 4   | Document from a workflow    | The input slot becomes a plain image layer holding the input image the workflow shows (the last one added); with no input image, the layer stays empty. Every other step is copied as it is.                                                                                           |
+| 5   | Its canvas                  | Follows the workflow's canvas size mode. **Set size**: the workflow's canvas. **Match each input image**: the size of the image put in the layer; with none, the website asks for the size and the CLI requires `--width` and `--height`.                                              |
+| 6   | Group as the source         | A group or an embedded document layer can be the source in both directions: `workflow create --from-document <id> --group <stepId>` and `document create --from-workflow <id> --group <stepId>`.                                                                                     |
+| 7   | What the new pipeline holds | The group's steps become the new pipeline's top level and the group's own placement settings are dropped. The canvas is the parent's. A new workflow whose steps have no image layer gets an empty one first, as its input slot.                                                    |
+| 8   | Workflow added as a group   | Adding a workflow into a document makes an embedded document layer named after the workflow: a copy, not tied to the workflow. The chosen image fills its input slot (empty if none). It goes after the selected step, or at the end.                                                 |
+| 9   | Nesting                     | A group holds steps and groups, never an embedded document layer. An embedded document layer holds steps, groups, embedded document layers, document layers and workflow layers. Nesting is built first in this section.                                                             |
+| 10  | Deleting something in use   | Deleting a document or workflow that a document layer or workflow layer uses is refused, naming the documents and workflows that use it.                                                                                                                                              |
+| 11  | Convert to embedded         | **Convert to embedded document layer** (the layer's ⋯ menu; `document step convert <stepId> --to embedded-document` on the CLI) turns a document layer or workflow layer into an embedded document layer holding a copy of its steps, so one place can change on its own.            |
+| 12  | Export and import           | A `.lemon` file (a zip) carries the document and every document and workflow its layers use, however deep. Importing always creates new documents and workflows, and the layers point at those, so they stay document and workflow layers.                                           |
+| 13  | No circular references      | A document layer or workflow layer that would lead back to the document or workflow holding it, at any depth, is refused. A workflow may hold a workflow layer.                                                                                                                       |
+| 14  | Canvas and output inside    | A document layer or workflow layer is drawn at its parent's canvas size and placed with its placement settings. A workflow's output settings are ignored there.                                                                                                                       |
+| 15  | Layers inside a group       | A group may hold document layers and workflow layers, since each is one step.                                                                                                                                                                                                         |
+| 16  | Depth                       | At most 8 levels of groups and embedded document layers.                                                                                                                                                                                                                              |
+| 17  | Input slot                  | A workflow's input slot is its first image layer, with or without an image; a run replaces that layer's image. Every other image layer is fixed and draws the same image in every item. This replaces "the image layers that are on and have no image".                             |
+| 18  | Edit history                | A change inside an embedded document layer, at any depth, is one entry in the Edit history of the document or workflow that holds it. A document layer or workflow layer is never edited in place: clicking it opens its own editor, and its changes go on its own Edit history.     |
+
+### To do, in build order
+
+- [ ] **Names.** Rename "sub-document" and the **Own picture** switch to **embedded document layer** in code, UI labels, the CLI (`--sub-document`), the `.lemon` format, docs and e2e. A group that is not one stays a **group**.
+- [ ] **Input slot rule** (decision 17, input slot) in `segments.ts`, the run handler, the workflow preview, `docs/layer-pipeline.md` and the glossary.
+- [ ] **Nesting** (decision 9, nesting; decision 16, depth): the schema, the planner and renderer, render keys, thumbnails, the group `DocumentChange` kinds (moving a step into, out of and between levels), the document sidebar, the workflow diagram, the CLI, `parity.ts`, `schema` and docs. Remove the "AI steps inside a sub-document cannot run in a workflow yet" limit only if nesting needs it; otherwise it stays a known limit.
+- [ ] **Context rules** on the step-kind registry (decision 1, context rules).
+- [ ] **Pure function: pipeline to a new workflow pipeline**, with the three image choices (decision 2, workflow from a document; decision 3, its canvas and inputs).
+- [ ] **Pure function: pipeline to a new document pipeline** (decision 4, document from a workflow; decision 5, its canvas).
+- [ ] **The same for a group and an embedded document layer as the source** (decision 6, group as the source; decision 7, what the new pipeline holds).
+- [ ] **CLI:** `workflow create --from-document <id> [--group <stepId>] --images keep|remove|remove-input` and `document create --from-workflow <id> [--group <stepId>] [--width --height]`, with parity entries.
+- [ ] **Website:** "New workflow from document / group / embedded document" (with the image choice) and "New document from workflow", each with its key action (registry and runner, no default key). The name is the source's, made unique and editable; the CLI's `--name` is optional. The new item opens.
+- [ ] **Add a workflow as an embedded document layer** (decision 8, workflow added as a group): an undoable `DocumentChange`, a CLI command, a website control, its key action and a parity entry.
+- [ ] **Document layer and workflow layer:** two layer kinds in the layer-kind registry. Each stores the id of the document or workflow it uses and its placement settings; a workflow layer also stores the image for the workflow's input slot. Rendering reads the current pipeline of what it uses, so render keys include that item's revision, and a change to it re-renders, and live-updates, everything that uses it. The layer shows as one row; clicking it opens the document or workflow (decision 18, edit history). Canvas and output follow decision 14, canvas and output inside. Insert actions on the website and the CLI, each with a `DocumentChange`, a key action and a parity entry.
+- [ ] **Deleting something in use** (decision 10) and **no circular references** (decision 13), in the services, with their messages on both front doors.
+- [ ] **Convert to embedded document layer** (decision 11, convert to embedded): an undoable `DocumentChange`, the menu item, the CLI command and a parity entry.
+- [ ] **Export and import** (decision 12, export and import): the `.lemon` zip holds every document and workflow used; `docs/document-file-format.md` describes it.
+- [ ] **Docs:** going from a document to a workflow and back drops the images the user chose to remove; the glossary, `docs/layer-pipeline.md`, `schema` and the skill describe nested, embedded, document and workflow layers.
 
 ## 5. Shared shell and the workflow page
 
