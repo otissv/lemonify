@@ -340,7 +340,7 @@ describe('WorkflowPage', () => {
     const diagram = within(canvas())
 
     for (const [label, summary] of [
-      ['Canvas', '1920 × 1080 px · transparent'],
+      ['Canvas', 'Size of each image · transparent'],
       ['Input images', 'No images yet'],
       ['Image layer', 'Each input image goes here'],
       ['Output', 'Same as original'],
@@ -1190,6 +1190,14 @@ describe('WorkflowPage', () => {
       return { ...createWorkflow('Test'), canvasSize: CanvasSize.Fixed }
     }
 
+    it('says in the diagram that a fixed canvas has its own size', async () => {
+      await renderPage(fixedWorkflow())
+
+      expect(
+        await within(canvas()).findByText('1920 × 1080 px · transparent'),
+      ).toBeInTheDocument()
+    })
+
     it('matches each input image for a new workflow, so only its background is set', async () => {
       await renderPage(createWorkflow('Test'))
       await clickStep('Canvas')
@@ -1361,6 +1369,21 @@ describe('WorkflowPage', () => {
   })
 
   describe('runs', () => {
+    it('names the input images without the Input images options being opened first', async () => {
+      await renderPage({
+        ...createWorkflow('Test'),
+        inputs: [PHOTO_A.id, PHOTO_B.id],
+      })
+      const runs = await runsTab()
+
+      expect(
+        await within(runs).findByRole('checkbox', { name: 'a.jpg' }),
+      ).toBeChecked()
+      expect(
+        within(runs).getByRole('checkbox', { name: 'b.png' }),
+      ).toBeChecked()
+    })
+
     it('saves, then starts a run on the chosen input images', async () => {
       vi.mocked(runWorkflow).mockResolvedValue(run({ state: RunState.Running }))
       const user = userEvent.setup()

@@ -1,3 +1,4 @@
+import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
 import { z } from 'zod'
@@ -485,6 +486,7 @@ ${OUTPUT_FLAG_HELP}
         )
       }
       const destination = path.resolve(options.zip)
+      await mkdir(path.dirname(destination), { recursive: true })
       const archive = await app.workflows.writeRunArchive(
         actor,
         options.runId,

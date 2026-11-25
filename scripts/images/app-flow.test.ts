@@ -613,7 +613,7 @@ describe('workflows through the CLI', () => {
     )
     expect(ran.run.sourceIds).toEqual([ids[1]])
 
-    const zip = path.join(workDir, 'chosen.zip')
+    const zip = path.join(workDir, 'not', 'made', 'yet', 'chosen.zip')
     const results = await cli<{ archive: { images: number; path: string } }>(
       'workflow',
       'results',

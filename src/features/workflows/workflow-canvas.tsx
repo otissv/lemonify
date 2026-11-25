@@ -10,6 +10,7 @@ import { usePipelineStore } from '@/store/pipeline-store'
 import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
 import { StepNode } from '@/features/workflows/step-node'
 import type { StepFlowNode } from '@/features/workflows/step-node'
+import { CanvasSize } from '@/features/workflows/workflow'
 import type { Workflow } from '@/features/workflows/workflow'
 import {
   CANVAS_NODE_ID,
@@ -47,6 +48,8 @@ interface WorkflowCanvasProps {
 }
 
 const NODE_TYPES = { step: StepNode }
+/** What the Canvas node says when each image is drawn on a canvas of its own size. */
+const MATCH_INPUT_SUMMARY = 'Size of each image'
 const PRO_OPTIONS = { hideAttribution: true }
 const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1 }
 
@@ -71,9 +74,13 @@ function describe(
   switch (node.kind) {
     case 'canvas': {
       const { width, height, background } = workflow.pipeline.canvas
+      const size =
+        workflow.canvasSize === CanvasSize.Fixed
+          ? `${width} × ${height} px`
+          : MATCH_INPUT_SUMMARY
       return {
         label: 'Canvas',
-        summary: `${width} × ${height} px · ${background}`,
+        summary: `${size} · ${background}`,
         enabled: true,
       }
     }
@@ -104,9 +111,7 @@ function describe(
 function thumbnailOf(
   workflowId: string,
   nodeId: string,
-  thumbnails:
-    | ReadonlyArray<{ stepId: string; key: string | null }>
-    | undefined,
+  thumbnails: ReadonlyArray<{ stepId: string; key: string | null }> | undefined,
 ): string | undefined {
   const key = thumbnails?.find(({ stepId }) => stepId === nodeId)?.key
   return key === null || key === undefined
@@ -120,9 +125,7 @@ function toFlowNodes(
   nodes: ReadonlyArray<GraphNode>,
   selection: Selection,
   imageName: (sourceId: string) => string,
-  thumbnails:
-    | ReadonlyArray<{ stepId: string; key: string | null }>
-    | undefined,
+  thumbnails: ReadonlyArray<{ stepId: string; key: string | null }> | undefined,
   onRemoveStep: (stepId: string) => void,
 ): StepFlowNode[] {
   const groupIds = new Set(

@@ -27,10 +27,13 @@ import { ConflictError, NotFoundError, ValidationError } from '../errors.ts'
 import { createTestApp } from '../testing/test-app.ts'
 import type { TestApp } from '../testing/test-app.ts'
 import { EngineTargetKind } from '../tools/image-engine.ts'
+import { RunItemState } from '../workflows/run-items.ts'
 import type { RunView } from './workflow-service.ts'
 
 const SETTINGS = { model: 'm', scale: 4, iterations: 1, tta: false } as const
 const CANVAS = canvasOfSize(20, 10)
+/** Longer than the scheduler's wait between checks for a cancel. */
+const CANCEL_NOTICED_MS = 700
 
 let t: TestApp
 
@@ -529,11 +532,34 @@ describe('running a workflow', () => {
     await t.app.workflows.cancelRun(t.ann, run.id)
     release()
     const done = await runFinished(run.id)
-    expect(done.state).toBe(
-      RunState.Done === done.state ? RunState.Done : RunState.Cancelled,
-    )
     expect(done.jobs.total).toBe(1)
     expect(t.aiEngine.batches).toHaveLength(0)
+  })
+
+  it('stops an image that is being drawn: it is not saved, and the run says it was stopped', async () => {
+    const a = await t.uploadImage(t.ann, '#111111', 'a.png')
+    let release: () => void = () => {}
+    t.imageEngine.gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { run } = await startRun(
+      definitionOf([a.id], createSharpStep('flip')),
+    )
+    const limit = Date.now() + 2000
+    while (t.imageEngine.requests.length === 0 && Date.now() < limit) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    await t.app.workflows.cancelRun(t.ann, run.id)
+    // The scheduler notices the cancel on its next check, then the drawing ends.
+    await new Promise((resolve) => setTimeout(resolve, CANCEL_NOTICED_MS))
+    release()
+
+    const stopped = await runFinished(run.id)
+    expect(stopped.state).toBe(RunState.Cancelled)
+    expect(stopped.items.map(({ state }) => state)).toEqual([
+      RunItemState.Cancelled,
+    ])
+    expect(stopped.items[0]?.resultIds).toEqual([])
   })
 
   it('hides another User’s run', async () => {

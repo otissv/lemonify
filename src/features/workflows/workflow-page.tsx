@@ -38,7 +38,11 @@ import {
   stepSelection,
 } from '@/features/workflows/workflow-selection'
 import type { Selection } from '@/features/workflows/workflow-selection'
-import { sourceFileName, useLibraryStore } from '@/store/library-store'
+import {
+  SourcesStatus,
+  sourceFileName,
+  useLibraryStore,
+} from '@/store/library-store'
 import { usePipelineStore, workflowSession } from '@/store/pipeline-store'
 import { findStep } from '@/features/pipeline/pipeline'
 import { stepLabel } from '@/features/workflows/workflow-steps'
@@ -116,6 +120,8 @@ export function WorkflowPage({
   useRunPolling(id)
   useWorkflowThumbnails(id, session !== undefined)
   const sources = useLibraryStore((state) => state.sources)
+  const sourcesStatus = useLibraryStore((state) => state.status)
+  const loadSources = useLibraryStore((state) => state.load)
   const startRun = useLibraryStore((state) => state.startRun)
   const stepId = useUiStore((state) => state.selectedSteps[id])
   const focus = useUiStore((state) => state.workflowFocus[id])
@@ -134,6 +140,12 @@ export function WorkflowPage({
   useEffect(() => {
     if (useUiStore.getState().visitTrail.at(-1) !== id) visitItem(id)
   }, [id, visitItem])
+
+  // The diagram, the preview and the runs name the input images, so the
+  // library is loaded with the page, not only when its options are opened.
+  useEffect(() => {
+    if (sourcesStatus === SourcesStatus.Idle) void loadSources()
+  }, [sourcesStatus, loadSources])
 
   const workflow = useMemo<Workflow | undefined>(
     () =>

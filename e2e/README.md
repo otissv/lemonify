@@ -20,3 +20,17 @@ The picture is compared at its own size, not as scaled to the window, so a Resiz
 ## Changing a snapshot
 
 A snapshot that differs is either a bug or a change you meant. Run the failing case, open the actual and expected pictures that Playwright writes under `e2e/.run/results`, and only then update. Snapshots are drawn by this machine's Sharp and Chromium; if they differ on another machine, update them there rather than loosening the comparison.
+
+## Workflows, on the website and the command line
+
+The workflow specs cover every workflow feature on both front doors, since the website and the command line must do the same things. Each spec signs in as its own scratch account from `e2e/global-setup.ts`, so specs running side by side never see each other's workflows, and each test names its workflow with `uniqueName` because names are unique per account.
+
+`e2e/workflow-editing.spec.ts` drives the workflow page as a person would: adding, setting up, moving, hiding and removing steps and groups; undo and redo from the Edit menu and the keys; the canvas size (matching each input image, or a size of its own); the Output settings and the file names they give; adding and taking out input images; the side panel's Preview and Runs tabs with View › Step preview and Run panel and their keys; the preview's zoom toolbar; and renaming, showing and deleting a workflow from the sidebar. `e2e/workflow-run-actions.spec.ts` covers the Runs tab: choosing images with search, Select all and Shift, a run in which one image fails and why, Retry failed, Run again, Delete and Stop. `e2e/workflow-runs.spec.ts` runs a workflow on an uploaded AVIF and downloads the results one by one and as a zip. `e2e/workflow-page.ts` holds the helpers these specs share.
+
+`e2e/workflow-cli.spec.ts` runs `pnpm images` as its own process, the way a person or a script would, on a data folder of its own under `e2e/.run`, and goes through every `workflow` command in order: create, show, list, update (canvas size, input images), rename, undo, redo, preview, run (with `--follow`, `--out`, `--manifest` and `--sources`, and queued without `--follow`), runs, run show, results (into a folder and as a zip), cancel, run delete and delete, and the commands it must refuse with a failing exit code. `e2e/cli.ts` starts the command line from the `images` script in `package.json` and checks what it prints against schemas.
+
+`e2e/workflow-parity.spec.ts` runs the command line on the test server's own data folder as the account the browser is signed in as, and checks that each front door sees what the other did: a workflow made on the command line opens on the website, a change made on the website is in `workflow show` and `workflow undo` takes it back, and a run started on either side is followed on the other.
+
+## A fast, quiet server
+
+Global setup opens the home page and a document once before the specs start, so the development server has compiled those pages and the first specs do not wait past their timeouts. `vite.config.ts` does not watch `e2e/.data`, `e2e/.run`, `.data` or `.claude`, which are written to all the time during a run.

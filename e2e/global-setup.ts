@@ -50,6 +50,9 @@ export const SCRATCH_ACCOUNTS = {
   keys: scratchAccount('keys', ['blur-default']),
   canvas: scratchAccount('canvas', ['blur-default']),
   runs: scratchAccount('runs', ['blur-default']),
+  workflowEditing: scratchAccount('workflow-editing', ['blur-default']),
+  workflowRuns: scratchAccount('workflow-runs', ['blur-default']),
+  workflowParity: scratchAccount('workflow-parity', ['blur-default']),
 } as const
 
 export const E2E_USER = {
