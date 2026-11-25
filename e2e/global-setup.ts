@@ -1,10 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
+import { chromium } from '@playwright/test'
+
 import { E2E_DATA_DIR, E2E_ORIGIN } from '../playwright.config.ts'
 import { createApp } from '../src/server/composition.ts'
 import { loadConfig } from '../src/server/config/config.ts'
 import { seedDocuments } from './seed.ts'
+import type { Manifest } from './seed.ts'
 
 export const RUN_DIR = path.resolve('e2e/.run')
 export const AUTH_FILE = path.join(RUN_DIR, 'auth.json')
@@ -90,6 +93,29 @@ function writeAuthState(file: string, cookieHeader: string): void {
   writeFileSync(file, JSON.stringify({ cookies, origins: [] }))
 }
 
+const WARM_UP_TIMEOUT = 120_000
+const PICTURE = '[data-slot="canvas"] img'
+
+/**
+ * Opens the home page and a document once, so the development server has
+ * compiled every module those pages load before the specs start. Otherwise the
+ * first specs pay for it, and wait past their timeouts for a page or a picture.
+ */
+async function warmUp(documentId: string): Promise<void> {
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage({ storageState: AUTH_FILE })
+    page.setDefaultTimeout(WARM_UP_TIMEOUT)
+    await page.goto(E2E_ORIGIN)
+    await page.waitForLoadState('networkidle')
+    await page.goto(`${E2E_ORIGIN}/documents/${documentId}`)
+    await page.locator(PICTURE).first().waitFor()
+    await page.waitForLoadState('networkidle')
+  } finally {
+    await browser.close()
+  }
+}
+
 /**
  * Signs the test account up on the running server and fills its data with one
  * document per case. The server and this process share the data directory, as
@@ -104,8 +130,9 @@ export default async function globalSetup(): Promise<void> {
 
   const config = loadConfig({ ...process.env, LEMONIFY_DATA_DIR: E2E_DATA_DIR })
   const app = await createApp(config)
+  let manifest: Manifest
   try {
-    const manifest = await seedDocuments(app, E2E_USER.name)
+    manifest = await seedDocuments(app, E2E_USER.name)
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2))
     for (const account of Object.values(SCRATCH_ACCOUNTS)) {
       const seeded = await seedDocuments(app, account.user.name, account.cases)
@@ -114,4 +141,8 @@ export default async function globalSetup(): Promise<void> {
   } finally {
     await app.close()
   }
+
+  const [firstDocument] = Object.values(manifest)
+  if (firstDocument === undefined) throw new Error('No document was seeded.')
+  await warmUp(firstDocument)
 }

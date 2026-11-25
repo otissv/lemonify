@@ -32,7 +32,7 @@ test.describe('signing in', () => {
   }) => {
     await page.goto('/sign-in')
 
-    await expect(page.getByLabel('Email')).toBeVisible()
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'Forgot your password?' }),
     ).toHaveCount(0)
@@ -40,8 +40,8 @@ test.describe('signing in', () => {
 
   test('shows an error for a wrong password', async ({ page }) => {
     await openSignIn(page)
-    await page.getByLabel('Email').fill(E2E_USER.email)
-    await page.getByLabel('Password').fill('not the password')
+    await page.getByLabel('Email', { exact: true }).fill(E2E_USER.email)
+    await page.getByLabel('Password', { exact: true }).fill('not the password')
     await page.getByRole('button', { name: 'Sign in' }).click()
 
     await expect(page.getByRole('alert')).toBeVisible()
@@ -52,8 +52,8 @@ test.describe('signing in', () => {
     page,
   }) => {
     await openSignIn(page)
-    await page.getByLabel('Email').fill(E2E_USER.email)
-    await page.getByLabel('Password').fill(E2E_USER.password)
+    await page.getByLabel('Email', { exact: true }).fill(E2E_USER.email)
+    await page.getByLabel('Password', { exact: true }).fill(E2E_USER.password)
     await page.getByRole('button', { name: 'Sign in' }).click()
 
     await expect(page).not.toHaveURL(/\/sign-in/)
@@ -66,7 +66,7 @@ test.describe('signing in', () => {
     await page.getByRole('button', { name: 'Create an account' }).click()
     await page.getByLabel('Name').fill('New Person')
     await page
-      .getByLabel('Email')
+      .getByLabel('Email', { exact: true })
       .fill(`new-${info.workerIndex}-${Date.now()}@example.test`)
     await page
       .getByLabel('Password', { exact: true })

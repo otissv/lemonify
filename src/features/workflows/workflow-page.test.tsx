@@ -745,6 +745,42 @@ describe('WorkflowPage', () => {
       vi.unstubAllGlobals()
     })
 
+    it('keeps an image added while an upload was still going', async () => {
+      let finishUpload: (response: Response) => void = () => {}
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          () =>
+            new Promise<Response>((resolve) => {
+              finishUpload = resolve
+            }),
+        ),
+      )
+      const user = userEvent.setup()
+      await renderPage(createWorkflow('Test'))
+      const panel = await selectInput()
+
+      fireEvent.change(within(panel).getByLabelText('Upload images… file'), {
+        target: {
+          files: [new File(['x'], 'b.png', { type: 'image/png' })],
+        },
+      })
+      await user.click(
+        await within(panel).findByRole('button', { name: 'Add a.jpg' }),
+      )
+      await waitFor(() => {
+        expect(inputSourceIds()).toEqual(['src-a'])
+      })
+      finishUpload(
+        Response.json({ data: [PHOTO_B], error: '' }, { status: 201 }),
+      )
+
+      await waitFor(() => {
+        expect(inputSourceIds()).toEqual(['src-a', 'src-b'])
+      })
+      vi.unstubAllGlobals()
+    })
+
     it('removes an image', async () => {
       const user = userEvent.setup()
       await renderPage(createWorkflow('Test'))

@@ -37,6 +37,10 @@ async function pictureBytes(picture: Locator): Promise<Buffer> {
  * by name.
  */
 test.describe('the picture the editor shows', () => {
+  // Opening the page, waiting for the render and then for the picture to load
+  // each get up to RENDER_TIMEOUT, so the test as a whole may take that long twice.
+  test.describe.configure({ timeout: 2 * RENDER_TIMEOUT })
+
   for (const { id } of CASES) {
     test(id, async ({ page }) => {
       const documentId = manifest[id]

@@ -49,11 +49,14 @@ export function AddWorkflowDialog({
     if (!next) return
     setProblem(null)
     setName('')
+    let suggested: string
     try {
-      setName(nextWorkflowName(await listWorkflows()))
+      suggested = nextWorkflowName(await listWorkflows())
     } catch {
-      setName(nextWorkflowName([]))
+      suggested = nextWorkflowName([])
     }
+    // The name is filled in only if nothing was typed while it was looked up.
+    setName((typed) => (typed === '' ? suggested : typed))
   }
 
   function handleNameChange(event: React.ChangeEvent<HTMLInputElement>): void {

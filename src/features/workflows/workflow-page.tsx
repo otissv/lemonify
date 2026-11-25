@@ -39,6 +39,7 @@ import {
 } from '@/features/workflows/workflow-selection'
 import type { Selection } from '@/features/workflows/workflow-selection'
 import { sourceFileName, useLibraryStore } from '@/store/library-store'
+import { usePipelineStore, workflowSession } from '@/store/pipeline-store'
 import { findStep } from '@/features/pipeline/pipeline'
 import { stepLabel } from '@/features/workflows/workflow-steps'
 import {
@@ -75,6 +76,14 @@ function previewName(workflow: Workflow, selection: Selection): string {
     default:
       return FOCUS_LABELS[selection.kind]
   }
+}
+
+/** The workflow as shown now, with the edits not yet saved. */
+function currentWorkflow(
+  id: string,
+): ReturnType<typeof shownWorkflow> | undefined {
+  const session = workflowSession(usePipelineStore.getState(), id)
+  return session === undefined ? undefined : shownWorkflow(session)
 }
 
 function cataloguesOf(aiTools: ReadonlyArray<AiToolEntry>): AiCatalogues {
@@ -181,22 +190,27 @@ export function WorkflowPage({
     [id, workflow],
   )
 
+  // An upload adds its images when it finishes, so the inputs are read when
+  // the change is made, not when the page last drew; otherwise an image added
+  // during the upload would be lost.
   const handleAddSources = useCallback(
     (sourceIds: ReadonlyArray<string>): void => {
-      if (workflow === undefined) return
-      const change = addInputsChange(workflow, sourceIds)
+      const current = currentWorkflow(id)
+      if (current === undefined) return
+      const change = addInputsChange(current, sourceIds)
       if (change !== undefined) void applyWorkflowEdit(id, change)
     },
-    [id, workflow],
+    [id],
   )
 
   const handleRemoveSource = useCallback(
     (sourceId: string): void => {
-      if (workflow === undefined) return
-      const change = removeInputChange(workflow, sourceId)
+      const current = currentWorkflow(id)
+      if (current === undefined) return
+      const change = removeInputChange(current, sourceId)
       if (change !== undefined) void applyWorkflowEdit(id, change)
     },
-    [id, workflow],
+    [id],
   )
 
   const handleCanvasSizeChange = useCallback(
