@@ -12,11 +12,12 @@ import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
 import type { Pipeline, PipelineStep } from '@/features/pipeline/pipeline'
-import { resetChangeFor } from '@/features/pipeline/step-reset'
+import { resetChangeFor, resetStep } from '@/features/pipeline/step-reset'
 import { pipelineOf } from '@/test/pipelines'
 
 const SETTINGS = { model: 'siax', scale: 2, iterations: 2, tta: true }
@@ -83,17 +84,22 @@ describe('reset-step', () => {
     expect(step).toEqual({ ...layer, ...DEFAULT_LAYER_SETTINGS })
   })
 
-  it('puts the placement of a group that is its own picture back, keeping its steps', () => {
-    const group = {
-      ...createGroupStep([createSharpStep('blur')]),
-      subDocument: true,
+  it('puts the placement of an embedded document layer back, keeping its steps', () => {
+    const embedded = {
+      ...createEmbeddedDocumentStep([createSharpStep('blur')]),
       rotation: 45,
     }
-    const pipeline = pipelineOf(group)
+    const pipeline = pipelineOf(embedded)
 
-    const step = reset(pipeline, resetChangeFor(group))
+    const step = reset(pipeline, resetChangeFor(embedded))
 
-    expect(step).toEqual({ ...group, ...DEFAULT_LAYER_SETTINGS })
+    expect(step).toEqual({ ...embedded, ...DEFAULT_LAYER_SETTINGS })
+  })
+
+  it('leaves a group as it is, since it has nothing to reset', () => {
+    const group = createGroupStep([createSharpStep('blur')])
+
+    expect(resetStep(pipelineOf(group), group, {})).toEqual(group)
   })
 
   it('puts an AI step back to the settings its catalogue starts from', () => {

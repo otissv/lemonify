@@ -1,11 +1,15 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
-import type { SourceSummary } from '@/features/documents/document'
-import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
-import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
+import { useLayerNames } from '@/features/documents/item-names'
+import {
+  childSteps,
+  findStep,
+  isContainerStep,
+  placementProblem,
+} from '@/features/pipeline/pipeline'
 import type {
-  GroupStep,
+  ContainerStep,
   LeafStep,
   PipelineStep,
 } from '@/features/pipeline/pipeline'
@@ -15,6 +19,8 @@ import { thumbnailImageUrl } from '@/features/documents/image-urls'
 import { useDocument } from '@/features/documents/use-document'
 import { GroupRow } from '@/features/documents/group-row'
 import { StepRow } from '@/features/documents/step-row'
+import { UsedLayerMenu } from '@/features/documents/used-layer-menu'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
 import type {
   SelectModifiers,
   StepPictureChoice,
@@ -32,19 +38,10 @@ import { useStepThumbnails } from '@/features/pipeline/use-step-thumbnails'
 import { Tool, useUiStore } from '@/store/ui-store'
 import { usePipelineStore } from '@/store/pipeline-store'
 
-function sourceNameOf(
-  step: PipelineStep,
-  sources: ReadonlyArray<SourceSummary> | undefined,
-): string | undefined {
-  if (!isLayerStep(step)) return undefined
-  const [imageId] = layerKind(step).sourceIds(step)
-  return sources?.find(({ id }) => id === imageId)?.fileName
-}
-
-/** Where a dragged step would land: at `index` among the steps of `groupId`, or of the top level. */
+/** Where a dragged step would land: at `index` among the steps of the container `parentId`, or of the top level. */
 interface DropPlace {
   index: number
-  groupId?: string
+  parentId?: string
 }
 
 interface DocumentStepsProps {
@@ -52,7 +49,7 @@ interface DocumentStepsProps {
   name: string
 }
 
-/** The steps of one document, the last on top as in a layer panel, so the first layer is lowest. Groups list their steps under them and can be folded. Select, pick several with ctrl or shift, switch off, delete, and reorder by dragging (into or out of a group too) or with the buttons. Dragging one onto another document in the sidebar copies it there. */
+/** The steps of one document, the last on top as in a layer panel, so the first layer is lowest. Groups and embedded document layers list their steps under them, indented at every depth, and can be folded. Select, pick several with ctrl or shift, switch off, delete, and reorder by dragging (into, out of and between containers too) or with the buttons. Dragging one onto another document in the sidebar copies it there. */
 export function DocumentSteps({
   documentId,
   name,
@@ -60,6 +57,7 @@ export function DocumentSteps({
   const navigate = useNavigate()
   useDocument(documentId)
   const preview = usePreview(documentId)
+  const names = useLayerNames(preview?.document.sources)
   const selectedId = useUiStore((state) => state.selectedSteps[documentId])
   const marked = useUiStore((state) => state.markedSteps[documentId])
   const collapsedGroups = useUiStore((state) => state.collapsedGroups)
@@ -72,11 +70,12 @@ export function DocumentSteps({
   const setGroupCollapsed = useUiStore((state) => state.setGroupCollapsed)
   const setActiveTool = useUiStore((state) => state.setActiveTool)
   const [draggedId, setDraggedId] = useState<string | undefined>(undefined)
-  const [overGroupId, setOverGroupId] = useState<string | undefined>(undefined)
+  const [overParentId, setOverParentId] = useState<string | undefined>(
+    undefined,
+  )
   useStepThumbnails(documentId, true)
 
   const steps = preview?.pipeline.steps ?? []
-  const topFirst = [...steps].reverse()
   if (steps.length === 0) {
     return (
       <p className="px-2 py-1 text-caption text-muted-foreground">
@@ -86,12 +85,9 @@ export function DocumentSteps({
   }
 
   function siblingsOf(stepId: string): string[] {
-    const found = preview ? findStep(preview.pipeline, stepId) : undefined
-    if (found?.groupId === undefined) return steps.map(({ id }) => id)
-    const group = steps.find(({ id }) => id === found.groupId)
-    return group?.kind === PipelineStepKind.Group
-      ? group.steps.map(({ id }) => id)
-      : []
+    if (!preview) return []
+    const parentId = findStep(preview.pipeline, stepId)?.parentId
+    return (childSteps(preview.pipeline, parentId) ?? []).map(({ id }) => id)
   }
 
   function handleSelect(stepId: string, modifiers: SelectModifiers): void {
@@ -116,8 +112,8 @@ export function DocumentSteps({
     deleteStep(documentId, stepId)
   }
 
-  function handleMove(stepId: string, index: number, groupId?: string): void {
-    reorderStep(documentId, stepId, index, groupId)
+  function handleMove(stepId: string, index: number, parentId?: string): void {
+    reorderStep(documentId, stepId, index, parentId)
   }
 
   function handleCollapse(groupId: string, collapsed: boolean): void {
@@ -136,12 +132,12 @@ export function DocumentSteps({
   }
 
   function canDrop(place: DropPlace): boolean {
-    if (draggedId === undefined) return false
-    const dragged = preview ? findStep(preview.pipeline, draggedId) : undefined
+    if (draggedId === undefined || !preview) return false
+    const dragged = findStep(preview.pipeline, draggedId)
     if (dragged === undefined) return false
-    return !(
-      dragged.step.kind === PipelineStepKind.Group &&
-      place.groupId !== undefined
+    return (
+      placementProblem(preview.pipeline, dragged.step, place.parentId) ===
+      undefined
     )
   }
 
@@ -153,7 +149,7 @@ export function DocumentSteps({
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
-    setOverGroupId(place.groupId)
+    setOverParentId(place.parentId)
   }
 
   function handleShow(stepId: string, part: StepViewPart): void {
@@ -177,6 +173,21 @@ export function DocumentSteps({
     }
   }
 
+  function menuOf(step: LeafStep): React.ReactNode {
+    if (!isLayerStep(step)) return undefined
+    const item = layerKind(step).uses(step)
+    if (item === undefined) return undefined
+    return (
+      <UsedLayerMenu
+        itemId={documentId}
+        stepId={step.id}
+        label={pipelineStepTitle(step)}
+        item={item}
+        names={names}
+      />
+    )
+  }
+
   function handleDrop(
     event: React.DragEvent<HTMLLIElement>,
     place: DropPlace,
@@ -184,31 +195,30 @@ export function DocumentSteps({
     if (draggedId === undefined || !canDrop(place)) return
     event.preventDefault()
     event.stopPropagation()
-    reorderStep(documentId, draggedId, place.index, place.groupId)
+    reorderStep(documentId, draggedId, place.index, place.parentId)
     setDraggedId(undefined)
-    setOverGroupId(undefined)
+    setOverParentId(undefined)
   }
 
   function handleDragEnd(): void {
     setDraggedId(undefined)
-    setOverGroupId(undefined)
+    setOverParentId(undefined)
   }
 
   function renderStep(
     step: LeafStep,
     position: number,
     siblings: ReadonlyArray<PipelineStep>,
-    group?: GroupStep,
+    parent: ContainerStep | undefined,
   ): React.JSX.Element {
     const key = thumbnails?.find(
       ({ stepId, before }) => stepId === step.id && before !== true,
     )?.key
-    const place: DropPlace = { index: position, groupId: group?.id }
+    const place: DropPlace = { index: position, parentId: parent?.id }
     return (
       <li
         key={step.id}
         draggable
-        className={group ? 'ml-4' : undefined}
         onDragStart={(event) => {
           handleDragStart(event, step.id)
         }}
@@ -223,7 +233,7 @@ export function DocumentSteps({
         <StepRow
           documentId={documentId}
           step={step}
-          groupId={group?.id}
+          parentId={parent?.id}
           marked={marked?.includes(step.id) ?? false}
           position={position}
           count={siblings.length}
@@ -235,8 +245,12 @@ export function DocumentSteps({
               : thumbnailImageUrl(documentId, key)
           }
           pictures={picturesOf(step)}
-          sourceName={sourceNameOf(step, preview?.document.sources)}
-          outOfDate={preview?.pending.includes(step.id) ?? false}
+          names={names}
+          menu={menuOf(step)}
+          outOfDate={
+            (preview?.pending.includes(step.id) ?? false) ||
+            (preview?.waitingLayers.includes(step.id) ?? false)
+          }
           skipped={
             preview?.problems.find(({ stepId }) => stepId === step.id)?.message
           }
@@ -250,46 +264,55 @@ export function DocumentSteps({
     )
   }
 
-  function renderGroup(group: GroupStep, position: number): React.JSX.Element {
-    const collapsed = collapsedGroups[group.id] ?? false
+  function renderContainer(
+    container: ContainerStep,
+    position: number,
+    siblings: ReadonlyArray<PipelineStep>,
+    parent: ContainerStep | undefined,
+  ): React.JSX.Element {
+    const collapsed = collapsedGroups[container.id] ?? false
     const key = thumbnails?.find(
-      ({ stepId, before }) => stepId === group.id && before !== true,
+      ({ stepId, before }) => stepId === container.id && before !== true,
     )?.key
-    const members = [...group.steps].reverse()
+    const inside: DropPlace = {
+      index: container.steps.length,
+      parentId: container.id,
+    }
     return (
       <li
-        key={group.id}
+        key={container.id}
         draggable
         onDragStart={(event) => {
-          handleDragStart(event, group.id)
+          handleDragStart(event, container.id)
         }}
         onDragOver={(event) => {
-          handleDragOver(event, {
-            index: group.steps.length,
-            groupId: group.id,
-          })
+          handleDragOver(event, inside)
         }}
         onDrop={(event) => {
-          handleDrop(event, { index: group.steps.length, groupId: group.id })
+          handleDrop(event, inside)
         }}
         onDragEnd={handleDragEnd}
       >
         <GroupRow
-          group={group}
+          group={container}
+          parentId={parent?.id}
           position={position}
-          count={steps.length}
-          selected={selectedId === group.id}
-          marked={marked?.includes(group.id) ?? false}
+          count={siblings.length}
+          selected={selectedId === container.id}
+          marked={marked?.includes(container.id) ?? false}
           collapsed={collapsed}
-          dragging={draggedId === group.id}
-          receiving={overGroupId === group.id && draggedId !== group.id}
+          dragging={draggedId === container.id}
+          receiving={
+            overParentId === container.id && draggedId !== container.id
+          }
           thumbnail={
             key === null || key === undefined
               ? undefined
               : thumbnailImageUrl(documentId, key)
           }
           skipped={
-            preview?.problems.find(({ stepId }) => stepId === group.id)?.message
+            preview?.problems.find(({ stepId }) => stepId === container.id)
+              ?.message
           }
           onSelect={handleSelect}
           onCollapse={handleCollapse}
@@ -297,28 +320,38 @@ export function DocumentSteps({
           onDelete={handleDelete}
           onMove={handleMove}
         />
-        {!collapsed && (
-          <ul
-            aria-label={`Steps in ${pipelineStepTitle(group)}`}
-            className="mt-1 flex flex-col gap-1"
-          >
-            {members.map((step) =>
-              renderStep(step, group.steps.indexOf(step), group.steps, group),
-            )}
-          </ul>
-        )}
+        {!collapsed && renderList(container.steps, container)}
       </li>
     )
   }
 
-  return (
-    <ul aria-label={`Steps of ${name}`} className="flex flex-col gap-1">
-      {topFirst.map((step) => {
-        const position = steps.indexOf(step)
-        return step.kind === PipelineStepKind.Group
-          ? renderGroup(step, position)
-          : renderStep(step, position, steps)
-      })}
-    </ul>
-  )
+  /** One list of steps, the last on top; a container's list is indented under it. */
+  function renderList(
+    list: ReadonlyArray<PipelineStep>,
+    parent: ContainerStep | undefined,
+  ): React.JSX.Element {
+    return (
+      <ul
+        aria-label={
+          parent === undefined
+            ? `Steps of ${name}`
+            : `Steps in ${pipelineStepTitle(parent)}`
+        }
+        className={
+          parent === undefined
+            ? 'flex flex-col gap-1'
+            : 'mt-1 ml-4 flex flex-col gap-1'
+        }
+      >
+        {[...list].reverse().map((step) => {
+          const position = list.indexOf(step)
+          return isContainerStep(step)
+            ? renderContainer(step, position, list, parent)
+            : renderStep(step, position, list, parent)
+        })}
+      </ul>
+    )
+  }
+
+  return renderList(steps, undefined)
 }

@@ -63,7 +63,8 @@ function previewAfter(
 
 /**
  * The large picture of a workflow diagram node, asked for again shortly after
- * the server confirms each change, and when the node changes.
+ * the server confirms each change, when the node changes, and when a
+ * document or workflow its layers use changed.
  */
 export function useWorkflowNodePreview(
   workflowId: string,
@@ -73,10 +74,14 @@ export function useWorkflowNodePreview(
   const revision = usePipelineStore(
     (state) => workflowSession(state, workflowId)?.confirmed.revision,
   )
+  const pictureVersion = usePipelineStore(
+    (state) => state.pictureVersions[workflowId],
+  )
   const pending = usePipelineStore(
     (state) => workflowSession(state, workflowId)?.pending.length ?? 0,
   )
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a change to what layers use makes the picture ask again
   useEffect(() => {
     if (revision === undefined || pending > 0) return
     const controller = new AbortController()
@@ -99,7 +104,7 @@ export function useWorkflowNodePreview(
       clearTimeout(timer)
       controller.abort()
     }
-  }, [workflowId, nodeId, revision, pending])
+  }, [workflowId, nodeId, revision, pending, pictureVersion])
 
   return preview
 }

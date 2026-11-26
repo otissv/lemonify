@@ -4,6 +4,7 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
@@ -217,15 +218,14 @@ describe('thumbnails of a document with groups', () => {
   })
 })
 
-async function subDocument(
+async function embeddedDocument(
   documentId: string,
   members: ReadonlyArray<LeafStep>,
   enabled = true,
 ) {
   await addAll(documentId, members)
   const group = {
-    ...createGroupStep(members, 'Logo'),
-    subDocument: true,
+    ...createEmbeddedDocumentStep(members, 'Logo'),
     enabled,
   }
   const view = await t.app.documents.get(t.ann, documentId)
@@ -242,18 +242,18 @@ async function previewOf(documentId: string) {
   return done.result
 }
 
-describe('sub-documents', () => {
+describe('embedded document layers', () => {
   it('are drawn on the canvas as a picture of their own', async () => {
     const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
     const document = await newDocument()
     const flip = createSharpStep('flip')
-    await subDocument(document.id, [createImageLayerStep(logo.id), flip])
+    await embeddedDocument(document.id, [createImageLayerStep(logo.id), flip])
 
     await previewOf(document.id)
 
     const [request] = t.imageEngine.requests
     expect(request?.steps.at(-1)).toMatchObject({
-      kind: 'sub-document',
+      kind: 'embedded-document',
       input: { kind: 'canvas', canvas: { width: 8, height: 6 } },
       steps: [{ kind: 'layer' }, { op: 'flip' }],
     })
@@ -262,7 +262,7 @@ describe('sub-documents', () => {
   it('are still drawn when none of their layers is on, as a picture with nothing in it', async () => {
     const document = await newDocument()
     const bare = await newDocument()
-    await subDocument(document.id, [createSharpStep('flip')])
+    await embeddedDocument(document.id, [createSharpStep('flip')])
 
     const result = await previewOf(document.id)
 
@@ -272,7 +272,7 @@ describe('sub-documents', () => {
 
   it('can be exported without a layer, since the canvas is the picture', async () => {
     const document = await newDocument()
-    await subDocument(document.id, [createSharpStep('flip')])
+    await embeddedDocument(document.id, [createSharpStep('flip')])
 
     const job = await t.app.renders.requestExport(t.ann, document.id, {
       format: ExportFormat.Png,
@@ -283,12 +283,16 @@ describe('sub-documents', () => {
     expect(job.kind).toBe(JobKind.Export)
   })
 
-  it('run an AI step on the sub-document’s picture and not on the canvas', async () => {
+  it('run an AI step on the embedded document layer’s picture and not on the canvas', async () => {
     const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
     const document = await newDocument()
     const flip = createSharpStep('flip')
     const ai = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
-    await subDocument(document.id, [createImageLayerStep(logo.id), flip, ai])
+    await embeddedDocument(document.id, [
+      createImageLayerStep(logo.id),
+      flip,
+      ai,
+    ])
 
     const waiting = await previewOf(document.id)
     expect(waiting.pendingStepIds).toEqual([ai.id])
@@ -312,7 +316,7 @@ describe('sub-documents', () => {
     const first = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     const inner = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     await addAll(document.id, [first])
-    await subDocument(document.id, [createImageLayerStep(logo.id), inner])
+    await embeddedDocument(document.id, [createImageLayerStep(logo.id), inner])
 
     await expect(
       t.app.renders.requestAiStep(t.ann, document.id, inner.id),
@@ -328,7 +332,7 @@ describe('sub-documents', () => {
     const document = await newDocument()
     const flip = createSharpStep('flip')
     const layer = createImageLayerStep(logo.id)
-    const group = await subDocument(document.id, [layer, flip])
+    const group = await embeddedDocument(document.id, [layer, flip])
 
     const done = await run(
       await t.app.renders.requestThumbnails(t.ann, document.id),
@@ -347,7 +351,11 @@ describe('sub-documents', () => {
     const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
     const document = await newDocument()
     const flip = createSharpStep('flip')
-    await subDocument(document.id, [createImageLayerStep(logo.id), flip], false)
+    await embeddedDocument(
+      document.id,
+      [createImageLayerStep(logo.id), flip],
+      false,
+    )
 
     const done = await run(
       await t.app.renders.requestThumbnails(t.ann, document.id, {

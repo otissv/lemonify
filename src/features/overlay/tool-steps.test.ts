@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
+import {
+  createEmbeddedDocumentStep,
+  createGroupStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 import { toolStepIds } from '@/features/overlay/tool-steps'
 import { pipelineOf } from '@/test/pipelines'
 
@@ -16,6 +20,14 @@ describe('toolStepIds', () => {
   it('lists a step that starts at the size of the picture it acts on, such as resize', () => {
     const resize = createSharpStep('resize')
     expect(toolStepIds(pipelineOf(resize))).toEqual([resize.id])
+  })
+
+  it('lists the steps a tool draws on inside embedded document layers, at any depth', () => {
+    const deep = createSharpStep('extract')
+    const embedded = createEmbeddedDocumentStep([
+      createEmbeddedDocumentStep([createGroupStep([deep])]),
+    ])
+    expect(toolStepIds(pipelineOf(embedded))).toEqual([deep.id])
   })
 
   it('is empty when there are none', () => {

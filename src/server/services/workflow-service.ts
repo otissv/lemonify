@@ -10,7 +10,7 @@ import {
   pipelineStepLabel,
   stepProblem,
 } from '@/features/pipeline/step-problems'
-import { planSegments, workflowProblem } from '@/features/workflows/segments'
+import { workflowProblem } from '@/features/workflows/segments'
 import {
   WorkflowDefinitionSchema,
   WorkflowNameSchema,
@@ -51,7 +51,9 @@ import type {
 import { runItems } from '../workflows/run-items.ts'
 import type { RunItem } from '../workflows/run-items.ts'
 import { runWorkDirectory, segmentJobSpec } from '../workflows/run-jobs.ts'
+import { FIRST_SEGMENT } from '../workflows/run-segments.ts'
 import type { SourceSummary } from '@/features/documents/document'
+import type { UsedItems } from './used-items.ts'
 import type { ChangePublisher } from '../realtime/change-publisher.ts'
 import type { JobService } from './job-service.ts'
 import type { ResultService } from './result-service.ts'
@@ -128,6 +130,8 @@ export type WorkflowServiceDependencies = {
   results: ResultService
   /** Tells the person's open tabs what changed. */
   changes: ChangePublisher
+  /** The rules for layers that use other documents and workflows, and the copy of them a run keeps. */
+  usedItems: UsedItems
 }
 
 function asValidation(error: unknown): unknown {
@@ -214,10 +218,11 @@ export class WorkflowService {
     const chosen = this.#parseDefinition(
       definition ?? this.#emptyDefinition(cleaned),
     )
-    await this.#checkDefinition(actor, chosen)
+    const id = ids.next()
+    await this.#checkDefinition(actor, chosen, id)
     const now = isoNow(clock)
     const record: WorkflowRecord = {
-      id: ids.next(),
+      id,
       ownerId: actor.userId,
       name: cleaned,
       definition: chosen,
@@ -266,7 +271,7 @@ export class WorkflowService {
     const record = await this.#current(actor, id, revision)
     const planned = this.#plan(record.definition, change)
     if (planned === null) return this.#workflowView(record)
-    await this.#checkDefinition(actor, planned.definition)
+    await this.#checkDefinition(actor, planned.definition, id)
     const changed = await this.#deps.workflows.applyChange({
       id,
       expectedRevision: revision,
@@ -276,6 +281,7 @@ export class WorkflowService {
       now: isoNow(this.#deps.clock),
     })
     this.#announceUpdated(actor.userId, changed)
+    await this.#announcePicture(actor, id)
     return this.#workflowView(changed)
   }
 
@@ -309,7 +315,7 @@ export class WorkflowService {
     } catch (error) {
       throw asValidation(error)
     }
-    await this.#checkDefinition(actor, definition)
+    await this.#checkDefinition(actor, definition, id)
     const moved = await workflows.moveCursor({
       id,
       expectedRevision: revision,
@@ -319,11 +325,16 @@ export class WorkflowService {
       now: isoNow(clock),
     })
     this.#announceUpdated(actor.userId, moved)
+    await this.#announcePicture(actor, id)
     return this.#workflowView(moved)
   }
 
   async delete(actor: Actor, id: string): Promise<void> {
     await this.#owned(actor, id)
+    await this.#deps.usedItems.requireUnused(actor.userId, {
+      kind: 'workflow',
+      id,
+    })
     await this.#deps.workflows.delete(id)
     this.#deps.changes.publish(actor.userId, {
       type: 'workflow.deleted',
@@ -348,27 +359,27 @@ export class WorkflowService {
     const definition = chosenInputs(workflow.definition, options.sourceIds)
     const problem = workflowProblem(definition)
     if (problem !== undefined) throw new ValidationError(problem)
-    await this.#checkDefinition(actor, definition)
+    await this.#checkDefinition(actor, definition, workflow.id)
     this.#requireSetUp(definition)
-    const { workflows, jobs, registry, clock, ids } = this.#deps
+    const { workflows, jobs, registry, clock, ids, usedItems } = this.#deps
     const run: WorkflowRunRecord = {
       id: ids.next(),
       workflowId: workflow.id,
       ownerId: actor.userId,
       definition,
+      used: await usedItems.snapshot(actor.userId, definition.pipeline),
       state: RunState.Running,
       createdAt: isoNow(clock),
       finishedAt: null,
     }
     await workflows.insertRun(run)
-    const segments = planSegments(definition.pipeline)
     try {
       await jobs.enqueue(
         actor,
         definition.inputs.map((sourceId) =>
           segmentJobSpec({
             runId: run.id,
-            segments,
+            segment: FIRST_SEGMENT,
             index: 0,
             sourceId,
             registry,
@@ -489,6 +500,15 @@ export class WorkflowService {
     this.#announce(job.ownerId)
   }
 
+  #announcePicture(actor: Actor, id: string): Promise<void> {
+    const { usedItems, changes } = this.#deps
+    return usedItems.announcePictureChanged(
+      actor.userId,
+      { kind: 'workflow', id },
+      changes,
+    )
+  }
+
   #announceUpdated(userId: string, record: WorkflowRecord): void {
     this.#deps.changes.publish(userId, {
       type: 'workflow.updated',
@@ -588,10 +608,17 @@ export class WorkflowService {
   }
 
   /** Every image the workflow names exists and is the User's, and every AI tool is one the server has. */
+  /** Every image the workflow uses must be the actor's own, and its layers follow the rules for layers that use other items. */
   async #checkDefinition(
     actor: Actor,
     definition: WorkflowDefinition,
+    id: string,
   ): Promise<void> {
+    await this.#deps.usedItems.check(
+      actor.userId,
+      { kind: 'workflow', id },
+      definition.pipeline,
+    )
     const ids = new Set([
       ...definition.inputs,
       ...pipelineOperandSourceIds(definition.pipeline),

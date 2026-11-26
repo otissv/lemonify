@@ -1,10 +1,9 @@
-import { PipelineStepKind, planSteps } from '@/features/pipeline/pipeline'
-import type { LeafStep, PlanStep } from '@/features/pipeline/pipeline'
-import { stepsBefore } from '@/features/pipeline/step-input'
+import type { PlanStep } from '@/features/pipeline/pipeline'
+import { stepsBefore, stepsThrough } from '@/features/pipeline/step-input'
 import type { Canvas, PictureSize } from '@/features/pipeline/canvas'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
-import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
-import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
+import { isLayerStep } from '@/features/pipeline/layer-kinds'
+import type { LayerStep } from '@/features/pipeline/layer-kinds'
 
 import type { DocumentRecord } from '../../dao/document-dao.ts'
 import { RenderKind } from '../../tools/render-store.ts'
@@ -29,37 +28,15 @@ type Made = Pick<Thumbnail, 'key' | 'size'>
 
 const NOT_MADE: Made = { key: null }
 
-/** A layer shows only its own image, as it is, on a canvas the size of that image. Undefined for a layer with no image to show. */
+/** A layer shows only what it draws, as it is, on a canvas of its own size: its image, or the document or workflow it uses. Undefined for a layer with nothing to show. */
 async function ownImage(
-  layer: ImageLayerStep,
+  layer: LayerStep,
   document: DocumentRecord,
   planner: RenderHandlerDependencies['planner'],
 ): Promise<Shown | undefined> {
-  const [imageId] = layerKind(layer).sourceIds(layer)
-  if (imageId === undefined) return undefined
-  const canvas = await planner.imageCanvas(document.ownerId, imageId)
+  const canvas = await planner.layerCanvas(document.ownerId, layer)
   if (canvas === undefined) return undefined
   return { steps: [{ ...layer, ...DEFAULT_LAYER_SETTINGS }], canvas }
-}
-
-/** For each step in a sub-document: the steps of that sub-document up to and including it, which make its own picture at that step. */
-function stepsInSubDocuments(
-  steps: ReadonlyArray<PlanStep>,
-): Map<string, { shown: ReadonlyArray<LeafStep>; enabled: boolean }> {
-  const inside = new Map<
-    string,
-    { shown: ReadonlyArray<LeafStep>; enabled: boolean }
-  >()
-  for (const group of steps) {
-    if (group.kind !== PipelineStepKind.Group) continue
-    for (const [index, step] of group.steps.entries()) {
-      inside.set(step.id, {
-        shown: group.steps.slice(0, index + 1),
-        enabled: step.enabled,
-      })
-    }
-  }
-  return inside
 }
 
 /**
@@ -90,18 +67,18 @@ export class ThumbnailHandler implements JobHandler {
     }
   }
 
+  /** What the small picture after a step shows: the picture it is drawn in up to and including it, or a layer's own image. Undefined when there is no such step. */
   async #shownFor(
     document: DocumentRecord,
-    steps: ReadonlyArray<PlanStep>,
-    index: number,
-    inSubDocument: ReadonlyArray<LeafStep> | undefined,
-  ): Promise<Shown | undefined> {
-    const step = steps[index]
-    if (step === undefined) {
-      return inSubDocument === undefined ? undefined : { steps: inSubDocument }
-    }
-    if (isLayerStep(step)) return ownImage(step, document, this.#deps.planner)
-    return { steps: steps.slice(0, index + 1) }
+    stepId: string,
+  ): Promise<{ shown: Shown; on: boolean } | undefined> {
+    const through = stepsThrough(document.pipeline, stepId)
+    const step = through?.at(-1)
+    if (through === undefined || step === undefined) return undefined
+    if (!isLayerStep(step))
+      return { shown: { steps: through }, on: step.enabled }
+    const own = await ownImage(step, document, this.#deps.planner)
+    return own === undefined ? undefined : { shown: own, on: step.enabled }
   }
 
   run(items: ReadonlyArray<JobItem>): Promise<ReadonlyArray<JobReport>> {
@@ -116,25 +93,14 @@ export class ThumbnailHandler implements JobHandler {
           payload.documentId,
           payload.revision,
         )
-        const steps = planSteps(document.pipeline)
-        const inside = stepsInSubDocuments(steps)
         const thumbnails: Thumbnail[] = []
         for (const [done, stepId] of payload.stepIds.entries()) {
           context.setProgress(done / payload.stepIds.length)
-          const index = steps.findIndex((step) => step.id === stepId)
-          const step = steps[index]
-          const within = inside.get(stepId)
-          const shown = await this.#shownFor(
-            document,
-            steps,
-            index,
-            within?.shown,
-          )
-          const on = step === undefined ? within?.enabled : step.enabled
+          const found = await this.#shownFor(document, stepId)
           const made =
-            shown === undefined || !on
+            found === undefined || !found.on
               ? NOT_MADE
-              : await this.#thumbnail(document, shown)
+              : await this.#thumbnail(document, found.shown)
           thumbnails.push({ stepId, ...made })
         }
         for (const stepId of payload.beforeStepIds ?? []) {

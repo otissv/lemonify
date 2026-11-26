@@ -2,7 +2,7 @@ import {
   ToolPictureSource,
   overlayToolFor,
 } from '@/features/overlay/overlay-tools'
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import { PipelineStepKind, leafSteps } from '@/features/pipeline/pipeline'
 import type { Pipeline, PipelineStep } from '@/features/pipeline/pipeline'
 import { startsAtPictureSize } from '@/features/pipeline/sharp-starting-options'
 
@@ -14,17 +14,11 @@ function needsBefore(step: PipelineStep): boolean {
   return step.kind === PipelineStepKind.Sharp && startsAtPictureSize(step.op)
 }
 
-/** The ids of the steps, in groups too, that the thumbnail job makes a before picture for. */
+/** The ids of the steps, at any depth of groups and embedded document layers, that the thumbnail job makes a before picture for. */
 export function toolStepIds(pipeline: Pipeline): string[] {
   const ids: string[] = []
-  for (const step of pipeline.steps) {
-    if (step.kind !== PipelineStepKind.Group) {
-      if (needsBefore(step)) ids.push(step.id)
-      continue
-    }
-    for (const inner of step.steps) {
-      if (needsBefore(inner)) ids.push(inner.id)
-    }
+  for (const step of leafSteps(pipeline)) {
+    if (needsBefore(step)) ids.push(step.id)
   }
   return ids
 }

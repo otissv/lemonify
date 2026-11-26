@@ -37,6 +37,8 @@ export const RealtimeEventSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('workflow.deleted'), workflowId: id }),
   /** A workflow was made, removed or renamed, or one of its runs changed: the lists are out of date. */
   z.strictObject({ type: z.literal('workflows.changed') }),
+  /** A document or workflow that this one's layers use, at any depth, changed: its picture is out of date. */
+  z.strictObject({ type: z.literal('picture.changed'), itemId: id }),
   /** The person's key bindings were saved or reset. */
   z.strictObject({ type: z.literal('keybindings.changed') }),
   /** Sent now and then, so a tab can tell a quiet connection from a dead one. */

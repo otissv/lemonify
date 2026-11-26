@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import {
+  DOCUMENT_LAYER_KIND,
   IMAGE_LAYER_KIND,
   LAYER_KINDS,
+  WORKFLOW_LAYER_KIND,
+  createDocumentLayerStep,
   createImageLayerStep,
+  createWorkflowLayerStep,
   isLayerStep,
   layerKind,
 } from '@/features/pipeline/layer-kinds'
+import { layerNames } from '@/features/pipeline/layer-names'
 import { PipelineSchema, createSharpStep } from '@/features/pipeline/pipeline'
 import { pipelineOf } from '@/test/pipelines'
 
@@ -18,13 +23,21 @@ function lookup(images: Record<string, { path: string; contentHash: string }>) {
 }
 
 describe('the layer kinds', () => {
-  it('has the image layer and nothing else', () => {
-    expect(Object.keys(LAYER_KINDS)).toEqual([IMAGE_LAYER_KIND])
+  it('has the image, document and workflow layers', () => {
+    expect(Object.keys(LAYER_KINDS)).toEqual([
+      IMAGE_LAYER_KIND,
+      DOCUMENT_LAYER_KIND,
+      WORKFLOW_LAYER_KIND,
+    ])
     expect(IMAGE_LAYER_KIND).toBe('image-layer')
+    expect(DOCUMENT_LAYER_KIND).toBe('document-layer')
+    expect(WORKFLOW_LAYER_KIND).toBe('workflow-layer')
   })
 
   it('tells a layer of any kind from other steps', () => {
     expect(isLayerStep(createImageLayerStep('a'))).toBe(true)
+    expect(isLayerStep(createDocumentLayerStep('d1'))).toBe(true)
+    expect(isLayerStep(createWorkflowLayerStep('w1'))).toBe(true)
     expect(isLayerStep(createSharpStep('blur'))).toBe(false)
   })
 
@@ -83,19 +96,24 @@ describe('the layer kinds', () => {
 
     it('says what a row shows: the image, what differs from the defaults, or that it is empty or gone', () => {
       const layer = createImageLayerStep('a')
-      expect(kind.display(layer, 'logo.png')).toEqual({
+      const named = layerNames({
+        documents: [],
+        workflows: [],
+        sources: [{ id: 'a', fileName: 'logo.png' }],
+      })
+      const none = layerNames({ documents: [], workflows: [], sources: [] })
+      expect(kind.display(layer, named)).toEqual({
         text: 'logo.png',
         problem: false,
       })
       expect(
-        kind.display({ ...layer, opacity: 50, blend: 'multiply' }, 'logo.png')
-          .text,
+        kind.display({ ...layer, opacity: 50, blend: 'multiply' }, named).text,
       ).toBe('logo.png · 50% · multiply')
-      expect(kind.display(layer, undefined)).toEqual({
+      expect(kind.display(layer, none)).toEqual({
         text: 'Image not available',
         problem: true,
       })
-      expect(kind.display(createImageLayerStep(), undefined)).toEqual({
+      expect(kind.display(createImageLayerStep(), none)).toEqual({
         text: 'No image yet',
         problem: false,
       })
@@ -135,7 +153,12 @@ describe('the layer kinds', () => {
   })
 
   it('finds the kind of a layer step', () => {
-    const layer = createImageLayerStep('a')
-    expect(layerKind(layer)).toBe(LAYER_KINDS[IMAGE_LAYER_KIND])
+    expect(layerKind(createImageLayerStep('a')).title).toBe('Image layer')
+    expect(layerKind(createDocumentLayerStep('d1')).title).toBe(
+      'Document layer',
+    )
+    expect(layerKind(createWorkflowLayerStep('w1')).title).toBe(
+      'Workflow layer',
+    )
   })
 })

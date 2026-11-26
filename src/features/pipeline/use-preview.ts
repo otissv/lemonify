@@ -37,6 +37,8 @@ export interface PipelinePreview {
   error: string | undefined
   /** Enabled AI steps that still need running. */
   pending: ReadonlyArray<string>
+  /** Document layers and workflow layers waiting for an AI step in what they use. */
+  waitingLayers: ReadonlyArray<string>
   /** Steps left out of the picture, with why. */
   problems: ReadonlyArray<StepProblem>
 }
@@ -54,7 +56,8 @@ export function activeSource(
  * Keeps the document's preview up to date: asks the server for it shortly
  * after the server has confirmed the latest change, and again when the
  * selected step changes to or from one a tool draws on, since the canvas then
- * shows the picture before that step. Every document has a canvas, so every
+ * shows the picture before that step, and when a document or workflow its
+ * layers use changed. Every document has a canvas, so every
  * document has a picture to render.
  */
 export function usePreviewLoading(documentId: string, enabled: boolean): void {
@@ -65,6 +68,9 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
   const part = useUiStore((state) => state.stepViews[documentId])
   const settled = session !== undefined && session.pending.length === 0
   const revision = session?.confirmed.revision
+  const pictureVersion = usePipelineStore(
+    (state) => state.pictureVersions[documentId],
+  )
   const viewed =
     session === undefined
       ? undefined
@@ -76,7 +82,7 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
   const viewedId = viewed?.stepId
   const viewedPart = viewed?.part
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the revision is what makes the preview ask again
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the revision and a change to what layers use are what make the preview ask again
   useEffect(() => {
     if (!enabled || !settled) return
     const controller = new AbortController()
@@ -87,7 +93,15 @@ export function usePreviewLoading(documentId: string, enabled: boolean): void {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [documentId, enabled, settled, revision, viewedId, viewedPart])
+  }, [
+    documentId,
+    enabled,
+    settled,
+    revision,
+    pictureVersion,
+    viewedId,
+    viewedPart,
+  ])
 }
 
 /** What a document looks like after its pipeline. Undefined until the document has loaded. */
@@ -118,6 +132,7 @@ export function usePreview(documentId: string): PipelinePreview | undefined {
       status: current?.status ?? PreviewStatus.Rendering,
       error: current?.error,
       pending: current?.pendingStepIds ?? [],
+      waitingLayers: current?.waitingLayerIds ?? [],
       problems: current?.problems ?? [],
     }
   }, [session, current, documentId])

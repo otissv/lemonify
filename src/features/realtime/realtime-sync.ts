@@ -100,6 +100,9 @@ export function createRealtimeSync(options: RealtimeSyncOptions): RealtimeSync {
         case 'workflow.deleted':
           forgetDeleted(event.workflowId)
           return
+        case 'picture.changed':
+          usePipelineStore.getState().pictureChanged(event.itemId)
+          return
         case 'results.changed':
           void useLibraryStore.getState().refreshResults()
           return

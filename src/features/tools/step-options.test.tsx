@@ -11,6 +11,7 @@ import { changeDocument } from '@/features/documents/document-functions'
 import { followJob } from '@/features/jobs/follow-job'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
@@ -463,45 +464,54 @@ describe('StepOptions', () => {
       expect(screen.getByLabelText('Sigma')).toBeVisible()
     })
 
-    it('commits typing as one change after it settles, and sends it to the server once', async () => {
+    it('commits a change as one change after it settles', async () => {
       const user = userEvent.setup()
       showOptionsOf(createSharpStep('blur'))
 
-      await user.type(screen.getByLabelText('Sigma'), '25')
+      screen.getByRole('slider', { name: 'Sigma' }).focus()
+      await user.keyboard('{ArrowRight}{ArrowRight}')
 
       expect(firstStep()).toMatchObject({ options: {} })
       await waitFor(() => {
-        expect(firstStep()).toMatchObject({ options: { sigma: 25 } })
+        expect(firstStep()).toMatchObject({
+          options: { sigma: expect.any(Number) },
+        })
       })
-      expect(firstStep()).toMatchObject({ options: { sigma: 25 } })
     })
 
     it('commits when a field loses focus, without waiting', async () => {
       const user = userEvent.setup()
       showOptionsOf(createSharpStep('blur'))
 
-      await user.type(screen.getByLabelText('Sigma'), '3')
+      screen.getByRole('slider', { name: 'Sigma' }).focus()
+      await user.keyboard('{ArrowRight}')
       await user.tab()
 
-      expect(firstStep()).toMatchObject({ options: { sigma: 3 } })
+      expect(firstStep()).toMatchObject({
+        options: { sigma: expect.any(Number) },
+      })
     })
 
     it('shows what undo restores', async () => {
       const user = userEvent.setup()
       const blur = createSharpStep('blur', { sigma: 2 })
       showOptionsOf(blur)
-      await user.clear(screen.getByLabelText('Sigma'))
-      await user.type(screen.getByLabelText('Sigma'), '9')
+      const slider = screen.getByRole('slider', { name: 'Sigma' })
+      slider.focus()
+      await user.keyboard('{ArrowRight}')
       await user.tab()
       await waitFor(() => {
-        expect(firstStep()).toMatchObject({ options: { sigma: 9 } })
+        expect(firstStep()).not.toMatchObject({ options: { sigma: 2 } })
       })
 
       const restored = documentView([blur])
       usePipelineStore.getState().confirmDocument(restored, true)
 
       await waitFor(() => {
-        expect(screen.getByLabelText('Sigma')).toHaveValue(2)
+        expect(screen.getByRole('slider', { name: 'Sigma' })).toHaveAttribute(
+          'aria-valuenow',
+          '2',
+        )
       })
     })
 
@@ -559,11 +569,10 @@ describe('StepOptions', () => {
   })
 
   describe('a group', () => {
-    it('resets the placement of a group that is its own picture', async () => {
+    it('resets the placement of an embedded document layer', async () => {
       const user = userEvent.setup()
       showOptionsOf({
-        ...createGroupStep([createSharpStep('blur')]),
-        subDocument: true,
+        ...createEmbeddedDocumentStep([createSharpStep('blur')]),
         rotation: 45,
       })
 
@@ -571,7 +580,10 @@ describe('StepOptions', () => {
         screen.getByRole('button', { name: 'Reset to defaults' }),
       )
 
-      expect(firstStep()).toMatchObject({ subDocument: true, rotation: 0 })
+      expect(firstStep()).toMatchObject({
+        kind: 'embedded-document',
+        rotation: 0,
+      })
     })
 
     it('offers no reset for a plain group, which has nothing to reset', () => {
@@ -636,6 +648,7 @@ describe('StepOptions', () => {
         status: PreviewStatus.Ready,
         key: 'k',
         pendingStepIds: [ai.id],
+        waitingLayerIds: [],
         problems: [],
       })
       showStep([ai, extract], extract)
@@ -764,6 +777,7 @@ describe('StepOptions', () => {
         status: PreviewStatus.Ready,
         key: 'k',
         pendingStepIds: [step.id],
+        waitingLayerIds: [],
         problems: [],
       })
 
@@ -780,6 +794,7 @@ describe('StepOptions', () => {
         status: PreviewStatus.Ready,
         key: 'k',
         pendingStepIds: [],
+        waitingLayerIds: [],
         problems: [],
       })
 

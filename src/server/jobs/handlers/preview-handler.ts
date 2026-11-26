@@ -129,6 +129,7 @@ export class PreviewHandler implements JobHandler {
               width: size.width,
               height: size.height,
               pendingStepIds: whole.pending.map(({ step }) => step.id),
+              waitingLayerIds: [...whole.waitingLayerIds],
               problems: [...whole.skipped],
             },
           },

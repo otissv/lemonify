@@ -64,6 +64,7 @@ export async function refreshPreview(
   store.setPreview(documentId, {
     ...before,
     pendingStepIds: before?.pendingStepIds ?? [],
+    waitingLayerIds: before?.waitingLayerIds ?? [],
     problems: before?.problems ?? [],
     status: PreviewStatus.Rendering,
     error: undefined,
@@ -82,6 +83,7 @@ export async function refreshPreview(
         size: { width: result.width, height: result.height },
         view,
         pendingStepIds: result.pendingStepIds,
+        waitingLayerIds: result.waitingLayerIds,
         problems: result.problems,
       })
       return
@@ -99,6 +101,7 @@ function failPreview(documentId: string, error: string): void {
   store.setPreview(documentId, {
     ...before,
     pendingStepIds: before?.pendingStepIds ?? [],
+    waitingLayerIds: before?.waitingLayerIds ?? [],
     problems: before?.problems ?? [],
     status: PreviewStatus.Failed,
     error,

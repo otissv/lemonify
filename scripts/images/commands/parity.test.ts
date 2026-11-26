@@ -5,6 +5,7 @@ import { AiToolRegistry } from '../../../src/server/ai/ai-tool-registry.ts'
 import { WorkflowChangeSchema } from '../../../src/features/workflows/workflow-change.ts'
 import { DocumentChangeSchema } from '../../../src/features/pipeline/document-change.ts'
 import { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
+import { CreateFromService } from '../../../src/server/services/create-from-service.ts'
 import { DocumentService } from '../../../src/server/services/document-service.ts'
 import { KeybindingService } from '../../../src/server/services/keybinding-service.ts'
 import { JobService } from '../../../src/server/services/job-service.ts'
@@ -17,6 +18,7 @@ import { COMMANDS } from './index.ts'
 import {
   AI_TOOL_COMMANDS,
   BUNDLE_COMMANDS,
+  CREATE_FROM_COMMANDS,
   DOCUMENT_CHANGE_COMMANDS,
   DOCUMENT_COMMANDS,
   JOB_COMMANDS,
@@ -58,6 +60,7 @@ const SERVICES: ReadonlyArray<
   ['ResultService', ResultService, RESULT_COMMANDS],
   ['JobService', JobService, JOB_COMMANDS],
   ['WorkflowService', WorkflowService, WORKFLOW_COMMANDS],
+  ['CreateFromService', CreateFromService, CREATE_FROM_COMMANDS],
   ['KeybindingService', KeybindingService, KEYBINDING_COMMANDS],
   ['RenderService', RenderService, RENDER_COMMANDS],
   ['DocumentBundleService', DocumentBundleService, BUNDLE_COMMANDS],

@@ -885,14 +885,14 @@ describe('SharpImageEngine', () => {
       expect(raw[3]).toBe(0)
     })
 
-    describe('a sub-document', () => {
+    describe('an embedded document layer', () => {
       function subOf(
         source: string,
         steps: Parameters<typeof engine.render>[0]['steps'] = [],
         settings = {},
       ) {
         return {
-          kind: 'sub-document' as const,
+          kind: 'embedded-document' as const,
           input: file(source),
           steps,
           ...DEFAULT_LAYER_SETTINGS,
@@ -956,6 +956,23 @@ describe('SharpImageEngine', () => {
 
         expect(at(raw, 4, 4)).toEqual([255, 255, 0, 255])
         expect(at(raw, 0, 0)).toEqual([0, 255, 255, 255])
+      })
+
+      it('holds embedded document layers of its own, each acting only on its own picture', async () => {
+        const base = await colourFile('base.png', '#ff0000', 8)
+        const logo = await colourFile('logo.png', '#0000ff', 2)
+        const inner = subOf(logo, [createSharpStep('negate', { alpha: false })])
+        const outer = {
+          kind: 'embedded-document' as const,
+          input: { kind: 'canvas' as const, canvas: canvasOfSize(8, 8) },
+          steps: [inner],
+          ...DEFAULT_LAYER_SETTINGS,
+        }
+
+        const raw = await render([outer], base)
+
+        expect(at(raw, 4, 4)).toEqual([255, 255, 0, 255])
+        expect(at(raw, 0, 0)).toEqual([255, 0, 0, 255])
       })
 
       it('says plainly when its picture cannot be read', async () => {

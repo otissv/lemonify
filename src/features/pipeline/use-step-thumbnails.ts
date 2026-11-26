@@ -25,7 +25,7 @@ export function usePictureSizeBefore(
  * Keeps the small pictures of a document's steps up to date while `active`
  * (its steps are shown): asks for them shortly after the server has confirmed
  * the latest change, and again when an AI step has run, since a result makes
- * later steps showable.
+ * later steps showable, or something its layers use changed.
  */
 export function useStepThumbnails(documentId: string, active: boolean): void {
   const session = usePipelineStore((state) =>
@@ -34,9 +34,12 @@ export function useStepThumbnails(documentId: string, active: boolean): void {
   const resultsVersion = useLibraryStore((state) => state.resultsVersion)
   const settled = session !== undefined && session.pending.length === 0
   const revision = session?.confirmed.revision
+  const pictureVersion = usePipelineStore(
+    (state) => state.pictureVersions[documentId],
+  )
   const hasSteps = (session?.confirmed.pipeline.steps.length ?? 0) > 0
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the revision and results make the thumbnails ask again
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the revision, results and a change to what layers use make the thumbnails ask again
   useEffect(() => {
     if (!active || !settled || !hasSteps) return
     const controller = new AbortController()
@@ -47,5 +50,13 @@ export function useStepThumbnails(documentId: string, active: boolean): void {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [documentId, active, settled, hasSteps, revision, resultsVersion])
+  }, [
+    documentId,
+    active,
+    settled,
+    hasSteps,
+    revision,
+    resultsVersion,
+    pictureVersion,
+  ])
 }

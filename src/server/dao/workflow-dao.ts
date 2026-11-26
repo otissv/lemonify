@@ -1,5 +1,6 @@
 import type { WorkflowHistoryPatch } from '@/features/workflows/workflow-change'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
+import type { UsedSnapshot } from '@/features/workflows/used-snapshot'
 
 export const STALE_WORKFLOW_MESSAGE =
   'This workflow was changed somewhere else. Reload it to see the latest version.'
@@ -54,6 +55,8 @@ export type WorkflowRunRecord = {
   ownerId: string
   /** The definition as it was when the run started, so editing the Workflow mid-run changes nothing. */
   definition: WorkflowDefinition
+  /** The documents and workflows its layers use, as they were when it started, for the same reason. */
+  used: UsedSnapshot
   state: RunState
   createdAt: string
   finishedAt: string | null

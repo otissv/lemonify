@@ -1,11 +1,13 @@
-import type { DocumentDao, DocumentRecord } from '../dao/document-dao.ts'
-import type { SourceDao } from '../dao/source-dao.ts'
+import type { DocumentRecord } from '../dao/document-dao.ts'
 import { StaleJobError } from '../jobs/job-handler.ts'
 import type { ResultService } from '../services/result-service.ts'
-import type { SourceStore } from '../tools/source-store.ts'
 import { planPipeline } from './plan-pipeline.ts'
+import { ownedUsedSources, usedPicture } from './used-pictures.ts'
+import type { OwnedItems } from './used-pictures.ts'
 import type { PipelinePlan } from './plan-pipeline.ts'
 import type { PlanLookups } from './plan-pipeline.ts'
+import { layerKind } from '@/features/pipeline/layer-kinds'
+import type { LayerStep } from '@/features/pipeline/layer-kinds'
 import { planSteps } from '@/features/pipeline/pipeline'
 import type { PlanStep } from '@/features/pipeline/pipeline'
 import { canvasOfSize } from '@/features/pipeline/canvas'
@@ -14,17 +16,14 @@ import type { Canvas } from '@/features/pipeline/canvas'
 const ASSUMED = 'assumed'
 
 export type PlanOptions = {
-  /** The steps to plan, as they count when the picture is made; the whole pipeline, groups that are not sub-documents opened, when not given. */
+  /** The steps to plan, as they count when the picture is made; the whole pipeline, with its groups opened, when not given. */
   steps?: ReadonlyArray<PlanStep>
   assumeAiResults?: boolean
   /** The canvas to plan on; the Document's own when not given. */
   canvas?: Canvas
 }
 
-export type DocumentPlannerDependencies = {
-  documents: DocumentDao
-  sources: SourceDao
-  sourceStore: SourceStore
+export type DocumentPlannerDependencies = OwnedItems & {
   results: ResultService
 }
 
@@ -81,6 +80,22 @@ export class DocumentPlanner {
     )
   }
 
+  /** The canvas of what a layer draws on its own: its image's size, or the canvas of the document or workflow it uses. Undefined when there is nothing to show. */
+  async layerCanvas(
+    ownerId: string,
+    layer: LayerStep,
+  ): Promise<Canvas | undefined> {
+    const used = layerKind(layer).uses(layer)
+    if (used !== undefined) {
+      const sources = ownedUsedSources(ownerId, this.#deps)
+      return (await usedPicture(used, sources))?.canvas
+    }
+    const [imageId] = layerKind(layer).sourceIds(layer)
+    return imageId === undefined
+      ? undefined
+      : this.imageCanvas(ownerId, imageId)
+  }
+
   /** A canvas the size of a stored image, or undefined when the image is gone or not the owner's. */
   async imageCanvas(
     ownerId: string,
@@ -92,18 +107,13 @@ export class DocumentPlanner {
   }
 
   #lookups(ownerId: string, assumeAiResults: boolean): PlanLookups {
-    const { sources, sourceStore, results } = this.#deps
+    const { results } = this.#deps
+    const used = ownedUsedSources(ownerId, this.#deps)
     return {
       aiResultPath: async (key) =>
         assumeAiResults ? ASSUMED : results.findPath(ownerId, key),
-      source: async (sourceId) => {
-        const source = await sources.findById(sourceId)
-        if (source === null || source.ownerId !== ownerId) return undefined
-        return {
-          contentHash: source.contentHash,
-          path: sourceStore.pathOf(source.contentHash),
-        }
-      },
+      source: used.image,
+      used: (item) => usedPicture(item, used),
     }
   }
 }

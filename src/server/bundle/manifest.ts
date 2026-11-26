@@ -2,6 +2,10 @@ import { z } from 'zod'
 
 import { MAX_DOCUMENT_NAME_LENGTH } from '@/features/documents/document'
 import { PipelineSchema } from '@/features/pipeline/pipeline'
+import {
+  MAX_WORKFLOW_NAME_LENGTH,
+  WorkflowDefinitionSchema,
+} from '@/features/workflows/workflow'
 
 import { ValidationError } from '../errors.ts'
 import { SOURCE_MEDIA_TYPES } from '../tools/image-inspector.ts'
@@ -42,9 +46,23 @@ const resultEntrySchema = z.strictObject({
   mediaType: z.enum(SOURCE_MEDIA_TYPES),
 })
 
+/** A document that a layer uses, at any depth, by the id the file's layers give it. */
+const usedDocumentSchema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string().min(1).max(MAX_DOCUMENT_NAME_LENGTH),
+  pipeline: PipelineSchema,
+})
+
+/** A workflow that a layer uses, at any depth, by the id the file's layers give it. */
+const usedWorkflowSchema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string().min(1).max(MAX_WORKFLOW_NAME_LENGTH),
+  definition: WorkflowDefinitionSchema,
+})
+
 /**
- * What a document file says about the document: its name and pipeline, and a
- * list of the images it holds. The images are stored by the hash of their
+ * What a document file says about the document: its name and pipeline, the
+ * documents and workflows its layers use, and a list of the images it holds. The images are stored by the hash of their
  * bytes (`objects/<hash>`), so an image used twice is stored once and anything
  * that already has an image by its hash does not need it sent again.
  */
@@ -56,7 +74,18 @@ export const ManifestSchema = z
     pipeline: PipelineSchema,
     sources: z.array(sourceEntrySchema),
     results: z.array(resultEntrySchema),
+    /** Every document and workflow the layers use, however deep: an import makes each anew. */
+    documents: z.array(usedDocumentSchema),
+    workflows: z.array(usedWorkflowSchema),
   })
+  .refine(
+    ({ documents, workflows }) =>
+      isUnique([
+        ...documents.map(({ id }) => id),
+        ...workflows.map(({ id }) => id),
+      ]),
+    'A document or workflow is listed twice.',
+  )
   .refine(
     ({ sources }) => isUnique(sources.map(({ id }) => id)),
     'An image is listed twice.',

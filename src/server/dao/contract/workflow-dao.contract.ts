@@ -1,3 +1,4 @@
+import { EMPTY_SNAPSHOT } from '@/features/workflows/used-snapshot'
 import { describe, expect, it } from 'vitest'
 
 import type { WorkflowHistoryPatch } from '@/features/workflows/workflow-change'
@@ -75,6 +76,7 @@ export function run(
     workflowId: 'wf-1',
     ownerId: 'ann',
     definition: definitionOf(),
+    used: EMPTY_SNAPSHOT,
     state: RunState.Running,
     createdAt: T0,
     finishedAt: null,

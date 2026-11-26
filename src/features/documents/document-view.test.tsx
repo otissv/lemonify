@@ -72,6 +72,7 @@ function renderedAt(width: number, height: number): void {
       width,
       height,
       pendingStepIds: [],
+      waitingLayerIds: [],
       problems: [],
     },
   })

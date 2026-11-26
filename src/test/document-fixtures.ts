@@ -122,6 +122,7 @@ export function previewJob(key = 'preview-key'): JobView {
       width: 10,
       height: 10,
       pendingStepIds: [],
+      waitingLayerIds: [],
       problems: [],
     },
     error: null,

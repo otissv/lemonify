@@ -4,10 +4,15 @@ import { Background, Controls, ReactFlow } from '@xyflow/react'
 import type { Edge } from '@xyflow/react'
 import { useCallback, useMemo } from 'react'
 
+import { useLayerNames } from '@/features/documents/item-names'
 import { workflowThumbnailImageUrl } from '@/features/documents/image-urls'
+import type { LayerNames } from '@/features/pipeline/layer-kinds'
 import { usePipelineStore } from '@/store/pipeline-store'
 
-import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
+import { findStep, isContainerStep } from '@/features/pipeline/pipeline'
+import { FrameNode } from '@/features/workflows/frame-node'
+import type { FrameFlowNode } from '@/features/workflows/frame-node'
+import { inputSlot } from '@/features/workflows/segments'
 import { StepNode } from '@/features/workflows/step-node'
 import type { StepFlowNode } from '@/features/workflows/step-node'
 import { CanvasSize } from '@/features/workflows/workflow'
@@ -47,7 +52,7 @@ interface WorkflowCanvasProps {
   imageName: (sourceId: string) => string
 }
 
-const NODE_TYPES = { step: StepNode }
+const NODE_TYPES = { step: StepNode, frame: FrameNode }
 /** What the Canvas node says when each image is drawn on a canvas of its own size. */
 const MATCH_INPUT_SUMMARY = 'Size of each image'
 const PRO_OPTIONS = { hideAttribution: true }
@@ -69,7 +74,8 @@ function selectionOf(nodeId: string): Selection {
 function describe(
   workflow: Workflow,
   node: GraphNode,
-  imageName: (sourceId: string) => string,
+  names: LayerNames,
+  slotId: string | undefined,
 ): { label: string; summary: string; enabled: boolean } {
   switch (node.kind) {
     case 'canvas': {
@@ -96,12 +102,13 @@ function describe(
         summary: outputSummary(workflow.output),
         enabled: true,
       }
-    case 'step': {
+    case 'step':
+    case 'frame': {
       const step = findStep(workflow.pipeline, node.id)?.step
       if (step === undefined) return { label: '', summary: '', enabled: false }
       return {
         label: stepLabel(step),
-        summary: stepSummary(step, imageName),
+        summary: stepSummary(step, names, slotId),
         enabled: step.enabled,
       }
     }
@@ -119,44 +126,62 @@ function thumbnailOf(
     : workflowThumbnailImageUrl(workflowId, key)
 }
 
+type DiagramNode = StepFlowNode | FrameFlowNode
+
 function toFlowNodes(
   workflow: Workflow,
-  workflowId: string,
   nodes: ReadonlyArray<GraphNode>,
   selection: Selection,
-  imageName: (sourceId: string) => string,
+  names: LayerNames,
   thumbnails: ReadonlyArray<{ stepId: string; key: string | null }> | undefined,
   onRemoveStep: (stepId: string) => void,
-): StepFlowNode[] {
-  const groupIds = new Set(
-    workflow.pipeline.steps
-      .filter(({ kind }) => kind === PipelineStepKind.Group)
-      .map(({ id }) => id),
-  )
+): DiagramNode[] {
   const chosen = selectedStepId(selection)
-  return nodes.map((node) => ({
-    id: node.id,
-    type: 'step',
-    position: { x: node.x, y: node.y },
-    draggable: false,
-    connectable: false,
-    deletable: false,
-    selected: selectionIsNode(selection, node, chosen),
-    data: {
-      ...describe(workflow, node, imageName),
-      thumbnail: thumbnailOf(workflowId, node.id, thumbnails),
-      position:
-        node.kind === 'canvas'
-          ? 'start'
-          : node.kind === 'output'
-            ? 'end'
-            : 'middle',
-      hasBranch: groupIds.has(node.id),
-      inBranch: node.groupId !== undefined,
-      deletable: node.kind === 'step',
-      onDelete: node.kind === 'step' ? onRemoveStep : undefined,
-    },
-  }))
+  const slotId = inputSlot(workflow.pipeline)?.id
+  return nodes.map((node): DiagramNode => {
+    const placed = {
+      id: node.id,
+      position: { x: node.x, y: node.y },
+      ...(node.parentId === undefined ? {} : { parentId: node.parentId }),
+      draggable: false,
+      connectable: false,
+      deletable: false,
+      selected: selectionIsNode(selection, node, chosen),
+    }
+    const described = describe(workflow, node, names, slotId)
+    if (node.kind === 'frame') {
+      const container = findStep(workflow.pipeline, node.id)?.step
+      return {
+        ...placed,
+        type: 'frame',
+        style: { width: node.width, height: node.height },
+        data: {
+          ...described,
+          onLine:
+            container !== undefined && isContainerStep(container)
+              ? container.steps.length === 0
+              : false,
+          onDelete: onRemoveStep,
+        },
+      }
+    }
+    return {
+      ...placed,
+      type: 'step',
+      data: {
+        ...described,
+        thumbnail: thumbnailOf(workflow.id, node.id, thumbnails),
+        position:
+          node.kind === 'canvas'
+            ? 'start'
+            : node.kind === 'output'
+              ? 'end'
+              : 'middle',
+        deletable: node.kind === 'step',
+        onDelete: node.kind === 'step' ? onRemoveStep : undefined,
+      },
+    }
+  })
 }
 
 function selectionIsNode(
@@ -178,26 +203,17 @@ function selectionIsNode(
   }
 }
 
-function toFlowEdges(
-  nodes: ReadonlyArray<GraphNode>,
-  edges: ReadonlyArray<GraphEdge>,
-): Edge[] {
-  const parents = new Map(nodes.map((node) => [node.id, node.groupId]))
-  return edges.map((edge) => {
-    const hangs = parents.get(edge.target) === edge.source
-    return {
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      sourceHandle: hangs ? 'bottom' : 'out',
-      targetHandle: hangs ? 'top' : 'in',
-      className: edge.branch ? 'workflow-branch' : undefined,
-      style: edge.branch ? { strokeDasharray: '6 4' } : undefined,
-    }
-  })
+function toFlowEdges(edges: ReadonlyArray<GraphEdge>): Edge[] {
+  return edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: 'out',
+    targetHandle: 'in',
+  }))
 }
 
-/** The workflow as a diagram: the line of steps from the canvas to the output, with the steps of a group hanging under it as a branch. Select a node to see its options in the panel; steps are added and changed there. */
+/** The workflow as a diagram: the line of steps from the canvas to the output, with each group and embedded document layer a frame around its steps, at any depth. Select a node or a frame to see its options in the panel; steps are added and changed there. */
 export function WorkflowCanvas({
   workflow,
   selection,
@@ -206,24 +222,28 @@ export function WorkflowCanvas({
   imageName,
 }: WorkflowCanvasProps): React.JSX.Element {
   const thumbnails = usePipelineStore((state) => state.thumbnails[workflow.id])
+  const items = useLayerNames(undefined)
+  const names = useMemo<LayerNames>(
+    () => ({ ...items, image: imageName }),
+    [items, imageName],
+  )
   const graph = useMemo(() => workflowGraph(workflow), [workflow])
   const nodes = useMemo(
     () =>
       toFlowNodes(
         workflow,
-        workflow.id,
         graph.nodes,
         selection,
-        imageName,
+        names,
         thumbnails,
         onRemoveStep,
       ),
-    [workflow, graph.nodes, selection, imageName, thumbnails, onRemoveStep],
+    [workflow, graph.nodes, selection, names, thumbnails, onRemoveStep],
   )
-  const edges = useMemo(() => toFlowEdges(graph.nodes, graph.edges), [graph])
+  const edges = useMemo(() => toFlowEdges(graph.edges), [graph])
 
   const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: StepFlowNode): void => {
+    (_event: React.MouseEvent, node: DiagramNode): void => {
       onSelect(selectionOf(node.id))
     },
     [onSelect],

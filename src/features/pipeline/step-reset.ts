@@ -41,9 +41,10 @@ export function resetChangeFor(
 
 /**
  * A step as a new one of its kind starts, keeping what makes it this step: its
- * id, name, whether it is on, a layer's image and a group's steps. A Sharp step
- * gets the options the website starts it with (a resize the size given) and loses its blend; an AI step
- * the settings given; a layer, or a group, the default placement. Undefined
+ * id, name, whether it is on, a layer's image and a container's steps. A Sharp
+ * step gets the options the website starts it with (a resize the size given)
+ * and loses its blend; an AI step the settings given; a layer or an embedded
+ * document layer the default placement. A group has nothing to reset. Undefined
  * when an AI step is not given settings for its own tool.
  */
 export function resetStep(
@@ -61,5 +62,6 @@ export function resetStep(
     if (ai === undefined || ai.tool !== step.tool) return undefined
     return PipelineStepSchema.parse({ ...step, ...ai })
   }
+  if (step.kind === PipelineStepKind.Group) return step
   return { ...step, ...DEFAULT_LAYER_SETTINGS }
 }

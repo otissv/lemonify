@@ -32,6 +32,7 @@ import {
   documentStepSetCommand,
 } from './document-step.ts'
 import { documentCanvasCommand } from './document-canvas.ts'
+import { documentStepConvertCommand } from './document-step-convert.ts'
 import { documentStepResetCommand } from './document-step-reset.ts'
 import { aiCatalogueCommand, aiToolsCommand } from './ai.ts'
 import { exportCommand, exportFormatsCommand } from './export.ts'
@@ -110,6 +111,7 @@ export const COMMANDS: readonly ImageCommand[] = [
   documentStepMoveCommand,
   documentStepSetCommand,
   documentStepResetCommand,
+  documentStepConvertCommand,
   documentStepEnableCommand,
   documentStepDisableCommand,
   documentStepGroupCommand,

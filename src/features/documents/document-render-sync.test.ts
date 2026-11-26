@@ -74,6 +74,7 @@ describe('refreshPreview', () => {
         width: 4000,
         height: 3000,
         pendingStepIds: ['s2'],
+        waitingLayerIds: [],
         problems: [{ stepId: 's3', message: 'Needs width.' }],
       }),
     )
@@ -84,6 +85,7 @@ describe('refreshPreview', () => {
       size: { width: 4000, height: 3000 },
       view: undefined,
       pendingStepIds: ['s2'],
+      waitingLayerIds: [],
       problems: [{ stepId: 's3', message: 'Needs width.' }],
     })
   })
@@ -99,6 +101,7 @@ describe('refreshPreview', () => {
         width,
         height,
         pendingStepIds: [],
+        waitingLayerIds: [],
         problems: [],
       })
     }
@@ -177,6 +180,7 @@ describe('refreshPreview', () => {
       status: PreviewStatus.Ready,
       key: 'old',
       pendingStepIds: [],
+      waitingLayerIds: [],
       problems: [],
     })
     vi.mocked(followJob).mockResolvedValue(
@@ -246,6 +250,7 @@ describe('runPendingAiSteps', () => {
       status: PreviewStatus.Ready,
       key: 'k',
       pendingStepIds: ['a', 'b'],
+      waitingLayerIds: [],
       problems: [],
     })
     vi.mocked(requestAiStep).mockImplementation(({ data }) =>
@@ -272,6 +277,7 @@ describe('runPendingAiSteps', () => {
           width: 10,
           height: 10,
           pendingStepIds: previews === 1 ? ['b'] : [],
+          waitingLayerIds: [],
           problems: [],
         }),
       )
@@ -290,6 +296,7 @@ describe('runPendingAiSteps', () => {
       status: PreviewStatus.Ready,
       key: 'k',
       pendingStepIds: ['a', 'b'],
+      waitingLayerIds: [],
       problems: [],
     })
     vi.mocked(requestAiStep).mockResolvedValue(

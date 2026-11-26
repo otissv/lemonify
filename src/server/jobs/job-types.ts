@@ -121,6 +121,8 @@ export const JobResultSchema = z.discriminatedUnion('kind', [
     height: z.number().int().positive(),
     /** Enabled AI Steps still waiting for a Result, so the preview shows the Pipeline only up to them. */
     pendingStepIds: z.array(id),
+    /** The document layers and workflow layers whose picture waits for one of those steps. */
+    waitingLayerIds: z.array(id),
     problems: z.array(ProblemSchema),
   }),
   z.strictObject({

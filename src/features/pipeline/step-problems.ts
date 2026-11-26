@@ -11,6 +11,7 @@ import {
 const GENERAL = '_'
 
 export const GROUP_LABEL = 'Group'
+export const EMBEDDED_DOCUMENT_LABEL = 'Embedded document layer'
 
 /**
  * Why a step cannot be applied yet, in plain words, or undefined when it is
@@ -35,6 +36,8 @@ export function pipelineStepLabel(step: PipelineStep): string {
   switch (step.kind) {
     case PipelineStepKind.Group:
       return GROUP_LABEL
+    case PipelineStepKind.EmbeddedDocument:
+      return EMBEDDED_DOCUMENT_LABEL
     case PipelineStepKind.Sharp:
       return opLabel(step.op)
     case PipelineStepKind.Ai:

@@ -1,60 +1,42 @@
-import { AI_STEP_KIND } from '@/features/ai/ai-tools'
 import { canvasOfSize } from '@/features/pipeline/canvas'
 import { applyChange } from '@/features/pipeline/document-change'
-import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import { isImageLayer } from '@/features/pipeline/layer-kinds'
 import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
-import {
-  PipelineStepKind,
-  effectiveSteps,
-  planSteps,
-} from '@/features/pipeline/pipeline'
-import type { AiStep, Pipeline, PlanStep } from '@/features/pipeline/pipeline'
+import { effectiveSteps } from '@/features/pipeline/pipeline'
+import type { Pipeline } from '@/features/pipeline/pipeline'
 import { CanvasSize } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
-
-/** Layers and Sharp steps drawn on the picture, run as one pass. */
-export type DrawSegment = { kind: 'draw'; steps: ReadonlyArray<PlanStep> }
-/** One AI step, which runs on the GPU and can be batched with other images. */
-export type AiSegment = { kind: 'ai'; step: AiStep }
-export type Segment = DrawSegment | AiSegment
 
 /** The size of an input image, which a run may take for its canvas. */
 export type InputImage = { id: string; width: number; height: number }
 
 const NO_INPUT = 'Add at least one image to run the workflow on.'
-const NO_SLOT = 'Add an image layer with no image: each input image goes in it.'
-const AI_IN_SUB_DOCUMENT =
-  'AI steps inside a sub-document cannot run in a workflow yet.'
+const NO_SLOT = 'Add an image layer: each input image goes in the first one.'
 const NO_SLOT_TO_FILL = 'This pipeline has no place for an input image.'
 
-function isSlot(step: { kind: string; enabled: boolean }): boolean {
-  return isLayerStep(step) && step.enabled
-}
-
 /**
- * The places an input image can go: image layers that are on and have no image,
- * in pipeline order. A run puts each input image in the first, and the rest
- * stay empty, so they draw nothing.
+ * Where an input image goes: the first image layer that is on, in pipeline
+ * order, at any depth of groups and embedded document layers, with or without
+ * an image. A run replaces its image; every other image layer is fixed and
+ * draws the same image in every item.
  */
-export function inputSlots(pipeline: Pipeline): ImageLayerStep[] {
-  const slots: ImageLayerStep[] = []
+export function inputSlot(pipeline: Pipeline): ImageLayerStep | undefined {
   for (const step of effectiveSteps(pipeline)) {
-    if (!isLayerStep(step) || !isSlot(step)) continue
-    if (layerKind(step).sourceIds(step).length === 0) slots.push(step)
+    if (isImageLayer(step) && step.enabled) return step
   }
-  return slots
+  return undefined
 }
 
-/** The pipeline with `sourceId` in its first input slot; throws when there is none. */
-export function fillFirstSlot(pipeline: Pipeline, sourceId: string): Pipeline {
-  const [slot] = inputSlots(pipeline)
+/** The pipeline with `sourceId` in its input slot; throws when there is none. */
+export function fillInputSlot(pipeline: Pipeline, sourceId: string): Pipeline {
+  const slot = inputSlot(pipeline)
   if (slot === undefined) throw new RangeError(NO_SLOT_TO_FILL)
   return applyChange(pipeline, { type: 'set-image', stepId: slot.id, sourceId })
 }
 
 /**
  * The pipeline one input image runs through: the workflow's pipeline with the
- * image in its first slot, on the canvas the workflow sets or, when its canvas
+ * image in its input slot, on the canvas the workflow sets or, when its canvas
  * matches each input image, on a canvas of the image's size with the
  * workflow's background.
  */
@@ -70,42 +52,28 @@ export function itemPipeline(
           background: pipeline.canvas.background,
         }
       : pipeline.canvas
-  return fillFirstSlot({ ...pipeline, canvas }, image.id)
+  return fillInputSlot({ ...pipeline, canvas }, image.id)
 }
 
 /**
- * Splits a pipeline into what a run executes: layers and Sharp steps are
- * drawn in a draw segment, and every enabled AI step is its own segment. The
- * list always starts and ends with a draw segment (possibly empty), because
- * the first draws the canvas and the last is where the Output settings apply.
+ * The pipeline a workflow layer draws: the workflow on the layer's image, as
+ * a run's item would be, or, when the layer has no image, the workflow on its
+ * own canvas with its input slot empty, as an empty image layer draws nothing.
  */
-export function planSegments(pipeline: Pipeline): Segment[] {
-  const segments: Segment[] = []
-  let draw: PlanStep[] = []
-  for (const step of planSteps(pipeline)) {
-    if (step.kind !== AI_STEP_KIND) {
-      draw.push(step)
-      continue
-    }
-    if (!step.enabled) continue
-    segments.push({ kind: 'draw', steps: draw })
-    draw = []
-    segments.push({ kind: 'ai', step })
+export function workflowLayerPipeline(
+  definition: WorkflowDefinition,
+  image: InputImage | undefined,
+): Pipeline {
+  if (image !== undefined) return itemPipeline(definition, image)
+  const slot = inputSlot(definition.pipeline)
+  if (slot === undefined || slot.sourceId === undefined) {
+    return definition.pipeline
   }
-  segments.push({ kind: 'draw', steps: draw })
-  return segments
-}
-
-function hasAiInSubDocument(pipeline: Pipeline): boolean {
-  for (const step of planSteps(pipeline)) {
-    if (step.kind !== PipelineStepKind.Group) continue
-    if (
-      step.steps.some((inner) => inner.kind === AI_STEP_KIND && inner.enabled)
-    ) {
-      return true
-    }
-  }
-  return false
+  return applyChange(definition.pipeline, {
+    type: 'set-image',
+    stepId: slot.id,
+    sourceId: null,
+  })
 }
 
 /** Why a workflow cannot run yet, in plain words, or undefined when it can. */
@@ -113,7 +81,6 @@ export function workflowProblem(
   definition: WorkflowDefinition,
 ): string | undefined {
   if (definition.inputs.length === 0) return NO_INPUT
-  if (inputSlots(definition.pipeline).length === 0) return NO_SLOT
-  if (hasAiInSubDocument(definition.pipeline)) return AI_IN_SUB_DOCUMENT
+  if (inputSlot(definition.pipeline) === undefined) return NO_SLOT
   return undefined
 }

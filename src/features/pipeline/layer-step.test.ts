@@ -20,7 +20,9 @@ import {
 } from '@/features/pipeline/pipeline'
 import {
   IMAGE_LAYER_KIND,
+  createDocumentLayerStep,
   createImageLayerStep,
+  createWorkflowLayerStep,
 } from '@/features/pipeline/layer-kinds'
 import {
   pipelineStepLabel,
@@ -49,6 +51,18 @@ describe('the first image layer', () => {
     expect(firstImageLayer(pipelineOf(empty))).toBeUndefined()
     expect(originalSourceId(pipelineOf(empty, filled))).toBe('b')
     expect(originalSourceId(pipelineOf(empty))).toBeUndefined()
+  })
+
+  it('is an image layer: a document or workflow layer, even with an image, is not the original', () => {
+    const workflow = createWorkflowLayerStep('w1', 'a')
+    const image = createImageLayerStep('b')
+
+    expect(
+      firstImageLayer(
+        pipelineOf(createDocumentLayerStep('d1'), workflow, image),
+      ),
+    ).toBe(image)
+    expect(originalSourceId(pipelineOf(workflow))).toBeUndefined()
   })
 
   it('does not count as an edit, but any other step does', () => {
@@ -246,6 +260,30 @@ describe('changing layers', () => {
         sourceId: 'c',
       }),
     ).toThrow(InvalidChangeError)
+  })
+
+  it('gives an image only to a layer that draws one: not to a document layer', () => {
+    const documentLayer = createDocumentLayerStep('d1')
+    const workflowLayer = createWorkflowLayerStep('w1')
+    const change = {
+      type: 'set-image',
+      stepId: documentLayer.id,
+      sourceId: 'c',
+    } as const
+
+    expect(() => applyChange(pipelineOf(documentLayer), change)).toThrow(
+      InvalidChangeError,
+    )
+    expect(() => planChange(pipelineOf(documentLayer), change)).toThrow(
+      InvalidChangeError,
+    )
+    expect(
+      applyChange(pipelineOf(workflowLayer), {
+        type: 'set-image',
+        stepId: workflowLayer.id,
+        sourceId: 'c',
+      }).steps[0],
+    ).toMatchObject({ sourceId: 'c' })
   })
 
   it('swaps the image of a layer, keeping everything else', () => {

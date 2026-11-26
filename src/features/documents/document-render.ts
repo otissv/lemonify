@@ -25,6 +25,8 @@ export type DocumentPreview = {
   view?: StepView
   /** Enabled AI steps with no result yet; the picture stops before the first. */
   pendingStepIds: ReadonlyArray<string>
+  /** Document layers and workflow layers whose picture waits for one of those steps, in what they use. */
+  waitingLayerIds: ReadonlyArray<string>
   problems: ReadonlyArray<StepProblem>
   error?: string
 }

@@ -45,6 +45,7 @@ function previewJob(
             key: 'picture',
             ...size,
             pendingStepIds: [],
+            waitingLayerIds: [],
             problems: [],
           },
   }

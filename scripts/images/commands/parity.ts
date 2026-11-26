@@ -2,6 +2,7 @@ import type { AiToolRegistry } from '../../../src/server/ai/ai-tool-registry.ts'
 import type { WorkflowChange } from '../../../src/features/workflows/workflow-change.ts'
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
 import type { DocumentBundleService } from '../../../src/server/services/document-bundle-service.ts'
+import type { CreateFromService } from '../../../src/server/services/create-from-service.ts'
 import type { DocumentService } from '../../../src/server/services/document-service.ts'
 import type { KeybindingService } from '../../../src/server/services/keybinding-service.ts'
 import type { JobService } from '../../../src/server/services/job-service.ts'
@@ -37,6 +38,7 @@ import {
   documentStepSetCommand,
 } from './document-step.ts'
 import { documentCanvasCommand } from './document-canvas.ts'
+import { documentStepConvertCommand } from './document-step-convert.ts'
 import { documentStepResetCommand } from './document-step-reset.ts'
 import { aiCatalogueCommand, aiToolsCommand } from './ai.ts'
 import { exportCommand, exportFormatsCommand } from './export.ts'
@@ -113,9 +115,11 @@ export const DOCUMENT_CHANGE_COMMANDS = {
   'set-options': [documentStepSetCommand],
   'set-settings': [documentStepSetCommand],
   'set-image': [documentStepSetCommand],
-  'set-sub-document': [documentStepSetCommand],
+  'set-embedded': [documentStepSetCommand],
   'reset-step': [documentStepResetCommand],
   'restore-step': [documentUndoCommand],
+  'convert-step': [documentStepConvertCommand],
+  'restore-layer': [documentUndoCommand],
 } as const satisfies Record<DocumentChange['type'], ReadonlyArray<ImageCommand>>
 
 /** The command that makes each kind of edit to a workflow's pipeline, inputs and Output settings. The ones a document has go through `workflow update`, which writes the whole workflow as one change. */
@@ -205,6 +209,14 @@ export const WORKFLOW_COMMANDS = {
   openRunArchive: [workflowResultsCommand],
   onJobFinished: LIFECYCLE,
 } as const satisfies Record<keyof WorkflowService, Coverage>
+
+export const CREATE_FROM_COMMANDS = {
+  workflowFromDocument: [workflowCreateCommand],
+  documentFromWorkflow: [documentCreateCommand],
+  insertWorkflow: [documentStepAddCommand],
+  workflowAsEmbedded: [documentStepAddCommand],
+  layerAsEmbedded: [documentStepConvertCommand],
+} as const satisfies Record<keyof CreateFromService, Coverage>
 
 export const RENDER_COMMANDS = {
   requestExport: [exportCommand],

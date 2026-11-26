@@ -5,11 +5,12 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
-import type { LeafStep } from '@/features/pipeline/pipeline'
+import type { LeafStep, PipelineStep } from '@/features/pipeline/pipeline'
 import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
 
 import { awaitingPlan, planKey, planPipeline } from './plan-pipeline.ts'
@@ -18,8 +19,18 @@ import { renderKey } from './render-key.ts'
 
 const CANVAS = canvasOfSize(10, 10)
 const BASE_KEY = canvasIdentity(CANVAS)
-const SOURCE = { contentHash: 'a'.repeat(64), path: '/data/source' }
-const SECOND = { contentHash: 'b'.repeat(64), path: '/data/second' }
+const SOURCE = {
+  contentHash: 'a'.repeat(64),
+  path: '/data/source',
+  width: 10,
+  height: 10,
+}
+const SECOND = {
+  contentHash: 'b'.repeat(64),
+  path: '/data/second',
+  width: 10,
+  height: 10,
+}
 const UPSCALE = {
   tool: AiToolId.Upscale,
   settings: { model: 'm', scale: 4, iterations: 1, tta: false },
@@ -30,12 +41,20 @@ function lookups(results: Record<string, string> = {}): PlanLookups {
     aiResultPath: async (key) => results[key],
     source: async (id) =>
       ({ base: SOURCE, second: SECOND, copy: SECOND, gone: undefined })[id],
+    used: async () => undefined,
   }
 }
 
 /** The layer as the render key sees it: its image named by its content hash. */
 function keyed(layer: ImageLayerStep): ImageLayerStep {
   return { ...layer, sourceId: SECOND.contentHash }
+}
+
+function waitingKey(
+  plan: { pending: ReadonlyArray<{ step: { id: string }; key: string }> },
+  stepId: string,
+): string {
+  return plan.pending.find(({ step }) => step.id === stepId)?.key ?? ''
 }
 
 describe('planPipeline', () => {
@@ -335,24 +354,23 @@ describe('planPipeline', () => {
     })
   })
 
-  describe('a sub-document', () => {
-    const subDocument = (steps: LeafStep[], settings = {}) => ({
-      ...createGroupStep(steps, 'Logo'),
-      subDocument: true,
+  describe('an embedded document layer', () => {
+    const embedded = (steps: PipelineStep[], settings = {}) => ({
+      ...createEmbeddedDocumentStep(steps, 'Logo'),
       ...settings,
     })
 
     it('is a picture of its own on the same canvas, with its layers drawn on it, and placed like a layer', async () => {
       const blur = createSharpStep('blur', { sigma: 2 })
       const layer = createImageLayerStep('second')
-      const group = subDocument([layer, blur], { opacity: 40 })
+      const group = embedded([layer, blur], { opacity: 40 })
 
       const plan = await planPipeline(CANVAS, [group], lookups())
 
       expect(plan.base).toEqual({ kind: 'canvas', canvas: CANVAS })
       expect(plan.steps).toEqual([
         {
-          kind: 'sub-document',
+          kind: 'embedded-document',
           input: { kind: 'canvas', canvas: CANVAS },
           steps: [
             { kind: 'layer', path: SECOND.path, ...DEFAULT_LAYER_SETTINGS },
@@ -368,7 +386,7 @@ describe('planPipeline', () => {
     it('is applied even when none of its layers is on: it is then a transparent picture', async () => {
       const off = { ...createImageLayerStep('second'), enabled: false }
       const flip = createSharpStep('flip')
-      const group = subDocument([off, flip])
+      const group = embedded([off, flip])
 
       const plan = await planPipeline(CANVAS, [group], lookups())
 
@@ -379,7 +397,7 @@ describe('planPipeline', () => {
 
     it('says so when its image is gone, and is still applied', async () => {
       const gone = createImageLayerStep('gone')
-      const group = subDocument([gone])
+      const group = embedded([gone])
 
       const plan = await planPipeline(CANVAS, [group], lookups())
 
@@ -392,14 +410,44 @@ describe('planPipeline', () => {
       ])
     })
 
-    it('has a key of its own, unlike a group that is not one', async () => {
+    it('plans the embedded document layers inside it as pictures of their own, and opens its groups', async () => {
+      const blur = createSharpStep('blur', { sigma: 2 })
+      const flip = createSharpStep('flip')
+      const inner = embedded([createGroupStep([flip])], { x: 3 })
+      const outer = embedded([createGroupStep([blur]), inner])
+
+      const plan = await planPipeline(CANVAS, [outer], lookups())
+
+      const outerPlan = plan.subPlans.get(outer.id)
+      expect(outerPlan?.applied).toEqual([blur, inner])
+      expect(outerPlan?.subPlans.get(inner.id)?.applied).toEqual([flip])
+      expect(plan.steps).toEqual([
+        {
+          kind: 'embedded-document',
+          input: { kind: 'canvas', canvas: CANVAS },
+          steps: [
+            blur,
+            {
+              kind: 'embedded-document',
+              input: { kind: 'canvas', canvas: CANVAS },
+              steps: [flip],
+              ...DEFAULT_LAYER_SETTINGS,
+              x: 3,
+            },
+          ],
+          ...DEFAULT_LAYER_SETTINGS,
+        },
+      ])
+    })
+
+    it('has a key of its own, unlike a group', async () => {
       const blur = createSharpStep('blur', { sigma: 2 })
       const layer = createImageLayerStep('second')
       const plain = createGroupStep([layer, blur])
-      const sub = { ...plain, subDocument: true }
+      const sub = { ...createEmbeddedDocumentStep(plain.steps), id: plain.id }
 
       const flat = await planPipeline(CANVAS, [layer, blur], lookups())
-      const grouped = await planPipeline(CANVAS, [...plain.steps], lookups())
+      const grouped = await planPipeline(CANVAS, [layer, blur], lookups())
       const separate = await planPipeline(CANVAS, [sub], lookups())
 
       expect(planKey(grouped)).toBe(planKey(flat))
@@ -413,7 +461,7 @@ describe('planPipeline', () => {
         image = 'second',
         name = 'A',
       ) => ({
-        ...subDocument(
+        ...embedded(
           [createImageLayerStep(image), createSharpStep('blur', { sigma })],
           settings,
         ),
@@ -435,7 +483,7 @@ describe('planPipeline', () => {
     describe('with an AI step in it', () => {
       const upscale = createAiStep(UPSCALE)
       const layer = createImageLayerStep('second')
-      const group = () => subDocument([layer, createSharpStep('flip'), upscale])
+      const group = () => embedded([layer, createSharpStep('flip'), upscale])
 
       it('waits for it, under a key made from its own picture, and holds what comes after', async () => {
         const g = group()
@@ -453,19 +501,18 @@ describe('planPipeline', () => {
           after.id,
         ])
         expect(plan.applied).toEqual([])
-        expect(awaitingPlan(plan, upscale.id)?.base).toEqual({
+        expect(awaitingPlan(plan, waitingKey(plan, upscale.id))?.base).toEqual({
           kind: 'canvas',
           canvas: CANVAS,
         })
-        expect(awaitingPlan(plan, upscale.id)?.steps).toMatchObject([
-          { kind: 'layer', path: SECOND.path },
-          g.steps[1],
-        ])
-        expect(awaitingPlan(plan, after.id)).toBe(plan)
+        expect(
+          awaitingPlan(plan, waitingKey(plan, upscale.id))?.steps,
+        ).toMatchObject([{ kind: 'layer', path: SECOND.path }, g.steps[1]])
+        expect(awaitingPlan(plan, waitingKey(plan, after.id))).toBe(plan)
       })
 
       it('starts from its result once it has one, keeping the steps after it', async () => {
-        const g = subDocument([layer, upscale, createSharpStep('flop')])
+        const g = embedded([layer, upscale, createSharpStep('flop')])
         const waiting = await planPipeline(CANVAS, [g], lookups())
         const key = waiting.aiKeys.get(upscale.id) ?? ''
 
@@ -478,7 +525,7 @@ describe('planPipeline', () => {
         expect(plan.pending).toEqual([])
         expect(plan.steps).toMatchObject([
           {
-            kind: 'sub-document',
+            kind: 'embedded-document',
             input: { kind: 'file', path: '/results/logo' },
             steps: [g.steps[2]],
           },

@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import { applyEdit, loadDocument } from '@/features/pipeline/pipeline-sync'
-import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
+import {
+  createEmbeddedDocumentStep,
+  createGroupStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
   addEmptyImageLayer,
@@ -11,7 +15,7 @@ import {
   groupSteps,
   insertImage,
   reorderStep,
-  setSubDocument,
+  setEmbedded,
   ungroupSteps,
   replaceImage,
   renameStep,
@@ -458,7 +462,35 @@ describe('groups', () => {
       type: 'add-step',
       step: added,
       index: 1,
-      groupId: group.id,
+      parentId: group.id,
+    })
+  })
+
+  it('adds an embedded document layer after a step in a group after the group, since a group cannot hold one', () => {
+    loadDocumentIntoEditor(documentView([group]))
+    const added = createEmbeddedDocumentStep([])
+
+    addStepAfter(DOCUMENT_ID, added, blur.id)
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'add-step',
+      step: added,
+      index: 2,
+    })
+  })
+
+  it('adds a step after one in a nested group, inside that nested group', () => {
+    const inner = createGroupStep([flip])
+    loadDocumentIntoEditor(documentView([createGroupStep([blur, inner])]))
+    const added = createSharpStep('flop')
+
+    addStepAfter(DOCUMENT_ID, added, flip.id)
+
+    expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
+      type: 'add-step',
+      step: added,
+      index: 1,
+      parentId: inner.id,
     })
   })
 
@@ -481,7 +513,7 @@ describe('groups', () => {
 
     expect(vi.mocked(applyEdit).mock.calls.map(([, change]) => change)).toEqual(
       [
-        { type: 'move-step', stepId: flip.id, to: 0, groupId: group.id },
+        { type: 'move-step', stepId: flip.id, to: 0, parentId: group.id },
         { type: 'move-step', stepId: flip.id, to: 0 },
       ],
     )
@@ -522,33 +554,39 @@ describe('groups', () => {
 
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
       type: 'ungroup',
-      groupId: group.id,
+      stepId: group.id,
     })
     expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBeUndefined()
   })
 
-  it('makes a group a sub-document only for a group', () => {
+  it('makes a group an embedded document layer only for a container', () => {
     loadDocumentIntoEditor(documentView([group, flip]))
 
-    setSubDocument(DOCUMENT_ID, group.id, true)
-    setSubDocument(DOCUMENT_ID, flip.id, true)
+    setEmbedded(DOCUMENT_ID, group.id, true)
+    setEmbedded(DOCUMENT_ID, flip.id, true)
 
     expect(applyEdit).toHaveBeenCalledTimes(1)
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
-      type: 'set-sub-document',
+      type: 'set-embedded',
       stepId: group.id,
-      subDocument: true,
+      embedded: true,
     })
   })
 
-  it('places a sub-document with the layer settings', () => {
-    loadDocumentIntoEditor(documentView([group]))
+  it('places an embedded document layer with the layer settings, and not a group', () => {
+    const embedded = createEmbeddedDocumentStep([flip])
+    loadDocumentIntoEditor(documentView([group, embedded]))
 
-    setLayerSettings(DOCUMENT_ID, group.id, { ...DEFAULT_LAYER_SETTINGS, x: 4 })
+    setLayerSettings(DOCUMENT_ID, embedded.id, {
+      ...DEFAULT_LAYER_SETTINGS,
+      x: 4,
+    })
+    setLayerSettings(DOCUMENT_ID, group.id, DEFAULT_LAYER_SETTINGS)
 
+    expect(applyEdit).toHaveBeenCalledTimes(1)
     expect(applyEdit).toHaveBeenCalledWith(DOCUMENT_ID, {
       type: 'set-layer',
-      stepId: group.id,
+      stepId: embedded.id,
       settings: { ...DEFAULT_LAYER_SETTINGS, x: 4 },
     })
   })

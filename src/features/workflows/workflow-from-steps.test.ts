@@ -5,7 +5,7 @@ import { ExportFormat } from '@/features/export/export-settings'
 import { canvasOfSize } from '@/features/pipeline/canvas'
 import { IMAGE_LAYER_KIND } from '@/features/pipeline/layer-kinds'
 
-import { planSegments, workflowProblem } from './segments'
+import { workflowProblem } from './segments'
 import { WorkflowDefinitionSchema } from './workflow'
 import { workflowDefinitionFromSteps } from './workflow-from-steps'
 
@@ -54,10 +54,5 @@ describe('workflowDefinitionFromSteps', () => {
         step.kind === 'sharp' ? step.op : step.kind,
       ),
     ).toEqual([IMAGE_LAYER_KIND, 'blur', 'ai', 'rotate'])
-    expect(planSegments(definition.pipeline).map(({ kind }) => kind)).toEqual([
-      'draw',
-      'ai',
-      'draw',
-    ])
   })
 })

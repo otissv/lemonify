@@ -75,7 +75,7 @@ export const DEFAULT_LAYER_SETTINGS: LayerSettings = layerSettingsSchema.parse(
   {},
 )
 
-/** The placement settings of anything that is placed on the picture like a layer: every kind of layer, and a sub-document. */
+/** The placement settings of anything that is placed on the picture like a layer: every kind of layer, and an embedded document layer. */
 export function layerSettingsOf(placed: LayerSettings): LayerSettings {
   const { opacity, blend, fit, scale, rotation, anchor, x, y } = placed
   return { opacity, blend, fit, scale, rotation, anchor, x, y }

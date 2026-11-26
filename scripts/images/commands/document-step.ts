@@ -3,20 +3,27 @@ import { z } from 'zod'
 import { AiToolId, aiToolSchema } from '../../../src/features/ai/ai-tools.ts'
 import type { DocumentChange } from '../../../src/features/pipeline/document-change.ts'
 import { layerSettingsSchema } from '../../../src/features/pipeline/layer.ts'
+import type { LayerSettings } from '../../../src/features/pipeline/layer.ts'
 import {
+  createDocumentLayerStep,
   createImageLayerStep,
+  createWorkflowLayerStep,
   isLayerStep,
   layerKind,
 } from '../../../src/features/pipeline/layer-kinds.ts'
 import { stepBlendSchema } from '../../../src/features/pipeline/step-blend.ts'
 import {
+  childSteps,
   createAiStep,
   createGroupStep,
   createSharpStep,
   findStep,
+  isContainerStep,
+  isGroupMember,
 } from '../../../src/features/pipeline/pipeline.ts'
 import { PipelineStepKind } from '../../../src/features/pipeline/pipeline.ts'
 import type {
+  GroupMember,
   LeafStep,
   PipelineStep,
 } from '../../../src/features/pipeline/pipeline.ts'
@@ -31,6 +38,7 @@ import {
   withPreview,
 } from '../preview-flag.ts'
 import { runAiSteps } from '../run-ai-steps.ts'
+import { addWorkflowCommand } from './create-from.ts'
 import type { AppCommandContext } from '../app-command.ts'
 
 const id = z.string().min(1)
@@ -66,14 +74,15 @@ export function requireStep(
   return found.step
 }
 
-/** How many steps sit where a step is added or moved to: the group's, or the top level's. */
-function placesIn(current: DocumentView, groupId: string | undefined): number {
-  if (groupId === undefined) return current.pipeline.steps.length
-  const group = requireStep(current, groupId)
-  if (group.kind !== PipelineStepKind.Group) {
-    throw new ValidationError('That step is not a group.')
+/** How many steps sit where a step is added: in the group or embedded document layer `parentId`, or at the top level. */
+function placesIn(current: DocumentView, parentId: string | undefined): number {
+  const steps = childSteps(current.pipeline, parentId)
+  if (steps === undefined) {
+    throw new ValidationError(
+      'That step is not a group or an embedded document layer.',
+    )
   }
-  return group.steps.length
+  return steps.length
 }
 
 function newStep(input: {
@@ -83,11 +92,28 @@ function newStep(input: {
   ai?: AiToolId
   settings?: Record<string, z.infer<ReturnType<typeof z.json>>>
   imageLayer?: { source: string | undefined }
+  documentLayer?: string
+  workflowLayer?: { workflowId: string; source: string | undefined }
 }): LeafStep {
+  const layerSettings = (): LayerSettings =>
+    layerSettingsSchema.parse(input.settings ?? {})
   if (input.imageLayer !== undefined) {
     return {
       ...createImageLayerStep(input.imageLayer.source),
-      ...layerSettingsSchema.parse(input.settings ?? {}),
+      ...layerSettings(),
+    }
+  }
+  if (input.documentLayer !== undefined) {
+    return {
+      ...createDocumentLayerStep(input.documentLayer),
+      ...layerSettings(),
+    }
+  }
+  if (input.workflowLayer !== undefined) {
+    const { workflowId, source } = input.workflowLayer
+    return {
+      ...createWorkflowLayerStep(workflowId, source),
+      ...layerSettings(),
     }
   }
   if (input.op !== undefined) {
@@ -102,9 +128,10 @@ function newStep(input: {
 
 export const documentStepAddCommand = defineAppCommand({
   name: 'document step add',
-  summary: 'Add a Sharp, AI or image layer step to a document',
+  summary:
+    'Add a Sharp, AI, image layer, document layer or workflow layer step, or a workflow, to a document',
   synopsis:
-    '<documentId> (--op <name> [--options <json>] [--blend <json>] | --ai <tool> --settings <json> | --image-layer [--source <sourceId>] [--settings <json>]) [--index <n>] [--group <groupId>] [--preview <path>]',
+    '<documentId> (--op <name> [--options <json>] [--blend <json>] | --ai <tool> --settings <json> | --image-layer [--source <sourceId>] [--settings <json>] | --document-layer <documentId> [--settings <json>] | --workflow-layer <workflowId> [--source <sourceId>] [--settings <json>] | --workflow <workflowId> [--source <sourceId>]) [--index <n>] [--into <stepId>] [--preview <path>]',
   help: `Adds a step to the end of the pipeline, or at --index. A Sharp step is an operation by name
 (\`${'pnpm images sharp --help'}\` and \`pnpm images schema sharp\` list them) with its
 options; an AI step names a tool (${Object.values(AiToolId).join(', ')}) and its settings; an image
@@ -119,6 +146,15 @@ colour-dodge, colour-burn, hard-light, soft-light, difference, exclusion), fit
 (-180 to 180), anchor (centre or a compass point such as northwest), x and y
 (whole pixels). Boolean and joinChannel steps name their own second image.
 
+A document layer draws another of your documents, as it is now and at its own
+canvas size, and changes when that document does; a workflow layer draws one
+of your workflows on the --source in its input slot (none: without an input),
+at the size its canvas gives. Both take the image layer settings. A layer
+cannot lead back to the document that holds it, and everything nested,
+counting the documents and workflows layers use, goes at most 8 deep. A
+document or workflow that a layer uses cannot be deleted until the layer is
+removed.
+
 A filter or colour step can be blended with the picture as it was before the
 step: --blend takes a mode (the same as a layer's blend) and an opacity (0-100),
 e.g. '{"mode":"multiply","opacity":50}'.
@@ -129,10 +165,19 @@ Options:
   --blend <json>       Blend of a filter or colour step: mode and opacity (${JSON_VALUE})
   --ai <tool>          An AI tool
   --image-layer        Add an image layer
-  --source <sourceId>  The source the new image layer shows (none: an empty layer)
-  --settings <json>    The tool's settings, or the image layer's (${JSON_VALUE})
+  --document-layer <id>
+                       Add a layer that draws this document
+  --workflow-layer <id>
+                       Add a layer that draws this workflow on --source
+  --workflow <id>      Add a copy of this workflow as an embedded document layer
+                       named after it; --source fills its input slot (none: empty)
+  --source <sourceId>  The source the new image layer shows (none: an empty layer),
+                       or the image in a workflow layer's input slot
+  --settings <json>    The tool's settings, or the layer's (${JSON_VALUE})
   --index <n>          Where to put the step (default: the end)
-  --group <groupId>    Put the step inside this group (the index counts inside it)
+  --into <stepId>      Put the step inside this group or embedded document layer
+                       (the index counts inside it); groups and embedded
+                       document layers nest, up to 8 deep
 ${PREVIEW_HELP}`,
   shape: {
     documentId: id,
@@ -143,8 +188,11 @@ ${PREVIEW_HELP}`,
     settings: json.optional(),
     imageLayer: z.boolean().default(false),
     source: id.optional(),
+    workflow: id.optional(),
+    documentLayer: id.optional(),
+    workflowLayer: id.optional(),
     index: z.coerce.number().int().nonnegative().optional(),
-    group: id.optional(),
+    into: id.optional(),
     ...PREVIEW_SHAPE,
   },
   positionals: ['documentId'],
@@ -156,8 +204,11 @@ ${PREVIEW_HELP}`,
     settings: { type: 'string', json: true },
     'image-layer': { type: 'boolean' },
     source: { type: 'string' },
+    workflow: { type: 'string' },
+    'document-layer': { type: 'string' },
+    'workflow-layer': { type: 'string' },
     index: { type: 'string' },
-    group: { type: 'string' },
+    into: { type: 'string' },
     ...PREVIEW_FLAGS,
   },
   async run(context) {
@@ -170,19 +221,39 @@ ${PREVIEW_HELP}`,
       imageLayer,
       source,
       index,
-      group,
+      into,
+      workflow,
+      documentLayer,
+      workflowLayer,
     } = context.options
-    const given = [op, ai, imageLayer ? true : undefined].filter(
-      (value) => value !== undefined,
-    )
+    const given = [
+      op,
+      ai,
+      imageLayer ? true : undefined,
+      documentLayer,
+      workflowLayer,
+      workflow,
+    ].filter((value) => value !== undefined)
     if (given.length !== 1) {
-      throw new ValidationError('Give one of --op, --ai or --image-layer.')
+      throw new ValidationError(
+        'Give one of --op, --ai, --image-layer, --document-layer, --workflow-layer or --workflow.',
+      )
+    }
+    if (workflow !== undefined) {
+      return withPreview(context, async () => ({
+        document: await addWorkflowCommand(context.app, context.actor, {
+          ...context.options,
+          workflow,
+        }),
+      }))
     }
     if (blend !== undefined && op === undefined) {
       throw new ValidationError('--blend goes with --op.')
     }
-    if (source !== undefined && !imageLayer) {
-      throw new ValidationError('--source goes with --image-layer.')
+    if (source !== undefined && !imageLayer && workflowLayer === undefined) {
+      throw new ValidationError(
+        '--source goes with --image-layer, --workflow-layer or --workflow.',
+      )
     }
     const step = newStep({
       op,
@@ -191,12 +262,16 @@ ${PREVIEW_HELP}`,
       ai,
       settings,
       ...(imageLayer ? { imageLayer: { source } } : {}),
+      ...(documentLayer === undefined ? {} : { documentLayer }),
+      ...(workflowLayer === undefined
+        ? {}
+        : { workflowLayer: { workflowId: workflowLayer, source } }),
     })
     return change(context, (current) => ({
       type: 'add-step',
       step,
-      index: index ?? placesIn(current, group),
-      ...(group === undefined ? {} : { groupId: group }),
+      index: index ?? placesIn(current, into),
+      ...(into === undefined ? {} : { parentId: into }),
     }))
   },
 })
@@ -222,14 +297,16 @@ ${PREVIEW_HELP}`,
 export const documentStepMoveCommand = defineAppCommand({
   name: 'document step move',
   summary: 'Move a step to another place in the pipeline',
-  synopsis: '<documentId> <stepId> <to> [--into <groupId>] [--preview <path>]',
+  synopsis: '<documentId> <stepId> <to> [--into <stepId>] [--preview <path>]',
   help: `Moves the step so it sits at position <to> (counting from 0) among the other steps.
-With --into the position counts inside that group, which moves the step into it
-(or within it); without it the step goes to the top level, which takes it out
-of a group.
+With --into the position counts inside that group or embedded document layer,
+which moves the step into it (or within it), at any depth; without it the step
+goes to the top level. A group or an embedded document layer moves with
+everything in it. A group cannot hold an embedded document layer, and nothing
+can go inside itself.
 
 Options:
-  --into <groupId>     Move the step into this group
+  --into <stepId>      Move the step into this group or embedded document layer
 ${PREVIEW_HELP}`,
   shape: {
     documentId: id,
@@ -247,7 +324,7 @@ ${PREVIEW_HELP}`,
       to: context.options.to,
       ...(context.options.into === undefined
         ? {}
-        : { groupId: context.options.into }),
+        : { parentId: context.options.into }),
     })),
 })
 
@@ -255,27 +332,30 @@ export const documentStepSetCommand = defineAppCommand({
   name: 'document step set',
   summary: "Replace a step's options, blend, settings or image",
   synopsis:
-    '<documentId> <stepId> (--options <json> | --blend <json> | --settings <json> | --source <sourceId> | --clear-source | --sub-document <on|off>) [--preview <path>]',
+    '<documentId> <stepId> (--options <json> | --blend <json> | --settings <json> | --source <sourceId> | --clear-source | --embedded-document <on|off>) [--preview <path>]',
   help: `Replaces the options of a Sharp step, the blend of a filter or colour step,
-the settings of an AI step or of an image layer (every setting not given goes
-back to its default), or the image of an image layer (--source, or
---clear-source to leave it empty). A blend of {} takes the blend away.
+the settings of an AI step or of a layer (every setting not given goes back to
+its default), or the image of an image layer or in a workflow layer's input
+slot (--source, or --clear-source to leave it empty); a document layer has no
+image of its own. A blend of {} takes the blend away.
 
-A group takes --sub-document on to become a picture of its own: a blank canvas
-the size of the document's, which its steps draw on and act on, and the result
-is placed on the document's canvas like a layer. Its --settings are then where
-and how it is placed (the same as a layer's: opacity, blend, fit, scale,
-rotation, anchor, x, y). With --sub-document off it goes back to being a plain
-group, whose steps are part of the one picture. A sub-document with no layer
-that is on is a picture with nothing in it.
+A group takes --embedded-document on to become an embedded document layer: a
+document inside this one, with a blank canvas the size of its parent's, which
+its steps draw on and act on; the result is placed on the parent like a layer.
+Its --settings are where and how it is placed (the same as a layer's: opacity,
+blend, fit, scale, rotation, anchor, x, y). With --embedded-document off it
+goes back to being a group, whose steps are part of the picture around it, and
+its placement is dropped; one that holds an embedded document layer cannot,
+since a group cannot hold one. An embedded document layer with no layer that
+is on is a picture with nothing in it.
 
 Options:
   --options <json>     New options for a Sharp step (${JSON_VALUE})
   --blend <json>       New blend, mode and opacity, for a filter or colour step (${JSON_VALUE})
-  --settings <json>    New settings for an AI step or an image layer (${JSON_VALUE})
-  --source <sourceId>  The source an image layer shows
-  --clear-source       Take the image away and leave the image layer empty
-  --sub-document <on|off>  Whether a group is a picture of its own
+  --settings <json>    New settings for an AI step or a layer (${JSON_VALUE})
+  --source <sourceId>  The source an image layer or a workflow layer's input slot shows
+  --clear-source       Take the image away and leave the layer empty
+  --embedded-document <on|off>  Whether a group is an embedded document layer
 ${PREVIEW_HELP}`,
   shape: {
     documentId: id,
@@ -285,7 +365,7 @@ ${PREVIEW_HELP}`,
     settings: json.optional(),
     source: id.optional(),
     clearSource: z.boolean().default(false),
-    subDocument: z.enum(['on', 'off']).optional(),
+    embeddedDocument: z.enum(['on', 'off']).optional(),
     ...PREVIEW_SHAPE,
   },
   positionals: ['documentId', 'stepId'],
@@ -296,7 +376,7 @@ ${PREVIEW_HELP}`,
     settings: { type: 'string', json: true },
     source: { type: 'string' },
     'clear-source': { type: 'boolean' },
-    'sub-document': { type: 'string' },
+    'embedded-document': { type: 'string' },
   },
   run: (context) =>
     change(context, (current) => {
@@ -307,7 +387,7 @@ ${PREVIEW_HELP}`,
         settings,
         source,
         clearSource,
-        subDocument,
+        embeddedDocument,
       } = context.options
       if (source !== undefined && clearSource) {
         throw new ValidationError('Give --source or --clear-source, not both.')
@@ -317,7 +397,7 @@ ${PREVIEW_HELP}`,
         blend,
         settings,
         source: clearSource ? null : source,
-        subDocument,
+        embeddedDocument,
       })
     }),
 })
@@ -328,7 +408,7 @@ type Given = {
   settings: Record<string, z.infer<ReturnType<typeof z.json>>> | undefined
   /** An image for an image layer; null takes it away. */
   source: string | null | undefined
-  subDocument: 'on' | 'off' | undefined
+  embeddedDocument: 'on' | 'off' | undefined
 }
 
 function requireGiven<T>(value: T | undefined, flag: string, what: string): T {
@@ -363,25 +443,31 @@ function setChange(step: PipelineStep, given: Given): DocumentChange {
       ),
     }
   }
+  if (isContainerStep(step)) {
+    if (given.embeddedDocument !== undefined) {
+      return {
+        type: 'set-embedded',
+        stepId,
+        embedded: given.embeddedDocument === 'on',
+      }
+    }
+    if (
+      given.settings !== undefined &&
+      step.kind === PipelineStepKind.EmbeddedDocument
+    ) {
+      return {
+        type: 'set-layer',
+        stepId,
+        settings: layerSettingsSchema.parse(given.settings),
+      }
+    }
+    throw new ValidationError(
+      step.kind === PipelineStepKind.Group
+        ? 'Give --embedded-document for a group. Rename it, switch it on or off, or change the steps in it for anything else.'
+        : 'Give --embedded-document or --settings for an embedded document layer. Rename it, switch it on or off, or change the steps in it for anything else.',
+    )
+  }
   switch (step.kind) {
-    case PipelineStepKind.Group:
-      if (given.subDocument !== undefined) {
-        return {
-          type: 'set-sub-document',
-          stepId,
-          subDocument: given.subDocument === 'on',
-        }
-      }
-      if (given.settings !== undefined) {
-        return {
-          type: 'set-layer',
-          stepId,
-          settings: layerSettingsSchema.parse(given.settings),
-        }
-      }
-      throw new ValidationError(
-        'Give --sub-document or --settings for a group. Rename it, switch it on or off, or change the steps in it for anything else.',
-      )
     case PipelineStepKind.Sharp:
       return {
         type: 'set-options',
@@ -400,11 +486,12 @@ export const documentStepGroupCommand = defineAppCommand({
   name: 'document step group',
   summary: 'Put steps together in a group',
   synopsis: '<documentId> <stepIds> [--name <name>] [--preview <path>]',
-  help: `Groups the steps, <stepIds> being their ids separated by commas. They must be next to each other at the top level and are
-kept in their order. A group holds steps like the pipeline does, has its own
-switch (off turns every step in it off) and can be named. Grouping does not
-change the picture. Prints the document; the group's id is the step that holds
-the others. It can be undone.
+  help: `Groups the steps, <stepIds> being their ids separated by commas. They must be next to each other in one list (the top level, a group or an embedded document layer) and are
+kept in their order; the group goes where they were. A group holds steps and
+other groups like the pipeline does, has its own switch (off turns every step in
+it off) and can be named; it cannot hold an embedded document layer. Grouping
+does not change the picture. Prints the document; the group's id is the step
+that holds the others. It can be undone.
 
 Options:
   --name <name>        Name the group
@@ -420,11 +507,13 @@ ${PREVIEW_HELP}`,
   run: (context) =>
     change(context, (current) => {
       const { stepIds, name } = context.options
-      const members: LeafStep[] = []
+      const members: GroupMember[] = []
       for (const stepId of stepIds.split(',')) {
         const step = requireStep(current, stepId)
-        if (step.kind === PipelineStepKind.Group) {
-          throw new ValidationError('A group cannot go inside a group.')
+        if (!isGroupMember(step)) {
+          throw new ValidationError(
+            'A group cannot hold an embedded document layer.',
+          )
         }
         members.push(step)
       }
@@ -437,11 +526,13 @@ ${PREVIEW_HELP}`,
 
 export const documentStepUngroupCommand = defineAppCommand({
   name: 'document step ungroup',
-  summary: 'Take the steps out of a group',
+  summary: 'Take the steps out of a group or an embedded document layer',
   synopsis: '<documentId> <groupId> [--preview <path>]',
-  help: `Removes the group and leaves its steps where it was, in the same order. Each
-keeps its own switch; a group that was off turns its steps off first, so the
-picture does not change. It can be undone.
+  help: `Removes the group or embedded document layer and leaves its steps where it
+was, in the same order. Each keeps its own switch. Taking the steps out of an
+embedded document layer puts them in the picture around it, which can change
+the picture; it is refused where that would put an embedded document layer
+inside a group. It can be undone.
 
 Options:
 ${PREVIEW_HELP}`,
@@ -451,7 +542,7 @@ ${PREVIEW_HELP}`,
   run: (context) =>
     change(context, () => ({
       type: 'ungroup',
-      groupId: context.options.groupId,
+      stepId: context.options.groupId,
     })),
 })
 

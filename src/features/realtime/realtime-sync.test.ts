@@ -133,6 +133,16 @@ describe('createRealtimeSync', () => {
     expect(refreshResults).toHaveBeenCalledTimes(1)
   })
 
+  it('marks the picture of a document or workflow out of date when something its layers use changed', () => {
+    const { sync, invalidate } = make()
+
+    sync.handle({ type: 'picture.changed', itemId: 'd1' })
+
+    expect(usePipelineStore.getState().pictureVersions.d1).toBe(1)
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(reconcilePipeline).not.toHaveBeenCalled()
+  })
+
   it('does nothing for a heartbeat', () => {
     const { sync, invalidate } = make()
 

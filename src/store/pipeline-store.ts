@@ -31,6 +31,8 @@ interface PipelineStateData {
   previews: Keyed<DocumentPreview>
   thumbnails: Keyed<DocumentThumbnails>
   aiRuns: Keyed<AiRun>
+  /** How many times something the layers of each pipeline use, at any depth, has changed: its picture is asked for again when this does. */
+  pictureVersions: Keyed<number>
   nextOperationId: number
 }
 
@@ -54,6 +56,8 @@ interface PipelineStateActions {
   setPreview: (id: string, preview: DocumentPreview) => void
   setThumbnails: (id: string, thumbnails: DocumentThumbnails) => void
   setAiRun: (id: string, run: AiRun | undefined) => void
+  /** Something the pipeline's layers use changed, so its pictures are out of date. */
+  pictureChanged: (id: string) => void
   /** Drops the session and everything rendered from it. */
   forgetPipeline: (id: string) => void
 }
@@ -65,6 +69,7 @@ export const INITIAL_PIPELINE_STATE: Readonly<PipelineStateData> = {
   previews: {},
   thumbnails: {},
   aiRuns: {},
+  pictureVersions: {},
   nextOperationId: 1,
 }
 
@@ -211,12 +216,21 @@ export const usePipelineStore = create<PipelineState>()((set) => ({
   setAiRun: (id, run) => {
     set(({ aiRuns }) => ({ aiRuns: { ...aiRuns, [id]: run } }))
   },
+  pictureChanged: (id) => {
+    set(({ pictureVersions }) => ({
+      pictureVersions: {
+        ...pictureVersions,
+        [id]: (pictureVersions[id] ?? 0) + 1,
+      },
+    }))
+  },
   forgetPipeline: (id) => {
     set((state) => ({
       sessions: without(state.sessions, id),
       previews: without(state.previews, id),
       thumbnails: without(state.thumbnails, id),
       aiRuns: without(state.aiRuns, id),
+      pictureVersions: without(state.pictureVersions, id),
     }))
   },
 }))

@@ -1,22 +1,33 @@
 import { z } from 'zod'
 
 import {
-  GroupStepSchema,
+  ContainerStepSchema,
+  EmbeddedDocumentStepSchema,
   MAX_STEP_NAME_LENGTH,
   PipelineSchema,
   PipelineStepKind,
   PipelineStepSchema,
   findStep,
   insertStep,
+  isContainerStep,
+  isGroupMember,
+  holdsEmbedded,
+  placementProblem,
+  GROUP_HOLDS_NO_EMBEDDED,
   moveStep,
   removeStep,
   replaceStep,
   setStepEnabled,
 } from '@/features/pipeline/pipeline'
-import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
-import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
+import {
+  LAYER_KIND_SCHEMAS,
+  isLayerStep,
+  layerKind,
+} from '@/features/pipeline/layer-kinds'
+import type { LayerStep } from '@/features/pipeline/layer-kinds'
 import type {
-  GroupStep,
+  ContainerStep,
+  EmbeddedDocumentStep,
   Pipeline,
   PipelineStep,
   StepLocation,
@@ -28,7 +39,11 @@ import {
   supportsBlend,
 } from '@/features/pipeline/step-blend'
 import { canvasSchema, pictureSizeSchema } from '@/features/pipeline/canvas'
-import { layerSettingsOf, layerSettingsSchema } from '@/features/pipeline/layer'
+import {
+  DEFAULT_LAYER_SETTINGS,
+  layerSettingsOf,
+  layerSettingsSchema,
+} from '@/features/pipeline/layer'
 import { AiStartingSchema, resetStep } from '@/features/pipeline/step-reset'
 
 /** The most changes the Edit history keeps for undo; older ones are dropped. */
@@ -50,20 +65,24 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     type: z.literal('add-step'),
     step: PipelineStepSchema,
     index: z.number().int().nonnegative(),
-    /** The group to add it to; at the top of the pipeline when there is none. */
-    groupId: z.string().min(1).optional(),
+    /** The group or embedded document layer to add it to; at the top of the pipeline when there is none. */
+    parentId: z.string().min(1).optional(),
   }),
   z.strictObject({ type: z.literal('remove-step'), stepId: z.string().min(1) }),
   z.strictObject({
     type: z.literal('move-step'),
     stepId: z.string().min(1),
     to: z.number().int().nonnegative(),
-    /** The group it goes into; the top of the pipeline when there is none. */
-    groupId: z.string().min(1).optional(),
+    /** The group or embedded document layer it goes into; the top of the pipeline when there is none. */
+    parentId: z.string().min(1).optional(),
   }),
-  /** Wraps steps that are next to each other, with this group's steps listed in order, in the group, where the first of them was. */
-  z.strictObject({ type: z.literal('group-steps'), group: GroupStepSchema }),
-  z.strictObject({ type: z.literal('ungroup'), groupId: z.string().min(1) }),
+  /** Wraps steps that are next to each other in one list, with this container's steps listed in order, in the container, where the first of them was. */
+  z.strictObject({
+    type: z.literal('group-steps'),
+    group: ContainerStepSchema,
+  }),
+  /** Takes the steps out of a group or an embedded document layer, leaving them where it was. */
+  z.strictObject({ type: z.literal('ungroup'), stepId: z.string().min(1) }),
   z.strictObject({
     type: z.literal('set-options'),
     stepId: z.string().min(1),
@@ -75,10 +94,11 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
     stepId: z.string().min(1),
     settings: layerSettingsSchema,
   }),
+  /** Makes a group an embedded document layer (placed with the default settings), or one a group again (its placement dropped). */
   z.strictObject({
-    type: z.literal('set-sub-document'),
+    type: z.literal('set-embedded'),
     stepId: z.string().min(1),
-    subDocument: z.boolean(),
+    embedded: z.boolean(),
   }),
   /** Gives a layer an image, or, with null, takes it away and leaves the layer empty. */
   z.strictObject({
@@ -109,6 +129,16 @@ export const DocumentChangeSchema = z.discriminatedUnion('type', [
   }),
   /** Puts a whole step back as it was, which is how a reset is undone. */
   z.strictObject({ type: z.literal('restore-step'), step: PipelineStepSchema }),
+  /** Puts an embedded document layer holding a copy of what a document layer or workflow layer uses in that layer's place, with the layer's id. */
+  z.strictObject({
+    type: z.literal('convert-step'),
+    step: EmbeddedDocumentStepSchema,
+  }),
+  /** Puts a document layer or workflow layer back where it was converted, which is how a convert is undone. */
+  z.strictObject({
+    type: z.literal('restore-layer'),
+    step: z.discriminatedUnion('kind', [...LAYER_KIND_SCHEMAS]),
+  }),
   z.strictObject({
     type: z.literal('rename-step'),
     stepId: z.string().min(1),
@@ -145,32 +175,27 @@ function requireStep(pipeline: Pipeline, stepId: string): StepLocation {
   return found
 }
 
-function requireGroup(
+function requireContainer(
   pipeline: Pipeline,
-  groupId: string,
-): { group: GroupStep; index: number } {
-  const found = findStep(pipeline, groupId)
-  if (
-    found === undefined ||
-    found.groupId !== undefined ||
-    found.step.kind !== PipelineStepKind.Group
-  ) {
-    throw new InvalidChangeError('That group is no longer in the pipeline.')
+  stepId: string,
+): StepLocation & { step: ContainerStep } {
+  const found = findStep(pipeline, stepId)
+  if (found === undefined || !isContainerStep(found.step)) {
+    throw new InvalidChangeError(
+      'That group or embedded document layer is no longer in the pipeline.',
+    )
   }
-  return { group: found.step, index: found.index }
+  return { ...found, step: found.step }
 }
 
-/** Checks that `step` can go in the list `groupId` names, or at the top when that is undefined. */
+/** Checks that `step` can go in the list `parentId` names, or at the top when that is undefined. */
 function requireDestination(
   pipeline: Pipeline,
   step: PipelineStep,
-  groupId: string | undefined,
+  parentId: string | undefined,
 ): void {
-  if (groupId === undefined) return
-  if (step.kind === PipelineStepKind.Group) {
-    throw new InvalidChangeError('A group cannot go inside another group.')
-  }
-  requireGroup(pipeline, groupId)
+  const problem = placementProblem(pipeline, step, parentId)
+  if (problem !== undefined) throw new InvalidChangeError(problem)
 }
 
 function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
@@ -178,19 +203,20 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
     case 'add-step':
       return { type: 'remove-step', stepId: change.step.id }
     case 'remove-step': {
-      const { step, index, groupId } = requireStep(pipeline, change.stepId)
-      return { type: 'add-step', step, index, groupId }
+      const { step, index, parentId } = requireStep(pipeline, change.stepId)
+      return { type: 'add-step', step, index, parentId }
     }
     case 'move-step': {
-      const { index, groupId } = requireStep(pipeline, change.stepId)
-      return { type: 'move-step', stepId: change.stepId, to: index, groupId }
+      const { index, parentId } = requireStep(pipeline, change.stepId)
+      return { type: 'move-step', stepId: change.stepId, to: index, parentId }
     }
     case 'group-steps':
-      return { type: 'ungroup', groupId: change.group.id }
-    case 'ungroup': {
-      const { group } = requireGroup(pipeline, change.groupId)
-      return { type: 'group-steps', group }
-    }
+      return { type: 'ungroup', stepId: change.group.id }
+    case 'ungroup':
+      return {
+        type: 'group-steps',
+        group: requireContainer(pipeline, change.stepId).step,
+      }
     case 'set-options': {
       const { step } = requireStep(pipeline, change.stepId)
       if (step.kind !== PipelineStepKind.Sharp) throw wrongKind()
@@ -219,17 +245,16 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         settings: layerSettingsOf(step),
       }
     }
-    case 'set-sub-document': {
-      const { group } = requireGroup(pipeline, change.stepId)
+    case 'set-embedded':
       return {
-        type: 'set-sub-document',
-        stepId: change.stepId,
-        subDocument: group.subDocument,
+        type: 'restore-step',
+        step: requireContainer(pipeline, change.stepId).step,
       }
-    }
     case 'set-image': {
       const { step } = requireStep(pipeline, change.stepId)
-      if (!isLayerStep(step)) throw wrongKind()
+      if (!isLayerStep(step) || layerKind(step).withImage === undefined) {
+        throw wrongKind()
+      }
       return {
         type: 'set-image',
         stepId: change.stepId,
@@ -265,6 +290,16 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
         type: 'restore-step',
         step: requireStep(pipeline, change.step.id).step,
       }
+    case 'convert-step':
+      return {
+        type: 'restore-layer',
+        step: requireUsedLayer(pipeline, change.step.id),
+      }
+    case 'restore-layer':
+      return {
+        type: 'convert-step',
+        step: requireEmbedded(pipeline, change.step.id),
+      }
     case 'rename-step': {
       const { step } = requireStep(pipeline, change.stepId)
       return {
@@ -276,51 +311,121 @@ function inverseOf(pipeline: Pipeline, change: DocumentChange): DocumentChange {
   }
 }
 
+/** The document layer or workflow layer `stepId`: one that uses another item. */
+function requireUsedLayer(pipeline: Pipeline, stepId: string): LayerStep {
+  const { step } = requireStep(pipeline, stepId)
+  if (!isLayerStep(step) || layerKind(step).uses(step) === undefined) {
+    throw new InvalidChangeError(
+      'Only a document layer or a workflow layer can be converted.',
+    )
+  }
+  return step
+}
+
+function requireEmbedded(
+  pipeline: Pipeline,
+  stepId: string,
+): EmbeddedDocumentStep {
+  const { step } = requireStep(pipeline, stepId)
+  if (step.kind !== PipelineStepKind.EmbeddedDocument) throw wrongKind()
+  return step
+}
+
 function wrongKind(): InvalidChangeError {
   return new InvalidChangeError('That step does not have those settings.')
 }
 
-type Placed = GroupStep | ImageLayerStep
+type Placed = LayerStep | EmbeddedDocumentStep
 
-/** Layers, and groups that are sub-documents, are placed on the picture with the layer settings. */
+/** Layers and embedded document layers are placed on the picture with the layer settings. */
 function hasPlacement(step: PipelineStep): step is Placed {
-  return isLayerStep(step) || step.kind === PipelineStepKind.Group
+  return isLayerStep(step) || step.kind === PipelineStepKind.EmbeddedDocument
 }
 
 /**
- * Wraps the top-level steps `group` lists in the group. They must be there,
- * next to each other and in the order the pipeline has them, so the picture is
- * made in the same order as before.
+ * Wraps the steps `group` lists in the container. They must be in one list,
+ * next to each other and in the order the pipeline has them, so the picture
+ * is made in the same order as before.
  */
-function groupSteps(pipeline: Pipeline, group: GroupStep): Pipeline {
-  if (group.steps.length === 0) {
+function groupSteps(pipeline: Pipeline, group: ContainerStep): Pipeline {
+  const [first] = group.steps
+  if (first === undefined) {
     throw new InvalidChangeError('Choose at least one step to group.')
   }
   if (findStep(pipeline, group.id) !== undefined) {
     throw new InvalidChangeError('That group is already in the pipeline.')
   }
+  const parentId = findStep(pipeline, first.id)?.parentId
   const places = group.steps.map((member) => {
     const found = findStep(pipeline, member.id)
-    if (found === undefined || found.groupId !== undefined) {
+    if (found === undefined || found.parentId !== parentId) {
       throw new InvalidChangeError(
-        'Only steps that are not in a group can be grouped.',
+        'Group steps that are in the same list, next to each other.',
       )
-    }
-    if (found.step.kind === PipelineStepKind.Group) {
-      throw new InvalidChangeError('A group cannot go inside another group.')
     }
     return found.index
   })
-  const first = places[0] ?? 0
-  const inOrder = places.every((place, position) => place === first + position)
+  const start = places[0] ?? 0
+  const inOrder = places.every((place, position) => place === start + position)
   if (!inOrder) {
     throw new InvalidChangeError(
       'Group steps that are next to each other, in the order they are in.',
     )
   }
-  const steps = [...pipeline.steps]
-  steps.splice(first, places.length, group)
-  return { ...pipeline, steps }
+  requireDestination(pipeline, group, parentId)
+  let next = pipeline
+  for (const member of group.steps) next = removeStep(next, member.id)
+  return insertStep(next, group, start, parentId)
+}
+
+/** Takes the steps out of a container and puts them where it was. */
+function ungroup(pipeline: Pipeline, stepId: string): Pipeline {
+  const { step, index, parentId } = requireContainer(pipeline, stepId)
+  let next = removeStep(pipeline, stepId)
+  for (const [offset, member] of step.steps.entries()) {
+    requireDestination(next, member, parentId)
+    next = insertStep(next, member, index + offset, parentId)
+  }
+  return next
+}
+
+/** A group as an embedded document layer, placed with the default settings, or an embedded document layer as a group, its placement dropped. */
+function setEmbedded(
+  pipeline: Pipeline,
+  stepId: string,
+  embedded: boolean,
+): Pipeline {
+  const { step, parentId } = requireContainer(pipeline, stepId)
+  const { id, enabled, name } = step
+  const named = name === undefined ? {} : { name }
+  if (!embedded) {
+    const steps: PipelineStep[] = [...step.steps]
+    if (steps.some(holdsEmbedded)) {
+      throw new InvalidChangeError(GROUP_HOLDS_NO_EMBEDDED)
+    }
+    return replaceStep(pipeline, {
+      id,
+      kind: PipelineStepKind.Group,
+      enabled,
+      ...named,
+      steps: steps.filter(isGroupMember),
+    })
+  }
+  if (step.kind === PipelineStepKind.EmbeddedDocument) return pipeline
+  const holder =
+    parentId === undefined ? undefined : findStep(pipeline, parentId)?.step
+  if (holder?.kind === PipelineStepKind.Group) {
+    throw new InvalidChangeError(GROUP_HOLDS_NO_EMBEDDED)
+  }
+  const placed: EmbeddedDocumentStep = {
+    id,
+    kind: PipelineStepKind.EmbeddedDocument,
+    enabled,
+    ...named,
+    ...DEFAULT_LAYER_SETTINGS,
+    steps: [...step.steps],
+  }
+  return replaceStep(pipeline, placed)
 }
 
 function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
@@ -329,24 +434,20 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       if (findStep(pipeline, change.step.id) !== undefined) {
         throw new InvalidChangeError('That step is already in the pipeline.')
       }
-      requireDestination(pipeline, change.step, change.groupId)
-      return insertStep(pipeline, change.step, change.index, change.groupId)
+      requireDestination(pipeline, change.step, change.parentId)
+      return insertStep(pipeline, change.step, change.index, change.parentId)
     case 'remove-step':
       requireStep(pipeline, change.stepId)
       return removeStep(pipeline, change.stepId)
     case 'move-step': {
       const { step } = requireStep(pipeline, change.stepId)
-      requireDestination(pipeline, step, change.groupId)
-      return moveStep(pipeline, change.stepId, change.to, change.groupId)
+      requireDestination(pipeline, step, change.parentId)
+      return moveStep(pipeline, change.stepId, change.to, change.parentId)
     }
     case 'group-steps':
       return groupSteps(pipeline, change.group)
-    case 'ungroup': {
-      const { group, index } = requireGroup(pipeline, change.groupId)
-      const steps = [...pipeline.steps]
-      steps.splice(index, 1, ...group.steps)
-      return { ...pipeline, steps }
-    }
+    case 'ungroup':
+      return ungroup(pipeline, change.stepId)
     case 'set-options': {
       const { step } = requireStep(pipeline, change.stepId)
       if (step.kind !== PipelineStepKind.Sharp) throw wrongKind()
@@ -371,18 +472,17 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       if (!hasPlacement(step)) throw wrongKind()
       return replaceStep(pipeline, { ...step, ...change.settings })
     }
-    case 'set-sub-document': {
-      const { group } = requireGroup(pipeline, change.stepId)
-      return replaceStep(pipeline, {
-        ...group,
-        subDocument: change.subDocument,
-      })
-    }
+    case 'set-embedded':
+      return setEmbedded(pipeline, change.stepId, change.embedded)
     case 'set-image': {
       const { step } = requireStep(pipeline, change.stepId)
       if (!isLayerStep(step)) throw wrongKind()
-      const image = change.sourceId ?? undefined
-      return replaceStep(pipeline, layerKind(step).withImage(step, image))
+      const { withImage } = layerKind(step)
+      if (withImage === undefined) throw wrongKind()
+      return replaceStep(
+        pipeline,
+        withImage(step, change.sourceId ?? undefined),
+      )
     }
     case 'set-enabled':
       requireStep(pipeline, change.stepId)
@@ -413,9 +513,19 @@ function applyUnchecked(pipeline: Pipeline, change: DocumentChange): Pipeline {
       }
       return replaceStep(pipeline, reset)
     }
+    case 'convert-step':
+      requireUsedLayer(pipeline, change.step.id)
+      return replaceStep(pipeline, change.step)
+    case 'restore-layer':
+      requireEmbedded(pipeline, change.step.id)
+      if (layerKind(change.step).uses(change.step) === undefined) {
+        throw wrongKind()
+      }
+      return replaceStep(pipeline, change.step)
     case 'restore-step': {
       const { step } = requireStep(pipeline, change.step.id)
-      if (step.kind !== change.step.kind) throw wrongKind()
+      const containers = isContainerStep(step) && isContainerStep(change.step)
+      if (step.kind !== change.step.kind && !containers) throw wrongKind()
       return replaceStep(pipeline, change.step)
     }
     case 'rename-step': {

@@ -107,12 +107,12 @@ describe('ToolsPanel', () => {
       expect(first?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
     })
 
-    it('shows each tool as a square 40px button with a 20px icon', () => {
+    it('shows each tool as a square 36px button with a 20px icon', () => {
       renderPanel()
       const first = within(panel()).getAllByRole('tab').at(0)
 
       expect(first).toHaveClass(
-        'size-10',
+        'size-9',
         'group-data-[orientation=vertical]/tabs:w-10',
       )
       expect(first).not.toHaveClass(

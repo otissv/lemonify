@@ -1,52 +1,14 @@
 // @vitest-environment node
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
-import os from 'node:os'
+import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 import sharp from 'sharp'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { openZip } from '../../src/server/bundle/zip.ts'
-import { COMMANDS } from './commands/index.ts'
-import { dispatch } from './dispatch.ts'
+import { cli, flow, makeImage, setUpFlowFolders } from './flow-test-kit.ts'
 
-let dataDir = ''
-let workDir = ''
-
-beforeEach(() => {
-  dataDir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-flow-data-'))
-  workDir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-flow-work-'))
-  vi.stubEnv('LEMONIFY_DATA_DIR', dataDir)
-})
-afterEach(() => {
-  vi.unstubAllEnvs()
-  vi.restoreAllMocks()
-  rmSync(dataDir, { recursive: true, force: true })
-  rmSync(workDir, { recursive: true, force: true })
-})
-
-async function cli<T = Record<string, unknown>>(...argv: string[]): Promise<T> {
-  const lines: string[] = []
-  vi.spyOn(console, 'log').mockImplementation((line: string) => {
-    lines.push(line)
-  })
-  const selected = dispatch(COMMANDS, [...argv, '--json'])
-  if (selected.kind !== 'run') throw new Error('expected a command')
-  await selected.command.execute(selected.argv, { json: true, progress: false })
-  vi.restoreAllMocks()
-  const parsed: { result: T } = JSON.parse(lines.join('\n'))
-  return parsed.result
-}
-
-async function makeImage(name: string): Promise<string> {
-  const file = path.join(workDir, name)
-  await sharp({
-    create: { width: 64, height: 48, channels: 3, background: '#d33' },
-  })
-    .png()
-    .toFile(file)
-  return file
-}
+setUpFlowFolders()
 
 type Doc = {
   document: {
@@ -77,7 +39,7 @@ describe('sources, documents and export through the CLI', () => {
     )
     expect(added.document.pipeline.steps).toHaveLength(2)
 
-    const out = path.join(workDir, 'out.png')
+    const out = path.join(flow.workDir, 'out.png')
     const exported = await cli<{ path: string }>(
       'export',
       document.id,
@@ -125,9 +87,9 @@ describe('document files through the CLI', () => {
       'export',
       document.id,
       '--out',
-      workDir,
+      flow.workDir,
     )
-    expect(folder.path).toBe(path.join(workDir, 'dog.lemon'))
+    expect(folder.path).toBe(path.join(flow.workDir, 'dog.lemon'))
     expect(folder.sources).toBe(1)
     expect(existsSync(folder.path)).toBe(true)
 
@@ -156,7 +118,7 @@ describe('layers through the CLI', () => {
       'add',
       await makeImage('base.png'),
     )
-    const stamp = path.join(workDir, 'stamp.png')
+    const stamp = path.join(flow.workDir, 'stamp.png')
     await sharp({
       create: {
         width: 16,
@@ -185,7 +147,7 @@ describe('layers through the CLI', () => {
       '{"fit":"original","anchor":"northwest"}',
     )
 
-    const out = path.join(workDir, 'layered.png')
+    const out = path.join(flow.workDir, 'layered.png')
     await cli('export', document.id, '--out', out, '--format', 'png')
 
     const [r, g, b, a] = await pixel(out, 4, 4)
@@ -195,7 +157,7 @@ describe('layers through the CLI', () => {
 
     const [first] = document.pipeline.steps
     await cli('document', 'step', 'disable', document.id, first?.id ?? '')
-    const alone = path.join(workDir, 'alone.png')
+    const alone = path.join(flow.workDir, 'alone.png')
     await cli('export', document.id, '--out', alone, '--format', 'png')
     const meta = await sharp(alone).metadata()
     expect([meta.width, meta.height]).toEqual([64, 48])
@@ -242,7 +204,7 @@ describe('blend, scale and opacity through the CLI', () => {
       blend: { mode: 'normal', opacity: 50 },
     })
 
-    const out = path.join(workDir, 'blended.png')
+    const out = path.join(flow.workDir, 'blended.png')
     await cli('export', document.id, '--out', out, '--format', 'png')
     const [r, g, b] = await pixel(out, 4, 4)
     expect([r, g, b]).toEqual([127, 127, 127])
@@ -301,7 +263,7 @@ describe('blend, scale and opacity through the CLI', () => {
       '--options',
       '{"percent":50}',
     )
-    const out = path.join(workDir, 'scaled.png')
+    const out = path.join(flow.workDir, 'scaled.png')
     await cli('export', document.id, '--out', out, '--format', 'png')
     const meta = await sharp(out).metadata()
     expect([meta.width, meta.height]).toEqual([32, 24])
@@ -334,7 +296,7 @@ describe('workflows through the CLI', () => {
         suffix: '',
       }),
     )
-    const folder = path.join(workDir, 'made')
+    const folder = path.join(flow.workDir, 'made')
     const ran = await cli<{
       run: { state: string }
       files: { written: string[]; manifest?: string }
@@ -378,7 +340,7 @@ describe('workflows through the CLI', () => {
       '[{"op":"flop"}]',
     )
     const flop = workflow.pipeline.steps.at(-1)
-    const file = path.join(workDir, 'node.png')
+    const file = path.join(flow.workDir, 'node.png')
 
     const { preview } = await cli<{
       preview: {
@@ -410,7 +372,7 @@ describe('workflows through the CLI', () => {
       'preview',
       workflow.id,
       '--out',
-      path.join(workDir, 'output.webp'),
+      path.join(flow.workDir, 'output.webp'),
     )
     expect(output.preview.nodeId).toBe('output')
   })
@@ -562,7 +524,7 @@ describe('workflows through the CLI', () => {
       'match-input',
     )
     expect(matched.workflow.canvasSize).toBe('match-input')
-    const folder = path.join(workDir, 'match-input')
+    const folder = path.join(flow.workDir, 'match-input')
     const ran = await cli<{ run: { state: string } }>(
       'workflow',
       'run',
@@ -583,7 +545,7 @@ describe('workflows through the CLI', () => {
       ['one.png', '#d33'],
       ['two.png', '#3d3'],
     ]) {
-      const file = path.join(workDir, name ?? '')
+      const file = path.join(flow.workDir, name ?? '')
       await sharp({
         create: { width: 64, height: 48, channels: 3, background },
       })
@@ -613,7 +575,7 @@ describe('workflows through the CLI', () => {
     )
     expect(ran.run.sourceIds).toEqual([ids[1]])
 
-    const zip = path.join(workDir, 'not', 'made', 'yet', 'chosen.zip')
+    const zip = path.join(flow.workDir, 'not', 'made', 'yet', 'chosen.zip')
     const results = await cli<{ archive: { images: number; path: string } }>(
       'workflow',
       'results',
@@ -644,7 +606,7 @@ describe('workflows through the CLI', () => {
 
   it('refuses --out without --follow', async () => {
     await expect(
-      cli('workflow', 'run', 'nope', '--out', path.join(workDir, 'x')),
+      cli('workflow', 'run', 'nope', '--out', path.join(flow.workDir, 'x')),
     ).rejects.toThrow(/--follow/)
   })
 
@@ -813,7 +775,7 @@ describe('groups through the CLI', () => {
       document.id,
       '--op',
       'negate',
-      '--group',
+      '--into',
       group?.id ?? '',
     )
     expect(added.document.pipeline.steps.at(1)?.steps).toHaveLength(3)
@@ -885,8 +847,8 @@ describe('groups through the CLI', () => {
     })
   })
 
-  it('makes a group a picture of its own, placed on the canvas, and back', async () => {
-    const blue = path.join(workDir, 'blue.png')
+  it('makes a group an embedded document layer, placed on the canvas, and back', async () => {
+    const blue = path.join(flow.workDir, 'blue.png')
     await sharp({
       create: { width: 8, height: 8, channels: 3, background: '#00f' },
     })
@@ -927,12 +889,11 @@ describe('groups through the CLI', () => {
       'set',
       document.id,
       group?.id ?? '',
-      '--sub-document',
+      '--embedded-document',
       'on',
     )
     expect(sub.document.pipeline.steps.at(-1)).toMatchObject({
-      kind: 'group',
-      subDocument: true,
+      kind: 'embedded-document',
     })
 
     const placed = await cli<GroupDoc>(
@@ -949,7 +910,7 @@ describe('groups through the CLI', () => {
       anchor: 'northwest',
     })
 
-    const out = path.join(workDir, 'sub.png')
+    const out = path.join(flow.workDir, 'sub.png')
     await cli('export', document.id, '--out', out, '--format', 'png')
     const raw = await sharp(out).raw().ensureAlpha().toBuffer()
     const meta = await sharp(out).metadata()
@@ -964,24 +925,90 @@ describe('groups through the CLI', () => {
       'set',
       document.id,
       group?.id ?? '',
-      '--sub-document',
+      '--embedded-document',
       'off',
     )
     expect(plain.document.pipeline.steps.at(-1)).toMatchObject({
-      subDocument: false,
+      kind: 'group',
     })
 
     await expect(
       cli('document', 'step', 'set', document.id, group?.id ?? ''),
-    ).rejects.toThrow(/--sub-document or --settings/)
+    ).rejects.toThrow(/Give --embedded-document/)
   })
 
-  it('refuses steps that are not next to each other and a group inside a group', async () => {
+  it('refuses steps that are not next to each other', async () => {
     const document = await documentWithSteps()
     const [layer, , flop] = document.pipeline.steps
     await expect(
       cli('document', 'step', 'group', document.id, `${layer?.id},${flop?.id}`),
     ).rejects.toThrow()
+  })
+
+  it('nests groups and embedded document layers, and refuses an embedded one inside a group', async () => {
+    const document = await documentWithSteps()
+    const [, flip, flop] = document.pipeline.steps
+    const outer = await cli<GroupDoc>(
+      'document',
+      'step',
+      'group',
+      document.id,
+      `${flip?.id},${flop?.id}`,
+    )
+    const outerGroup = outer.document.pipeline.steps.at(1)
+    const inner = await cli<GroupDoc>(
+      'document',
+      'step',
+      'group',
+      document.id,
+      flop?.id ?? '',
+      '--name',
+      'Inner',
+    )
+    const nested = inner.document.pipeline.steps.at(1)?.steps?.at(1)
+    expect(nested).toMatchObject({ kind: 'group', name: 'Inner' })
+    expect(nested?.steps?.map(({ id }) => id)).toEqual([flop?.id])
+
+    const moved = await cli<GroupDoc>(
+      'document',
+      'step',
+      'move',
+      document.id,
+      flip?.id ?? '',
+      '0',
+      '--into',
+      nested?.id ?? '',
+    )
+    expect(
+      moved.document.pipeline.steps
+        .at(1)
+        ?.steps?.at(0)
+        ?.steps?.map(({ id }) => id),
+    ).toEqual([flip?.id, flop?.id])
+
+    await expect(
+      cli(
+        'document',
+        'step',
+        'set',
+        document.id,
+        nested?.id ?? '',
+        '--embedded-document',
+        'on',
+      ),
+    ).rejects.toThrow(/cannot hold an embedded document layer/)
+    const embedded = await cli<GroupDoc>(
+      'document',
+      'step',
+      'set',
+      document.id,
+      outerGroup?.id ?? '',
+      '--embedded-document',
+      'on',
+    )
+    expect(embedded.document.pipeline.steps.at(1)).toMatchObject({
+      kind: 'embedded-document',
+    })
   })
 })
 
@@ -1064,7 +1091,7 @@ describe('looking at a document through the CLI', () => {
       '{"left":0,"top":0,"width":2,"height":2}',
     )
     const extract = added.document.pipeline.steps.at(-1)
-    const file = path.join(workDir, 'before.png')
+    const file = path.join(flow.workDir, 'before.png')
 
     const { preview } = await cli<{
       preview: Preview & { beforeStepId: string | null; size: unknown }
@@ -1088,7 +1115,7 @@ describe('looking at a document through the CLI', () => {
   it('writes the picture the canvas shows with `document preview`', async () => {
     const id = await newDoc()
     await cli<Doc>('document', 'step', 'add', id, '--op', 'flop')
-    const file = path.join(workDir, 'canvas.png')
+    const file = path.join(flow.workDir, 'canvas.png')
 
     const { preview } = await cli<{ preview: Preview }>(
       'document',
@@ -1120,7 +1147,7 @@ describe('looking at a document through the CLI', () => {
       '--options',
       '{"angle":90}',
     )
-    const file = path.join(workDir, 'before.jpg')
+    const file = path.join(flow.workDir, 'before.jpg')
 
     await cli(
       'document',
@@ -1139,7 +1166,7 @@ describe('looking at a document through the CLI', () => {
 
   it('shows the result of an edit in the same command with --preview', async () => {
     const id = await newDoc()
-    const file = path.join(workDir, 'after.png')
+    const file = path.join(flow.workDir, 'after.png')
 
     const edited = await cli<Doc & { preview: Preview }>(
       'document',
@@ -1172,7 +1199,7 @@ describe('looking at a document through the CLI', () => {
       '--options',
       '{"angle":90}',
     )
-    const file = path.join(workDir, 'undone.png')
+    const file = path.join(flow.workDir, 'undone.png')
 
     const undone = await cli<Doc & { preview: Preview }>(
       'document',
@@ -1211,7 +1238,7 @@ describe('looking at part of a document through the CLI', () => {
       await makeImage('part.png'),
     )
     const { document } = await cli<Doc>('document', 'create', source.id)
-    const file = path.join(workDir, 'part.png')
+    const file = path.join(flow.workDir, 'part.png')
 
     const { preview } = await cli<{
       preview: { region: { x: number; width: number } }
@@ -1247,7 +1274,7 @@ describe('looking at part of a document through the CLI', () => {
         'preview',
         document.id,
         '--out',
-        path.join(workDir, 'x.png'),
+        path.join(flow.workDir, 'x.png'),
         '--region',
         '0.8,0,0.5,1',
       ),
@@ -1455,7 +1482,7 @@ describe('the canvas through the CLI', () => {
       background: '#00ff00',
     })
 
-    const out = path.join(workDir, 'banner.png')
+    const out = path.join(flow.workDir, 'banner.png')
     await cli('export', id, '--out', out, '--format', 'png')
     const meta = await sharp(out).metadata()
     expect([meta.width, meta.height]).toEqual([30, 10])
@@ -1567,7 +1594,7 @@ describe('empty image layers through the CLI', () => {
     const document = await blank()
     await cli('document', 'step', 'add', document.id, '--image-layer')
 
-    const out = path.join(workDir, 'empty.png')
+    const out = path.join(flow.workDir, 'empty.png')
     await cli('export', document.id, '--out', out, '--format', 'png')
 
     const { data, info } = await sharp(out)

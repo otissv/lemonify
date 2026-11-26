@@ -38,7 +38,7 @@ export class WorkflowPreviewHandler implements JobHandler {
         const shown = shownForWorkflowNode(
           filled.pipeline,
           payload.nodeId,
-          filled.firstSlotId,
+          filled.slotId,
         )
         const plan =
           shown === undefined

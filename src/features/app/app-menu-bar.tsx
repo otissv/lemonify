@@ -23,6 +23,14 @@ type Sections = ReadonlyArray<ReadonlyArray<ActionMenuEntry>>
 const FILE_SECTIONS: Sections = [
   [
     { actionId: 'file.newDocument', label: 'New document…' },
+    {
+      actionId: 'file.newWorkflowFromDocument',
+      label: 'New workflow from document…',
+    },
+    {
+      actionId: 'file.newDocumentFromWorkflow',
+      label: 'New document from workflow…',
+    },
     { actionId: 'file.openImage' },
     { actionId: 'file.openLibrary' },
     { actionId: 'file.importDocument', label: 'Import document…' },
@@ -93,7 +101,10 @@ export function AppMenuBar(props: AppMenuBarProps): React.JSX.Element {
     [{ actionId: 'edit.undo' }, { actionId: 'edit.redo' }],
     [
       { actionId: 'edit.addImageLayer' },
+      { actionId: 'edit.addDocumentLayer', label: 'Add document layer…' },
+      { actionId: 'edit.addWorkflowLayer', label: 'Add workflow layer…' },
       { actionId: 'edit.insertImage' },
+      { actionId: 'edit.insertWorkflow', label: 'Insert workflow…' },
       { actionId: 'edit.replaceImage' },
     ],
     [{ actionId: 'edit.setCanvas', label: 'Canvas size…' }],

@@ -12,6 +12,7 @@ import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
@@ -154,15 +155,17 @@ describe('DocumentBundleService', () => {
     ).resolves.toBeDefined()
   })
 
-  it('carries groups, sub-documents and the AI results inside them, with their images made the new User’s', async () => {
+  it('carries groups, embedded document layers and the AI results inside them, with their images made the new User’s', async () => {
     const base = await t.uploadImage(t.ann, '#336699', 'base.png')
     const logo = await t.uploadImage(t.ann, '#cc0000', 'logo.png')
     const created = await t.app.documents.create(t.ann, base.id, 'Poster')
     const upscale = createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS })
     const plain = createGroupStep([createSharpStep('flip')], 'Tidy')
     const sub = {
-      ...createGroupStep([createImageLayerStep(logo.id), upscale], 'Logo'),
-      subDocument: true,
+      ...createEmbeddedDocumentStep(
+        [createImageLayerStep(logo.id), upscale],
+        'Logo',
+      ),
       opacity: 60,
     }
     await change(created.id, pipelineOf(plain, sub))
@@ -182,19 +185,19 @@ describe('DocumentBundleService', () => {
     expect(tidy).toMatchObject({
       kind: 'group',
       name: 'Tidy',
-      subDocument: false,
     })
     expect(logoGroup).toMatchObject({
-      kind: 'group',
+      kind: 'embedded-document',
       name: 'Logo',
-      subDocument: true,
       opacity: 60,
     })
     const theirLogo = imported.document.sources.find(
       ({ fileName }) => fileName === 'logo.png',
     )
     expect(theirLogo?.id).not.toBe(logo.id)
-    expect(logoGroup?.kind === 'group' && logoGroup.steps[0]).toMatchObject({
+    expect(
+      logoGroup?.kind === 'embedded-document' && logoGroup.steps[0],
+    ).toMatchObject({
       kind: 'image-layer',
       sourceId: theirLogo?.id,
     })
@@ -283,6 +286,8 @@ describe('DocumentBundleService', () => {
             },
           ],
           results: [],
+          documents: [],
+          workflows: [],
         }),
       ),
     )
@@ -317,6 +322,8 @@ describe('DocumentBundleService', () => {
           },
           sources: [],
           results: [],
+          documents: [],
+          workflows: [],
         }),
       ),
     )
@@ -358,6 +365,8 @@ describe('DocumentBundleService', () => {
           pipeline: { steps: [] },
           sources: [],
           results: [],
+          documents: [],
+          workflows: [],
         }),
       ),
     )
@@ -685,6 +694,8 @@ describe('DocumentBundleService', () => {
             pipeline: pipelineOf(createImageLayerStep('s1')),
             sources: [{ id: 's1', hash, fileName: 'a.png' }],
             results: [],
+            documents: [],
+            workflows: [],
           }),
         ),
       )

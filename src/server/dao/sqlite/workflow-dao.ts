@@ -1,3 +1,5 @@
+import { UsedSnapshotSchema } from '@/features/workflows/used-snapshot'
+import type { UsedSnapshot } from '@/features/workflows/used-snapshot'
 import type { Knex } from 'knex'
 
 import { WorkflowHistoryPatchSchema } from '@/features/workflows/workflow-change'
@@ -43,6 +45,7 @@ type RunRow = {
   workflow_id: string | null
   owner_id: string
   definition: string
+  used: string
   state: string
   created_at: string
   finished_at: string | null
@@ -50,6 +53,7 @@ type RunRow = {
 
 const MISSING = 'That workflow does not exist.'
 const UNREADABLE = 'A saved workflow could not be read.'
+const UNREADABLE_RUN = 'A saved run could not be read.'
 const UNREADABLE_EDITS = 'The saved edits of this workflow could not be read.'
 
 function parseDefinition(text: string): WorkflowDefinition {
@@ -124,12 +128,27 @@ async function reload(
   return toWorkflow(row)
 }
 
+function parseUsed(text: string): UsedSnapshot {
+  let json: unknown
+  try {
+    json = JSON.parse(text)
+  } catch (error) {
+    throw new DataIntegrityError(UNREADABLE_RUN, { cause: error })
+  }
+  const used = UsedSnapshotSchema.safeParse(json)
+  if (!used.success) {
+    throw new DataIntegrityError(UNREADABLE_RUN, { cause: used.error })
+  }
+  return used.data
+}
+
 function toRun(row: RunRow): WorkflowRunRecord {
   return {
     id: row.id,
     workflowId: row.workflow_id,
     ownerId: row.owner_id,
     definition: parseDefinition(row.definition),
+    used: parseUsed(row.used),
     state: row.state as RunState,
     createdAt: row.created_at,
     finishedAt: row.finished_at,
@@ -246,6 +265,7 @@ export class SqliteWorkflowDao implements WorkflowDao {
       workflow_id: run.workflowId,
       owner_id: run.ownerId,
       definition: JSON.stringify(run.definition),
+      used: JSON.stringify(run.used),
       state: run.state,
       created_at: run.createdAt,
       finished_at: run.finishedAt,

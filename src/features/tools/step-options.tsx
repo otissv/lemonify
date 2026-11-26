@@ -7,9 +7,18 @@ import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import { AiToolId } from '@/features/ai/ai-tools'
 import type { AiCatalogue } from '@/features/ai/ai-tools'
 import { isLayerStep } from '@/features/pipeline/layer-kinds'
-import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  findStep,
+  isContainerStep,
+} from '@/features/pipeline/pipeline'
 import type { DocumentChange } from '@/features/pipeline/document-change'
-import type { AiStep, GroupStep, SharpStep } from '@/features/pipeline/pipeline'
+import type {
+  AiStep,
+  ContainerStep,
+  EmbeddedDocumentStep,
+  SharpStep,
+} from '@/features/pipeline/pipeline'
 import { layerSettingsOf } from '@/features/pipeline/layer'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import {
@@ -19,7 +28,7 @@ import {
   setLayerSettings,
   setSharpOptions,
   setStepBlend,
-  setSubDocument,
+  setEmbedded,
   ungroupSteps,
 } from '@/features/pipeline/pipeline-actions'
 import {
@@ -136,64 +145,81 @@ function UpscaleStepOptions({
   )
 }
 
-interface GroupOptionsProps {
+interface ContainerOptionsProps {
   documentId: string
-  group: GroupStep
+  group: ContainerStep
 }
 
-/** What a group offers: it has no options of its own, only the steps in it, whether it is a picture of its own and where that is placed, and it can be taken apart. */
-function GroupStepOptions({
+const EMBEDDED_SWITCH = 'Embedded document layer'
+
+/** Where an embedded document layer is placed on the picture around it. */
+function EmbeddedPlacement({
   documentId,
-  group,
-}: GroupOptionsProps): React.JSX.Element {
-  const switchId = useId()
-  const groupId = group.id
+  embedded,
+}: {
+  documentId: string
+  embedded: EmbeddedDocumentStep
+}): React.JSX.Element {
+  const stepId = embedded.id
   const { draft, change, flush } = useStepDraft<LayerSettings>(
-    layerSettingsOf(group),
+    layerSettingsOf(embedded),
     (settings) => {
-      setLayerSettings(documentId, groupId, settings)
+      setLayerSettings(documentId, stepId, settings)
     },
   )
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them
+    <div onBlur={flush}>
+      <LayerSettingsForm settings={draft} onChange={change} />
+    </div>
+  )
+}
+
+/** What a group or an embedded document layer offers: no options of its own, only the steps in it, whether it is an embedded document layer and where that is placed, and taking its steps out. */
+function ContainerStepOptions({
+  documentId,
+  group,
+}: ContainerOptionsProps): React.JSX.Element {
+  const switchId = useId()
+  const groupId = group.id
+  const embedded = group.kind === PipelineStepKind.EmbeddedDocument
+  const count = group.steps.length
 
   function handleUngroup(): void {
     ungroupSteps(documentId, groupId)
   }
 
-  function handleSubDocument(checked: boolean): void {
-    setSubDocument(documentId, groupId, checked)
+  function handleEmbedded(checked: boolean): void {
+    setEmbedded(documentId, groupId, checked)
   }
 
   return (
     <div className="flex flex-col gap-3 pt-3">
       <p className="px-4 text-caption text-muted-foreground">
-        Holds {group.steps.length} {group.steps.length === 1 ? 'step' : 'steps'}
-        . Switching the group off switches off every step in it. Drag steps in
-        or out in the sidebar.
+        Holds {count} {count === 1 ? 'step' : 'steps'}. Switching it off
+        switches off every step in it. Drag steps in or out in the sidebar.
       </p>
       <div className="flex items-start gap-3 px-4">
         <Switch
           id={switchId}
-          checked={group.subDocument}
-          onCheckedChange={handleSubDocument}
+          checked={embedded}
+          onCheckedChange={handleEmbedded}
         />
         <div className="flex flex-col gap-1">
-          <Label htmlFor={switchId}>Own picture</Label>
+          <Label htmlFor={switchId}>{EMBEDDED_SWITCH}</Label>
           <p className="text-caption text-muted-foreground">
-            It is drawn on a blank canvas of the document’s size, its steps act
-            on that picture only, and the result is placed on the canvas like a
-            layer.
+            A document inside this one: its steps draw on a blank canvas of the
+            same size and act on that picture only, and the result is placed on
+            the picture like a layer. A group cannot hold one.
           </p>
         </div>
       </div>
-      {group.subDocument && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: blur bubbles from the form's fields, so this only saves the pending edit when focus leaves them
-        <div onBlur={flush}>
-          <LayerSettingsForm settings={draft} onChange={change} />
-        </div>
+      {group.kind === PipelineStepKind.EmbeddedDocument && (
+        <EmbeddedPlacement documentId={documentId} embedded={group} />
       )}
       <div className="px-4 pb-4">
         <Button variant="secondary" size="sm" onClick={handleUngroup}>
-          Ungroup
+          {embedded ? 'Take the steps out' : 'Ungroup'}
         </Button>
       </div>
     </div>
@@ -254,8 +280,8 @@ export function StepOptions({
           This step is off.
         </p>
       )}
-      {step.kind === PipelineStepKind.Group && (
-        <GroupStepOptions documentId={documentId} group={step} />
+      {isContainerStep(step) && (
+        <ContainerStepOptions documentId={documentId} group={step} />
       )}
       {isLayerStep(step) && (
         <LayerStepOptions

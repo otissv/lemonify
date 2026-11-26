@@ -1,8 +1,6 @@
 import { createReadStream } from 'node:fs'
 import path from 'node:path'
 
-import { remapPipelineSources } from '@/features/pipeline/image-operands'
-
 import {
   MANIFEST_ENTRY,
   MAX_MANIFEST_BYTES,
@@ -14,6 +12,7 @@ import { fileHash } from '../bundle/file-hash.ts'
 import { openZip } from '../bundle/zip.ts'
 import type { ZipArchive } from '../bundle/zip.ts'
 import { ResultKind } from '../dao/result-dao.ts'
+import type { PipelinePlan } from '../render/plan-pipeline.ts'
 import type { Actor } from '../domain/actor.ts'
 import { LimitError, NotFoundError, ValidationError } from '../errors.ts'
 import { withWorkDirectory } from '../tools/work-directory.ts'
@@ -21,11 +20,11 @@ import type {
   DocumentBundleServiceDependencies,
   ImportedBundle,
 } from './document-bundle-types.ts'
+import { UsedItemsImport } from './document-bundle-used.ts'
 
 const NO_FILE = 'The document file was not found.'
 const TOO_LARGE = 'The document file is too large.'
 const DAMAGED = 'The document file is damaged.'
-const UNKNOWN_IMAGE = 'The document uses an image that is not in the file.'
 const FOREIGN_RESULT =
   'The document holds a result that does not belong to any of its steps.'
 const WRONG_RESULT_TYPE = 'A result in the document is not the image it says.'
@@ -101,6 +100,7 @@ class BundleImport {
   readonly #directory: string
   readonly #addedSourceIds = new Set<string>()
   #documentId: string | undefined
+  #used: UsedItemsImport | undefined
 
   constructor(
     deps: DocumentBundleServiceDependencies,
@@ -132,10 +132,19 @@ class BundleImport {
 
   async #build(kept: Set<string>): Promise<ImportedBundle> {
     const ids = await this.#addSources(kept)
+    const used = new UsedItemsImport(
+      this.#deps,
+      this.#actor,
+      this.#manifest,
+      ids,
+    )
+    this.#used = used
+    used.requireHeld(this.#manifest.pipeline)
+    await used.run()
     const document = await this.#deps.documentService.createFromPipeline(
       this.#actor,
       this.#manifest.name,
-      this.#remap(ids),
+      used.remap(this.#manifest.pipeline),
     )
     this.#documentId = document.id
     const results = await this.#addResults(document.id)
@@ -175,25 +184,12 @@ class BundleImport {
     return ids
   }
 
-  #remap(ids: ReadonlyMap<string, string>) {
-    try {
-      return remapPipelineSources(this.#manifest.pipeline, ids)
-    } catch (error) {
-      if (error instanceof RangeError) {
-        throw new ValidationError(UNKNOWN_IMAGE, { cause: error })
-      }
-      throw error
-    }
-  }
-
-  /** The key each AI step of the new document stores its result under. */
-  async #expectedKeys(
-    documentId: string,
-  ): Promise<ReadonlyMap<string, string>> {
+  /** The key each AI step of the new document stores its result under, and the used document that owns it when one does. */
+  async #expectedPlan(documentId: string): Promise<PipelinePlan> {
     const { documents, planner } = this.#deps
     const record = await documents.findById(documentId)
     if (record === null) throw new Error('The new document is missing.')
-    return (await planner.plan(record)).aiKeys
+    return planner.plan(record)
   }
 
   async #addResults(
@@ -201,9 +197,9 @@ class BundleImport {
   ): Promise<ImportedBundle['summary']['results']> {
     const counts = { imported: 0, existing: 0, skipped: 0 }
     if (this.#manifest.results.length === 0) return counts
-    const expected = await this.#expectedKeys(documentId)
+    const { aiKeys, aiOwners } = await this.#expectedPlan(documentId)
     for (const entry of this.#manifest.results) {
-      if (expected.get(entry.stepId) !== entry.key) {
+      if (aiKeys.get(entry.stepId) !== entry.key) {
         throw new ValidationError(FOREIGN_RESULT)
       }
     }
@@ -221,7 +217,7 @@ class BundleImport {
         await this.#deps.results.record(this.#actor, {
           kind: ResultKind.AiStep,
           key: entry.key,
-          documentId,
+          documentId: aiOwners.get(entry.stepId) ?? documentId,
           stepId: entry.stepId,
           file: target,
           fileName: entry.fileName,
@@ -243,6 +239,7 @@ class BundleImport {
       if (this.#documentId !== undefined) {
         await documentService.delete(this.#actor, this.#documentId)
       }
+      await this.#used?.undo()
       for (const id of this.#addedSourceIds) {
         await sources.delete(this.#actor, id)
       }

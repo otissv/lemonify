@@ -12,9 +12,6 @@ export type StepNodeData = {
   enabled: boolean
   /** Whether the node is the start of the line, the end of it, or a step between. */
   position: 'start' | 'middle' | 'end'
-  /** Whether a branch hangs from the bottom of the node, or hangs it from the top. */
-  hasBranch: boolean
-  inBranch: boolean
   /** Pipeline steps can be removed from the diagram; fixed nodes cannot. */
   deletable: boolean
   onDelete?: (stepId: string) => void
@@ -43,9 +40,6 @@ export function StepNode({
     >
       {data.position !== 'start' && (
         <Handle id="in" type="target" position={Position.Left} />
-      )}
-      {data.inBranch && (
-        <Handle id="top" type="target" position={Position.Top} />
       )}
       {data.deletable && data.onDelete !== undefined && (
         <Button
@@ -86,9 +80,6 @@ export function StepNode({
       )}
       {data.position !== 'end' && (
         <Handle id="out" type="source" position={Position.Right} />
-      )}
-      {data.hasBranch && (
-        <Handle id="bottom" type="source" position={Position.Bottom} />
       )}
     </div>
   )

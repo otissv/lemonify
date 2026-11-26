@@ -55,6 +55,7 @@ describe('ExportOptions', () => {
     usePipelineStore.getState().setPreview(DOCUMENT_ID, {
       status: PreviewStatus.Ready,
       pendingStepIds: [],
+      waitingLayerIds: [],
       problems: [],
     })
   })
@@ -123,6 +124,7 @@ describe('ExportOptions', () => {
     usePipelineStore.getState().setPreview(DOCUMENT_ID, {
       status: PreviewStatus.Ready,
       pendingStepIds: ['s1'],
+      waitingLayerIds: [],
       problems: [],
     })
     render(<ExportOptions documentId={DOCUMENT_ID} />)

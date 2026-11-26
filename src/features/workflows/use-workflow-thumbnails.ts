@@ -13,11 +13,14 @@ export function useWorkflowThumbnails(
   const revision = usePipelineStore(
     (state) => workflowSession(state, workflowId)?.confirmed.revision,
   )
+  const pictureVersion = usePipelineStore(
+    (state) => state.pictureVersions[workflowId],
+  )
   const pending = usePipelineStore(
     (state) => workflowSession(state, workflowId)?.pending.length ?? 0,
   )
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: revision and pending retrigger the ask
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision, pending and a change to what layers use retrigger the ask
   useEffect(() => {
     if (!active || revision === undefined) return
     const controller = new AbortController()
@@ -30,5 +33,5 @@ export function useWorkflowThumbnails(
       clearTimeout(timer)
       controller.abort()
     }
-  }, [workflowId, active, revision, pending])
+  }, [workflowId, active, revision, pending, pictureVersion])
 }

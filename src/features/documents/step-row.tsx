@@ -14,6 +14,7 @@ import { DEFAULT_STEP_BLEND } from '@/features/pipeline/step-blend'
 import type { StepBlend } from '@/features/pipeline/step-blend'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import type { LayerNames } from '@/features/pipeline/layer-kinds'
 import type { LeafStep } from '@/features/pipeline/pipeline'
 import {
   pipelineStepTitle,
@@ -29,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { JobState } from '@/server/jobs/job-types'
 
 const PERCENT = 100
+const WAITING_FOR_AI = 'Waiting for an AI step to run'
 
 /** For a step whose tool has a picture of its own: that picture's small picture, and which of the step's two pictures the canvas shows. */
 export interface StepPictureChoice {
@@ -48,8 +50,8 @@ export interface SelectModifiers {
 export interface StepRowProps {
   documentId: string
   step: LeafStep
-  /** The group the step is in, when it is in one. */
-  groupId?: string
+  /** The group or embedded document layer the step is in, when it is in one. */
+  parentId?: string
   /** Picked together with other steps, to group them. */
   marked?: boolean
   /** Where the step is in the pipeline: later steps are drawn on top of earlier ones. */
@@ -60,17 +62,19 @@ export interface StepRowProps {
   thumbnail: string | undefined
   /** For a step a tool draws on the picture for: the two pictures to choose between, and which is shown. Undefined for any other step. */
   pictures?: StepPictureChoice
-  /** The server has no result for this AI step yet. */
+  /** The server has no result for this AI step yet, or, for a document or workflow layer, for an AI step in what it uses. */
   outOfDate: boolean
-  /** For a layer: the file name of its image. */
-  sourceName: string | undefined
+  /** For a layer: the names of the image, document or workflow it uses. */
+  names: LayerNames
   /** Why the server left this step out of the picture, if it did. */
   skipped: string | undefined
+  /** The row's ⋯ menu, for a step that has more to do than the row's buttons. */
+  menu?: React.ReactNode
   run: AiRun | undefined
   onSelect: (stepId: string, modifiers: SelectModifiers) => void
   onToggle: (stepId: string, isOn: boolean) => void
   onDelete: (stepId: string) => void
-  onMove: (stepId: string, index: number, groupId?: string) => void
+  onMove: (stepId: string, index: number, parentId?: string) => void
 }
 
 interface StepStatus {
@@ -102,7 +106,7 @@ function blendSummary(blend: StepBlend): string {
 
 function statusOf(
   step: LeafStep,
-  sourceName: string | undefined,
+  names: LayerNames,
   outOfDate: boolean,
   skipped: string | undefined,
   run: AiRun | undefined,
@@ -111,7 +115,10 @@ function statusOf(
   if (problem !== undefined)
     return { text: problem, problem: true, running: false }
   if (isLayerStep(step)) {
-    const { text, problem } = layerKind(step).display(step, sourceName)
+    if (outOfDate) {
+      return { text: WAITING_FOR_AI, problem: false, running: false }
+    }
+    const { text, problem } = layerKind(step).display(step, names)
     return { text, problem, running: false }
   }
   if (step.kind === PipelineStepKind.Sharp) {
@@ -132,7 +139,7 @@ function statusOf(
 export function StepRow({
   documentId,
   step,
-  groupId,
+  parentId,
   marked = false,
   position,
   count,
@@ -140,9 +147,10 @@ export function StepRow({
   dragging,
   thumbnail,
   pictures,
-  sourceName,
+  names,
   outOfDate,
   skipped,
+  menu,
   run,
   onSelect,
   onToggle,
@@ -150,7 +158,7 @@ export function StepRow({
   onMove,
 }: StepRowProps): React.JSX.Element {
   const label = pipelineStepTitle(step)
-  const status = statusOf(step, sourceName, outOfDate, skipped, run)
+  const status = statusOf(step, names, outOfDate, skipped, run)
 
   function handleSelect(event: React.MouseEvent<HTMLButtonElement>): void {
     onSelect(step.id, {
@@ -180,11 +188,11 @@ export function StepRow({
   }
 
   function handleMoveUp(): void {
-    onMove(step.id, position + 1, groupId)
+    onMove(step.id, position + 1, parentId)
   }
 
   function handleMoveDown(): void {
-    onMove(step.id, position - 1, groupId)
+    onMove(step.id, position - 1, parentId)
   }
 
   function handleCancel(): void {
@@ -256,7 +264,7 @@ export function StepRow({
             Cancel
           </Button>
         )}
-
+        {menu}
         <Button
           variant="ghost"
           size="icon-sm"

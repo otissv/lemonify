@@ -7,7 +7,10 @@ import type { AiCatalogues } from '@/features/ai/ai-defaults'
 import type { AiToolSummary } from '@/features/ai/ai-tools'
 import { toolActionId } from '@/features/keybindings/actions'
 import { useActionHint } from '@/features/keybindings/use-action-hint'
+import { askForUsedLayer } from '@/features/create-from/add-used-layer'
+import { addEmptyImageLayer } from '@/features/pipeline/pipeline-actions'
 import { addTool } from '@/features/tools/add-tool'
+import { LayerTool, LayerTools } from '@/features/tools/layer-tools'
 import { searchTools, toolGroups } from '@/features/tools/tool-catalogue'
 import type { ToolEntry } from '@/features/tools/tool-catalogue'
 import { cn } from '@/lib/utils'
@@ -23,7 +26,7 @@ interface ToolsListProps {
   tools: ReadonlyArray<AiToolSummary>
   /** Adds the tool; returns why it could not be added, or nothing when it was. */
   onAdd: (tool: ToolEntry) => string | undefined
-  /** Shown above the groups, for what only some pages offer. */
+  /** Shown above the groups while not searching, for what only some pages offer. */
   before?: React.ReactNode
 }
 
@@ -153,7 +156,7 @@ export function ToolsList({
         />
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4">
-        {before}
+        {!searching && before}
         {error && (
           <p role="alert" className="text-body-md text-destructive">
             {error}
@@ -179,7 +182,46 @@ export function ToolsList({
   )
 }
 
-/** Every editing tool for a document. Choosing one adds it as a step after the selected step, or at the end. */
+interface DocumentLayerToolsProps {
+  documentId: string
+}
+
+/** The layers a document adds from Tools: an empty image layer, or a layer that draws another document or a workflow, chosen in a picker. */
+function DocumentLayerTools({
+  documentId,
+}: DocumentLayerToolsProps): React.JSX.Element {
+  const handleImageLayer = useCallback((): void => {
+    addEmptyImageLayer(documentId)
+  }, [documentId])
+  const handleDocumentLayer = useCallback((): void => {
+    askForUsedLayer(documentId, 'document')
+  }, [documentId])
+  const handleWorkflowLayer = useCallback((): void => {
+    askForUsedLayer(documentId, 'workflow')
+  }, [documentId])
+
+  return (
+    <LayerTools>
+      <LayerTool
+        label="Image layer"
+        actionId="edit.addImageLayer"
+        onAdd={handleImageLayer}
+      />
+      <LayerTool
+        label="Document layer"
+        actionId="edit.addDocumentLayer"
+        onAdd={handleDocumentLayer}
+      />
+      <LayerTool
+        label="Workflow layer"
+        actionId="edit.addWorkflowLayer"
+        onAdd={handleWorkflowLayer}
+      />
+    </LayerTools>
+  )
+}
+
+/** Every editing tool for a document, after its layers. Choosing one adds it as a step after the selected step, or at the end. */
 export function ToolsBrowser({
   documentId,
   tools,
@@ -191,5 +233,11 @@ export function ToolsBrowser({
     [documentId, catalogues],
   )
 
-  return <ToolsList tools={tools} onAdd={handleAdd} />
+  return (
+    <ToolsList
+      tools={tools}
+      onAdd={handleAdd}
+      before={<DocumentLayerTools documentId={documentId} />}
+    />
+  )
 }

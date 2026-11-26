@@ -4,7 +4,7 @@ import { isLayerStep } from '@/features/pipeline/layer-kinds'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type { LayerSettings } from '@/features/pipeline/layer'
 import type { AiStep, SharpStep } from '@/features/pipeline/pipeline'
-import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
+import type { LayerStep } from '@/features/pipeline/layer-kinds'
 
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys)
@@ -16,17 +16,34 @@ function sortKeys(value: unknown): unknown {
   return sorted
 }
 
-/** A sub-document as the key sees it: what its picture starts from, the steps it applies as the key sees them, and where it is placed. */
-export interface KeyedSubDocument extends LayerSettings {
-  kind: typeof PipelineStepKind.Group
+/** An embedded document layer as the key sees it: what its picture starts from, the steps it applies as the key sees them, and where it is placed. */
+export interface KeyedEmbeddedDocument extends LayerSettings {
+  kind: typeof PipelineStepKind.EmbeddedDocument
+  base: string
+  steps: ReadonlyArray<KeyedStep>
+}
+
+/** A document layer or workflow layer as the key sees it: the picture of what it uses, as the key sees that, and where it is placed. Its steps follow the used item, so a change to the item is another key. */
+export const USED_PICTURE = 'used-picture'
+
+export interface KeyedUsedPicture extends LayerSettings {
+  kind: typeof USED_PICTURE
   base: string
   steps: ReadonlyArray<KeyedStep>
 }
 
 /** A step as the key sees it. A layer's `sourceId` must already be the image's content hash, so the key means the same wherever the image is stored. */
-export type KeyedStep = SharpStep | ImageLayerStep | AiStep | KeyedSubDocument
+export type KeyedStep =
+  | SharpStep
+  | LayerStep
+  | AiStep
+  | KeyedEmbeddedDocument
+  | KeyedUsedPicture
 
 function stepIdentity(step: KeyedStep): unknown {
+  if (step.kind === USED_PICTURE) {
+    return { ...step, steps: step.steps.map(stepIdentity) }
+  }
   if (isLayerStep(step)) {
     const { id: _id, enabled: _enabled, name: _name, ...identity } = step
     return identity
@@ -41,7 +58,7 @@ function stepIdentity(step: KeyedStep): unknown {
       }
     case PipelineStepKind.Ai:
       return { kind: step.kind, tool: step.tool, settings: step.settings }
-    case PipelineStepKind.Group:
+    case PipelineStepKind.EmbeddedDocument:
       return { ...step, steps: step.steps.map(stepIdentity) }
   }
 }

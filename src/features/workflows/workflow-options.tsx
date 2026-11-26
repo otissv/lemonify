@@ -13,7 +13,11 @@ import type { AiContent } from '@/features/ai/ai-tools'
 import { CanvasForm } from '@/features/documents/canvas-form'
 import type { DocumentChange } from '@/features/pipeline/document-change'
 import { isLayerStep } from '@/features/pipeline/layer-kinds'
-import { PipelineStepKind, findStep } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  findStep,
+  isContainerStep,
+} from '@/features/pipeline/pipeline'
 import type {
   AiStep,
   PipelineStep,
@@ -33,9 +37,10 @@ import { CanvasSizeSelect } from '@/features/workflows/canvas-size-select'
 import { CanvasSize } from '@/features/workflows/workflow'
 import type { Workflow } from '@/features/workflows/workflow'
 import {
-  WorkflowGroupOptions,
+  WorkflowContainerOptions,
   WorkflowLayerOptions,
 } from '@/features/workflows/workflow-layer-options'
+import { inputSlot } from '@/features/workflows/segments'
 import type { Selection } from '@/features/workflows/workflow-selection'
 import { stepLabel } from '@/features/workflows/workflow-steps'
 
@@ -95,16 +100,21 @@ function AiSettingsForm({
 }
 
 interface StepOptionsProps {
+  workflowId: string
   step: PipelineStep
   aiTools: ReadonlyArray<AiToolEntry>
   imageName: (sourceId: string) => string
+  /** Whether the step is the workflow's input slot, where each input image goes. */
+  isInputSlot: boolean
   onChange: ChangeHandler
 }
 
 function StepOptions({
+  workflowId,
   step,
   aiTools,
   imageName,
+  isInputSlot,
   onChange,
 }: StepOptionsProps): React.JSX.Element {
   function handleOptions(options: SharpStep['options']): void {
@@ -118,15 +128,18 @@ function StepOptions({
   if (isLayerStep(step)) {
     return (
       <WorkflowLayerOptions
+        workflowId={workflowId}
         step={step}
         imageName={imageName}
+        isInputSlot={isInputSlot}
         onChange={onChange}
       />
     )
   }
+  if (isContainerStep(step)) {
+    return <WorkflowContainerOptions step={step} onChange={onChange} />
+  }
   switch (step.kind) {
-    case PipelineStepKind.Group:
-      return <WorkflowGroupOptions step={step} onChange={onChange} />
     case PipelineStepKind.Sharp:
       return (
         <SharpOptionsForm
@@ -261,9 +274,11 @@ function Content(props: WorkflowOptionsProps): React.JSX.Element {
         >
           <StepOptions
             key={step.id}
+            workflowId={workflow.id}
             step={step}
             aiTools={aiTools}
             imageName={imageName}
+            isInputSlot={inputSlot(workflow.pipeline)?.id === step.id}
             onChange={onChange}
           />
           <StepResetButton

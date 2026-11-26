@@ -1,7 +1,6 @@
 import path from 'node:path'
 
 import type { AiToolId } from '@/features/ai/ai-tools'
-import { PipelineStepKind, effectiveSteps } from '@/features/pipeline/pipeline'
 import type { AiStep } from '@/features/pipeline/pipeline'
 
 import type { AiToolRegistry } from '../../ai/ai-tool-registry.ts'
@@ -12,6 +11,9 @@ import { ValidationError } from '../../errors.ts'
 import type { Logger } from '../../http/logger.ts'
 import type { DocumentPlanner } from '../../render/document-planner.ts'
 import { awaitingPlan } from '../../render/plan-pipeline.ts'
+import type { PipelinePlan } from '../../render/plan-pipeline.ts'
+import type { ChangePublisher } from '../../realtime/change-publisher.ts'
+import type { UsedItems } from '../../services/used-items.ts'
 import type { ResultService } from '../../services/result-service.ts'
 import { EngineTargetKind } from '../../tools/image-engine.ts'
 import type { ImageEngine } from '../../tools/image-engine.ts'
@@ -31,6 +33,9 @@ export type AiStepHandlerDependencies = {
   results: ResultService
   workRoot: string
   logger: Logger
+  /** Tells the tabs of the documents and workflows that draw this document that its picture changed. */
+  usedItems: UsedItems
+  changes: ChangePublisher
 }
 
 type Ready = {
@@ -105,21 +110,20 @@ export class AiStepHandler implements JobHandler {
       payload.documentId,
       payload.revision,
     )
-    const step = effectiveSteps(document.pipeline).find(
-      ({ id }) => id === payload.stepId,
-    )
-    if (step?.kind !== PipelineStepKind.Ai || !step.enabled) {
+    const plan = await planner.plan(document)
+    const first = plan.pending[0]
+    if (first?.step.id !== payload.stepId) {
+      return {
+        resultId: await this.#madeAlready(job.ownerId, plan, payload.stepId),
+      }
+    }
+    if (first.documentId !== undefined && first.documentId !== document.id) {
       throw new ValidationError(NOT_AN_AI_STEP)
     }
-    const plan = await planner.plan(document)
-    const key = plan.aiKeys.get(step.id)
-    if (key === undefined) throw new ValidationError(NOT_AN_AI_STEP)
+    const { step, key } = first
     const existing = await results.find(job.ownerId, key)
     if (existing !== undefined) return { resultId: existing.id }
-    if (plan.pending[0]?.step.id !== step.id) {
-      throw new ValidationError(EARLIER_FIRST)
-    }
-    const own = awaitingPlan(plan, step.id)
+    const own = awaitingPlan(plan, key)
     if (own === undefined) throw new ValidationError(NOT_AN_AI_STEP)
     let input = own.base.kind === 'file' ? own.base.path : ''
     if (own.base.kind === 'canvas' || own.steps.length > 0) {
@@ -142,6 +146,19 @@ export class AiStepHandler implements JobHandler {
       input,
       output: path.join(directory, `out-${job.id}.png`),
     }
+  }
+
+  /** The Result of a step that is not first in line: made already, by another Job, or else why it cannot run. */
+  async #madeAlready(
+    ownerId: string,
+    plan: PipelinePlan,
+    stepId: string,
+  ): Promise<string> {
+    const key = plan.aiKeys.get(stepId)
+    if (key === undefined) throw new ValidationError(NOT_AN_AI_STEP)
+    const existing = await this.#deps.results.find(ownerId, key)
+    if (existing !== undefined) return existing.id
+    throw new ValidationError(EARLIER_FIRST)
   }
 
   async #runGroup(
@@ -192,6 +209,11 @@ export class AiStepHandler implements JobHandler {
       fileName: fileNameForFormat(`${document.name}-${tool}`, 'png'),
       mediaType: 'image/png',
     })
+    await this.#deps.usedItems.announcePictureChanged(
+      item.job.ownerId,
+      { kind: 'document', id: document.id },
+      this.#deps.changes,
+    )
     return done(record.id)
   }
 }

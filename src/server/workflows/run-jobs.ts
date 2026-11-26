@@ -1,15 +1,16 @@
 import path from 'node:path'
 
 import { WorkerPool } from '@/features/ai/ai-tools'
-import type { Segment } from '@/features/workflows/segments'
 
 import type { AiToolRegistry } from '../ai/ai-tool-registry.ts'
 import { JobKind } from '../jobs/job-types.ts'
 import type { NewJob } from '../services/job-service.ts'
+import type { RunSegment } from './run-segments.ts'
 
 export type SegmentJobArguments = {
   runId: string
-  segments: ReadonlyArray<Segment>
+  /** The segment the Job runs, and where it is in the run's segments. */
+  segment: RunSegment
   index: number
   sourceId: string
   /** The work image the previous segment left; absent on the first segment. */
@@ -20,16 +21,12 @@ export type SegmentJobArguments = {
 /** The Job that runs one segment of a workflow run on one Source. AI segments say which tool and batch they belong to. */
 export function segmentJobSpec({
   runId,
-  segments,
+  segment,
   index,
   sourceId,
   input,
   registry,
 }: SegmentJobArguments): NewJob {
-  const segment = segments[index]
-  if (segment === undefined) {
-    throw new RangeError(`A run has no segment ${index}.`)
-  }
   const base = {
     kind: JobKind.RunItem,
     groupKey: runId,

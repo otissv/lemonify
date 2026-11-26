@@ -1057,7 +1057,7 @@ describe('WorkflowPage', () => {
   })
 
   describe('layers and groups', () => {
-    it('adds an empty image layer, the place an input image goes, and selects it', async () => {
+    it('adds an empty image layer after the input slot, and selects it', async () => {
       const user = userEvent.setup()
       await renderPage(createWorkflow('Test'))
 
@@ -1068,13 +1068,15 @@ describe('WorkflowPage', () => {
       await waitFor(() => {
         expect(stepKinds()).toEqual([IMAGE_LAYER_KIND, IMAGE_LAYER_KIND])
       })
-      expect(inspector()).toHaveTextContent('Each input image goes here')
+      expect(inspector()).toHaveTextContent('This layer has no image yet')
       expect(
-        within(inspector()).getByRole('button', { name: 'Use a fixed image…' }),
+        within(inspector()).getByRole('button', {
+          name: 'Choose an image for image',
+        }),
       ).toBeInTheDocument()
     })
 
-    it('gives a layer a fixed image, and goes back to the input image', async () => {
+    it('gives the input slot an image that each input replaces, then removes it', async () => {
       const user = userEvent.setup()
       await renderPage(createWorkflow('Test'))
       await clickStep('Image layer')
@@ -1090,12 +1092,10 @@ describe('WorkflowPage', () => {
         const [layer] = savedWorkflow().pipeline.steps
         expect(layer).toMatchObject({ sourceId: 'src-a' })
       })
-      expect(inspector()).toHaveTextContent('always draws a.jpg')
+      expect(inspector()).toHaveTextContent('in place of a.jpg')
 
       await user.click(
-        within(inspector()).getByRole('button', {
-          name: 'Use the input image',
-        }),
+        within(inspector()).getByRole('button', { name: 'Remove the image' }),
       )
 
       await waitFor(() => {
@@ -1132,13 +1132,17 @@ describe('WorkflowPage', () => {
       )
       await clickStep('Group')
       await user.click(
-        within(inspector()).getByRole('switch', { name: 'Own picture' }),
+        within(inspector()).getByRole('switch', {
+          name: 'Embedded document layer',
+        }),
       )
 
       await waitFor(() => {
         const group = savedWorkflow().pipeline.steps.at(-1)
-        expect(group).toMatchObject({ kind: 'group', subDocument: true })
-        expect(group?.kind === 'group' && group.steps).toHaveLength(1)
+        expect(group).toMatchObject({ kind: 'embedded-document' })
+        expect(group?.kind === 'embedded-document' && group.steps).toHaveLength(
+          1,
+        )
       })
     })
   })

@@ -32,8 +32,6 @@ describe('StepNode', () => {
       thumbnail: undefined,
       enabled: true,
       position: 'middle',
-      hasBranch: false,
-      inBranch: false,
       deletable: true,
       onDelete,
     })
@@ -50,8 +48,6 @@ describe('StepNode', () => {
       thumbnail: undefined,
       enabled: true,
       position: 'start',
-      hasBranch: false,
-      inBranch: false,
       deletable: false,
     })
 

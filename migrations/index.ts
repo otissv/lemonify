@@ -11,6 +11,7 @@ import { keybindings } from './20260101000800-keybindings.ts'
 import { workflowPipelines } from './20260101000900-workflow-pipelines.ts'
 import { workflowHistory } from './20260101001000-workflow-history.ts'
 import { workflowCanvasSize } from './20260101001100-workflow-canvas-size.ts'
+import { runUsedItems } from './20260101001200-run-used-items.ts'
 
 export type Migration = {
   name: string
@@ -31,4 +32,5 @@ export const MIGRATIONS: readonly Migration[] = [
   workflowPipelines,
   workflowHistory,
   workflowCanvasSize,
+  runUsedItems,
 ]

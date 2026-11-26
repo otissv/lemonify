@@ -136,7 +136,7 @@ export async function compositeLayer(
   return compositeImage(canvas, await decode(layer.path), layer)
 }
 
-/** The same for a picture that is already made, such as a sub-document's: put over the canvas with a layer's placement settings. */
+/** The same for a picture that is already made, such as an embedded document layer's: put over the canvas with a layer's placement settings. */
 export async function compositeImage(
   canvas: RawImage,
   image: RawImage,

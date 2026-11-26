@@ -48,6 +48,7 @@ import type { JobRecord } from './jobs/job-types.ts'
 import { Scheduler } from './jobs/scheduler.ts'
 import { DocumentPlanner } from './render/document-planner.ts'
 import { WorkflowPlanner } from './render/workflow-planner.ts'
+import { CreateFromService } from './services/create-from-service.ts'
 import { DocumentService } from './services/document-service.ts'
 import { JobService } from './services/job-service.ts'
 import { DocumentBundleService } from './services/document-bundle-service.ts'
@@ -55,6 +56,7 @@ import { RenderService } from './services/render-service.ts'
 import { ResultService } from './services/result-service.ts'
 import { SourceService } from './services/source-service.ts'
 import { KeybindingService } from './services/keybinding-service.ts'
+import { UsedItems } from './services/used-items.ts'
 import { UserService } from './services/user-service.ts'
 import { WorkflowService } from './services/workflow-service.ts'
 import { SharpImageEngine } from './tools/image-engine.ts'
@@ -97,6 +99,8 @@ export type App = {
   bundles: DocumentBundleService
   jobs: JobService
   workflows: WorkflowService
+  /** Makes a workflow from a document and a document from a workflow. */
+  createFrom: CreateFromService
   keybindings: KeybindingService
   aiTools: AiToolRegistry
   /** The open tabs, which the realtime server connects and the services tell about changes. */
@@ -209,6 +213,10 @@ export async function createApp(
     ids,
     maxUploadBytes: config.maxUploadBytes,
   })
+  const usedItems = new UsedItems({
+    documents: documentDao,
+    workflows: workflowDao,
+  })
   const documents = new DocumentService({
     documents: documentDao,
     sources: sourceDao,
@@ -216,6 +224,7 @@ export async function createApp(
     ids,
     cleanup: results,
     changes,
+    usedItems,
   })
 
   const imageEngine = overrides.imageEngine ?? new SharpImageEngine()
@@ -226,21 +235,10 @@ export async function createApp(
   ])
   const planner = new DocumentPlanner({
     documents: documentDao,
+    workflows: workflowDao,
     sources: sourceDao,
     sourceStore,
     results,
-  })
-
-  const bundles = new DocumentBundleService({
-    documents: documentDao,
-    documentService: documents,
-    sources,
-    results,
-    planner,
-    inspector,
-    logger,
-    workRoot: workDir(config),
-    maxBundleBytes: config.maxBundleBytes,
   })
 
   let scheduler: Scheduler | undefined
@@ -262,6 +260,25 @@ export async function createApp(
     workRoot: workDir(config),
     results,
     changes,
+    usedItems,
+  })
+  const bundles = new DocumentBundleService({
+    documents: documentDao,
+    documentService: documents,
+    workflowService: workflows,
+    usedItems,
+    sources,
+    results,
+    planner,
+    inspector,
+    logger,
+    workRoot: workDir(config),
+    maxBundleBytes: config.maxBundleBytes,
+  })
+  const createFrom = new CreateFromService({
+    documents,
+    workflows,
+    sources: sourceDao,
   })
   const keybindings = new KeybindingService({
     keybindings: new SqliteKeybindingDao(database),
@@ -269,6 +286,7 @@ export async function createApp(
     changes,
   })
   const workflowPlanner = new WorkflowPlanner({
+    documents: documentDao,
     workflows: workflowDao,
     sources: sourceDao,
     sourceStore,
@@ -340,6 +358,8 @@ export async function createApp(
         results,
         workRoot: workDir(config),
         logger,
+        usedItems,
+        changes,
       }),
       [JobKind.RunItem]: new RunItemHandler({
         workflows: workflowDao,
@@ -378,6 +398,7 @@ export async function createApp(
     bundles,
     jobs,
     workflows,
+    createFrom,
     keybindings,
     aiTools,
     realtime,

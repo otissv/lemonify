@@ -36,6 +36,7 @@ import { requireOwned } from '../domain/ownership.ts'
 import { ConflictError, ValidationError } from '../errors.ts'
 import type { ChangePublisher } from '../realtime/change-publisher.ts'
 import { toSourceSummary } from './source-service.ts'
+import type { UsedItems } from './used-items.ts'
 
 const MISSING_IMAGE = 'That image does not exist.'
 const MISSING_OPERAND = 'An image used by this step does not exist.'
@@ -55,6 +56,8 @@ export type DocumentServiceDependencies = {
   cleanup: DocumentCleanup
   /** Tells the person's open tabs what changed. */
   changes: ChangePublisher
+  /** The rules for layers that use other documents and workflows. */
+  usedItems: UsedItems
 }
 
 function cleanName(raw: string): string {
@@ -162,9 +165,11 @@ export class DocumentService {
       )
     }
     const operandSourceIds = await this.#ownedOperands(actor, checked.data)
+    const id = this.#deps.ids.next()
+    await this.#checkUsed(actor, id, checked.data)
     const now = isoNow(this.#deps.clock)
     const record: DocumentRecord = {
-      id: this.#deps.ids.next(),
+      id,
       ownerId: actor.userId,
       name: cleanName(name),
       pipeline: checked.data,
@@ -219,6 +224,10 @@ export class DocumentService {
 
   async delete(actor: Actor, id: string): Promise<void> {
     await this.#owned(actor, id)
+    await this.#deps.usedItems.requireUnused(actor.userId, {
+      kind: 'document',
+      id,
+    })
     await this.#deps.cleanup.onDocumentDeleted(actor, id)
     await this.#deps.documents.delete(id)
     this.#deps.changes.publish(actor.userId, {
@@ -239,6 +248,7 @@ export class DocumentService {
     const planned = this.#plan(record.pipeline, change)
     if (planned === null) return this.#view(record)
     const operandSourceIds = await this.#ownedOperands(actor, planned.pipeline)
+    await this.#checkUsed(actor, id, planned.pipeline)
     const changed = await this.#deps.documents.applyChange({
       id,
       expectedRevision: revision,
@@ -249,6 +259,7 @@ export class DocumentService {
       now: isoNow(this.#deps.clock),
     })
     this.#announceEdit(actor, record, changed)
+    await this.#announcePicture(actor, id)
     return this.#view(changed)
   }
 
@@ -281,6 +292,7 @@ export class DocumentService {
     }
     const change = offset === -1 ? entry.patch.inverse : entry.patch.forward
     const pipeline = this.#apply(record.pipeline, change)
+    await this.#checkUsed(actor, id, pipeline)
     const moved = await documents.moveCursor({
       id,
       expectedRevision: revision,
@@ -291,6 +303,7 @@ export class DocumentService {
       now: isoNow(clock),
     })
     this.#announceEdit(actor, record, moved)
+    await this.#announcePicture(actor, id)
     return this.#view(moved)
   }
 
@@ -308,6 +321,15 @@ export class DocumentService {
   }
 
   /** After an edit, undo or redo: the document moved on, and the list too when it now shows another image. */
+  #announcePicture(actor: Actor, id: string): Promise<void> {
+    const { usedItems, changes } = this.#deps
+    return usedItems.announcePictureChanged(
+      actor.userId,
+      { kind: 'document', id },
+      changes,
+    )
+  }
+
   #announceEdit(
     actor: Actor,
     before: DocumentRecord,
@@ -355,6 +377,15 @@ export class DocumentService {
     } catch (error) {
       throw asValidation(error)
     }
+  }
+
+  /** The documents and workflows the layers use must be the actor's own, never lead back to this document, and stay within the depth limit. */
+  #checkUsed(actor: Actor, id: string, pipeline: Pipeline): Promise<void> {
+    return this.#deps.usedItems.check(
+      actor.userId,
+      { kind: 'document', id },
+      pipeline,
+    )
   }
 
   /** Every Source a Pipeline uses (as a layer or as a second image) must be the actor's own. */

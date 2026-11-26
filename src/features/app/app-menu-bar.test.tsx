@@ -590,7 +590,10 @@ describe('AppMenuBar', () => {
         'Undo',
         'Redo',
         'Add image layer',
+        'Add document layer…',
+        'Add workflow layer…',
         'Insert image',
+        'Insert workflow…',
         'Replace image',
         'Canvas size…',
         'Show original',
@@ -853,6 +856,8 @@ describe('AppMenuBar', () => {
         'Undo',
         'Redo',
         'Add image layer',
+        'Add document layer…',
+        'Add workflow layer…',
         'Canvas size…',
       ])
       await user.keyboard('{Escape}')

@@ -109,9 +109,12 @@ export class DocumentBundleService {
       pipeline: document.pipeline,
       sources: [],
       results: [],
+      documents: [],
+      workflows: [],
     }
     const objects = new Map<string, StoredObject>()
-    await this.#collectSources(actor, document, manifest, objects)
+    const imageIds = await this.#collectUsed(actor, document, manifest)
+    await this.#collectSources(actor, imageIds, manifest, objects)
     await this.#collectResults(actor, document, manifest, objects)
     this.#checkSize(objects)
     await mkdir(path.dirname(target), { recursive: true })
@@ -143,14 +146,39 @@ export class DocumentBundleService {
     }
   }
 
-  async #collectSources(
+  /** Lists every document and workflow the layers use, however deep; the images of all of them and of the document, each once. */
+  async #collectUsed(
     actor: Actor,
     document: DocumentRecord,
+    manifest: Manifest,
+  ): Promise<ReadonlyArray<string>> {
+    const images = new Set(pipelineOperandSourceIds(document.pipeline))
+    const used = await this.#deps.usedItems.tree(
+      actor.userId,
+      document.pipeline,
+    )
+    for (const { id, name, pipeline } of used.documents) {
+      manifest.documents.push({ id, name, pipeline })
+      for (const image of pipelineOperandSourceIds(pipeline)) images.add(image)
+    }
+    for (const { id, name, definition } of used.workflows) {
+      manifest.workflows.push({ id, name, definition })
+      for (const image of pipelineOperandSourceIds(definition.pipeline)) {
+        images.add(image)
+      }
+      for (const image of definition.inputs) images.add(image)
+    }
+    return [...images]
+  }
+
+  async #collectSources(
+    actor: Actor,
+    imageIds: ReadonlyArray<string>,
     manifest: Manifest,
     objects: Map<string, StoredObject>,
   ): Promise<void> {
     const { sources } = this.#deps
-    for (const id of pipelineOperandSourceIds(document.pipeline)) {
+    for (const id of imageIds) {
       const source = await sources.get(actor, id)
       const file = await sources.pathOf(actor, id)
       if ((await fileHash(file)) !== source.contentHash) {

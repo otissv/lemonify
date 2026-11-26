@@ -1,11 +1,12 @@
-import { RiAddLine } from '@remixicon/react'
+import { useCallback } from 'react'
 
 import { AppMenuBar } from '@/features/app/app-menu-bar'
-import { Button } from '@/components/ui/button'
 import { TabsContent } from '@/components/ui/tabs'
 import type { AiToolSummary } from '@/features/ai/ai-tools'
 import type { DocumentChange } from '@/features/pipeline/document-change'
+import { askForUsedLayer } from '@/features/create-from/add-used-layer'
 import { FloatingPanel } from '@/features/tools/floating-panel'
+import { LayerTool, LayerTools } from '@/features/tools/layer-tools'
 import { ToolTabs, WORKFLOW_TOOLS, shownTool } from '@/features/tools/tool-tabs'
 import type { ToolEntry } from '@/features/tools/tool-catalogue'
 import { ToolsList } from '@/features/tools/tools-browser'
@@ -35,51 +36,48 @@ interface WorkflowPanelProps {
   onCanvasSizeChange: (canvasSize: CanvasSize) => void
 }
 
-interface LayerButtonsProps {
+interface WorkflowLayerToolsProps {
+  workflowId: string
   onAdd: (choice: NewStepChoice) => void
 }
 
-function LayerButtons({ onAdd }: LayerButtonsProps): React.JSX.Element {
-  function handleLayer(): void {
+/** The layers a workflow adds from Tools: an empty image layer, a group, or a layer that draws a document or another workflow, chosen in a picker. */
+function WorkflowLayerTools({
+  workflowId,
+  onAdd,
+}: WorkflowLayerToolsProps): React.JSX.Element {
+  const handleImageLayer = useCallback((): void => {
     onAdd({ kind: 'image-layer' })
-  }
-
-  function handleGroup(): void {
+  }, [onAdd])
+  const handleGroup = useCallback((): void => {
     onAdd({ kind: 'group' })
-  }
+  }, [onAdd])
+  const handleDocumentLayer = useCallback((): void => {
+    askForUsedLayer(workflowId, 'document')
+  }, [workflowId])
+  const handleWorkflowLayer = useCallback((): void => {
+    askForUsedLayer(workflowId, 'workflow')
+  }, [workflowId])
 
   return (
-    <div className="flex flex-col gap-1">
-      <h3 className="px-2 py-1 text-caption font-medium text-muted-foreground">
-        Layers
-      </h3>
-      <ul className="flex flex-col">
-        <li>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Add Image layer"
-            className="w-full justify-start gap-2 px-2"
-            onClick={handleLayer}
-          >
-            <RiAddLine aria-hidden="true" />
-            Image layer
-          </Button>
-        </li>
-        <li>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Add Group"
-            className="w-full justify-start gap-2 px-2"
-            onClick={handleGroup}
-          >
-            <RiAddLine aria-hidden="true" />
-            Group
-          </Button>
-        </li>
-      </ul>
-    </div>
+    <LayerTools>
+      <LayerTool
+        label="Image layer"
+        actionId="edit.addImageLayer"
+        onAdd={handleImageLayer}
+      />
+      <LayerTool
+        label="Document layer"
+        actionId="edit.addDocumentLayer"
+        onAdd={handleDocumentLayer}
+      />
+      <LayerTool
+        label="Workflow layer"
+        actionId="edit.addWorkflowLayer"
+        onAdd={handleWorkflowLayer}
+      />
+      <LayerTool label="Group" onAdd={handleGroup} />
+    </LayerTools>
   )
 }
 
@@ -100,9 +98,12 @@ export function WorkflowPanel(props: WorkflowPanelProps): React.JSX.Element {
     )
   }
 
-  function handleAddLayer(choice: NewStepChoice): void {
-    onAddStep(choice)
-  }
+  const handleAddLayer = useCallback(
+    (choice: NewStepChoice): void => {
+      onAddStep(choice)
+    },
+    [onAddStep],
+  )
 
   return (
     <FloatingPanel
@@ -123,7 +124,12 @@ export function WorkflowPanel(props: WorkflowPanelProps): React.JSX.Element {
           <ToolsList
             tools={tools}
             onAdd={handleAddTool}
-            before={<LayerButtons onAdd={handleAddLayer} />}
+            before={
+              <WorkflowLayerTools
+                workflowId={workflow.id}
+                onAdd={handleAddLayer}
+              />
+            }
           />
         </TabsContent>
         <TabsContent value={Tool.Options} className="min-w-0 overflow-y-auto">

@@ -9,7 +9,16 @@ import {
 import { canRunAction, runAction } from '@/features/keybindings/action-runner'
 import type { ActionContext } from '@/features/keybindings/action-runner'
 import { Page } from '@/features/keybindings/actions'
-import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
+import { convertLayer } from '@/features/create-from/convert-layer'
+import {
+  createDocumentLayerStep,
+  createWorkflowLayerStep,
+} from '@/features/pipeline/layer-kinds'
+import {
+  createEmbeddedDocumentStep,
+  createGroupStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 import { SidePanelTab, Tool, useUiStore } from '@/store/ui-store'
 import {
   AI_CATALOGUES,
@@ -27,6 +36,10 @@ vi.mock('@/features/pipeline/pipeline-sync', () => ({
   loadDocument: vi.fn().mockResolvedValue(undefined),
   undoEdit: vi.fn().mockResolvedValue(undefined),
   redoEdit: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/features/create-from/convert-layer', () => ({
+  convertLayer: vi.fn().mockResolvedValue(undefined),
 }))
 
 function opener(): ImageOpener {
@@ -399,7 +412,7 @@ describe('step actions', () => {
     expect(runAction('step.ungroup', context())).toBe(true)
     expect(applyEdit).toHaveBeenLastCalledWith(DOCUMENT_ID, {
       type: 'ungroup',
-      groupId: group.id,
+      stepId: group.id,
     })
     select(rotate.id)
     expect(canRunAction('step.ungroup', context())).toBe(false)
@@ -409,6 +422,38 @@ describe('step actions', () => {
 describe('tool actions', () => {
   beforeEach(() => {
     loadDocumentIntoEditor(documentView([createSharpStep('blur')]))
+  })
+
+  it('move, select and ungroup steps at any depth, inside embedded document layers too', () => {
+    const inner = createGroupStep([blur, flip])
+    const embedded = createEmbeddedDocumentStep([inner])
+    loadDocumentIntoEditor(documentView([embedded, rotate]))
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, flip.id)
+    expect(canRunAction('step.moveDown', context())).toBe(false)
+    expect(runAction('step.moveUp', context())).toBe(true)
+    expect(applyEdit).toHaveBeenLastCalledWith(
+      DOCUMENT_ID,
+      expect.objectContaining({
+        type: 'move-step',
+        stepId: flip.id,
+        to: 0,
+        parentId: inner.id,
+      }),
+    )
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, embedded.id)
+    runAction('step.selectDown', context())
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(inner.id)
+    runAction('step.selectDown', context())
+    expect(useUiStore.getState().selectedSteps[DOCUMENT_ID]).toBe(blur.id)
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, embedded.id)
+    expect(runAction('step.ungroup', context())).toBe(true)
+    expect(applyEdit).toHaveBeenLastCalledWith(DOCUMENT_ID, {
+      type: 'ungroup',
+      stepId: embedded.id,
+    })
   })
 
   it('add a Sharp tool as a step after the selected one', () => {
@@ -469,5 +514,160 @@ describe('view actions', () => {
     )
     expect(near).toBeGreaterThan(0)
     expect(far).toBeGreaterThan(near)
+  })
+})
+
+describe('making a new item from the one on screen', () => {
+  const WORKFLOW_ID = 'w1'
+
+  it('open the new workflow dialog for the document, or for its selected group or embedded document layer', () => {
+    const group = createGroupStep([blur])
+    loadDocumentIntoEditor(documentView([group, flip]))
+
+    expect(runAction('file.newWorkflowFromDocument', context())).toBe(true)
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'workflow-from-document',
+      documentId: DOCUMENT_ID,
+    })
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, group.id)
+    runAction('file.newWorkflowFromDocument', context())
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'workflow-from-document',
+      documentId: DOCUMENT_ID,
+      stepId: group.id,
+    })
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, flip.id)
+    runAction('file.newWorkflowFromDocument', context())
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'workflow-from-document',
+      documentId: DOCUMENT_ID,
+    })
+  })
+
+  it('open the new document dialog for the workflow, only on a workflow’s page', () => {
+    usePipelineStore.getState().confirmWorkflow(workflowView(WORKFLOW_ID), true)
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
+
+    expect(runAction('file.newDocumentFromWorkflow', workflow)).toBe(true)
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'document-from-workflow',
+      workflowId: WORKFLOW_ID,
+    })
+    expect(canRunAction('file.newWorkflowFromDocument', workflow)).toBe(false)
+
+    loadDocumentIntoEditor(documentView())
+    expect(canRunAction('file.newDocumentFromWorkflow', context())).toBe(false)
+    expect(
+      canRunAction(
+        'file.newWorkflowFromDocument',
+        context({ page: Page.Home, documentId: undefined }),
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('a new item from a selected document or workflow layer', () => {
+  it('makes a workflow from the document a selected document layer uses, on any page', () => {
+    const layer = createDocumentLayerStep('d2')
+    loadDocumentIntoEditor(documentView([layer]))
+    useUiStore.getState().selectStep(DOCUMENT_ID, layer.id)
+
+    runAction('file.newWorkflowFromDocument', context())
+
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'workflow-from-document',
+      documentId: 'd2',
+    })
+  })
+
+  it('makes a document from the workflow a selected workflow layer uses, with the layer’s image, even in a document', () => {
+    const layer = createWorkflowLayerStep('w2', 'src-logo')
+    const empty = createWorkflowLayerStep('w3')
+    loadDocumentIntoEditor(documentView([layer, empty]))
+    useUiStore.getState().selectStep(DOCUMENT_ID, layer.id)
+
+    expect(runAction('file.newDocumentFromWorkflow', context())).toBe(true)
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'document-from-workflow',
+      workflowId: 'w2',
+      inputImage: 'src-logo',
+    })
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, empty.id)
+    runAction('file.newDocumentFromWorkflow', context())
+    expect(useUiStore.getState().createFrom).toMatchObject({
+      inputImage: null,
+    })
+  })
+})
+
+describe('converting the selected layer', () => {
+  it('converts a selected document layer, and is off for any other step', () => {
+    const layer = createDocumentLayerStep('d2')
+    loadDocumentIntoEditor(documentView([blur, layer]))
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
+    expect(canRunAction('step.convertToEmbedded', context())).toBe(false)
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, layer.id)
+    expect(runAction('step.convertToEmbedded', context())).toBe(true)
+    expect(convertLayer).toHaveBeenCalledWith(DOCUMENT_ID, layer.id)
+  })
+})
+
+describe('adding a document or workflow layer', () => {
+  it('opens the picker for the kind, to add it after the selected step', () => {
+    loadDocumentIntoEditor(documentView([blur, flip]))
+
+    expect(runAction('edit.addDocumentLayer', context())).toBe(true)
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'add-used-layer',
+      itemId: DOCUMENT_ID,
+      layer: 'document',
+    })
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
+    runAction('edit.addWorkflowLayer', context())
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'add-used-layer',
+      itemId: DOCUMENT_ID,
+      layer: 'workflow',
+      afterStepId: blur.id,
+    })
+  })
+
+  it('opens the picker on a workflow’s page too', () => {
+    const WORKFLOW_ID = 'w1'
+    usePipelineStore.getState().confirmWorkflow(workflowView(WORKFLOW_ID), true)
+    const workflow = context({ page: Page.Workflow, documentId: WORKFLOW_ID })
+
+    expect(runAction('edit.addDocumentLayer', workflow)).toBe(true)
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'add-used-layer',
+      itemId: WORKFLOW_ID,
+      layer: 'document',
+    })
+  })
+})
+
+describe('adding a workflow to the document', () => {
+  it('opens the insert workflow dialog, to add it after the selected step', () => {
+    loadDocumentIntoEditor(documentView([blur, flip]))
+
+    expect(runAction('edit.insertWorkflow', context())).toBe(true)
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'insert-workflow',
+      documentId: DOCUMENT_ID,
+    })
+
+    useUiStore.getState().selectStep(DOCUMENT_ID, blur.id)
+    runAction('edit.insertWorkflow', context())
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'insert-workflow',
+      documentId: DOCUMENT_ID,
+      afterStepId: blur.id,
+    })
   })
 })

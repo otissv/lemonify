@@ -1,6 +1,6 @@
 import type { Readable } from 'node:stream'
 
-import { PipelineStepKind, effectiveSteps } from '@/features/pipeline/pipeline'
+import { PipelineStepKind, isContainerStep } from '@/features/pipeline/pipeline'
 import type { Pipeline } from '@/features/pipeline/pipeline'
 import { stepsBefore, stepsThrough } from '@/features/pipeline/step-input'
 import { ExportSettingsSchema } from '@/features/export/export-settings'
@@ -37,12 +37,14 @@ import { WorkerPool } from '@/features/ai/ai-tools'
 const MISSING_DOCUMENT = 'That image does not exist.'
 const MISSING_WORKFLOW = 'That workflow does not exist.'
 const MISSING_RENDER = 'That picture is not available. Request it again.'
-/** Every step that does work, and each sub-document, which has a picture of its own to show. */
-function thumbnailStepIds(pipeline: Pipeline): string[] {
-  return pipeline.steps.flatMap((step) => {
-    if (step.kind !== PipelineStepKind.Group) return [step.id]
-    const inner = step.steps.map(({ id }) => id)
-    return step.subDocument ? [step.id, ...inner] : inner
+/** Every step that does work, and each embedded document layer, which has a picture of its own to show, at any depth. */
+function thumbnailStepIds(steps: Pipeline['steps']): string[] {
+  return steps.flatMap((step) => {
+    if (!isContainerStep(step)) return [step.id]
+    const inner = thumbnailStepIds(step.steps)
+    return step.kind === PipelineStepKind.EmbeddedDocument
+      ? [step.id, ...inner]
+      : inner
   })
 }
 
@@ -161,7 +163,7 @@ export class RenderService {
     options: ThumbnailOptions = {},
   ): Promise<JobView> {
     const document = await this.#owned(actor, documentId)
-    const ids = options.stepIds ?? thumbnailStepIds(document.pipeline)
+    const ids = options.stepIds ?? thumbnailStepIds(document.pipeline.steps)
     const beforeIds = options.beforeStepIds ?? []
     for (const id of beforeIds) {
       if (stepsBefore(document.pipeline, id) === undefined) {
@@ -266,20 +268,20 @@ export class RenderService {
     stepId: string,
   ): Promise<JobView> {
     const document = await this.#owned(actor, documentId)
-    const step = effectiveSteps(document.pipeline).find(
-      ({ id }) => id === stepId,
-    )
-    if (step?.kind !== PipelineStepKind.Ai || !step.enabled) {
-      throw new ValidationError(NOT_AN_AI_STEP)
-    }
-    const entry = this.#deps.registry.get(step.tool)
     const plan = await this.#deps.planner.plan(document)
-    const first = plan.pending[0]
-    if (first?.step.id !== step.id) {
-      throw first === undefined
+    const waiting = plan.pending.find(({ step }) => step.id === stepId)
+    if (waiting === undefined) {
+      throw plan.aiKeys.has(stepId)
         ? new ConflictError(ALREADY_RUN)
-        : new ValidationError(EARLIER_FIRST)
+        : new ValidationError(NOT_AN_AI_STEP)
     }
+    // A step inside a document layer is that document's: it runs and keeps it.
+    if (waiting.documentId !== undefined && waiting.documentId !== documentId) {
+      return this.requestAiStep(actor, waiting.documentId, stepId)
+    }
+    if (plan.pending[0] !== waiting) throw new ValidationError(EARLIER_FIRST)
+    const { step } = waiting
+    const entry = this.#deps.registry.get(step.tool)
     const active = await this.#activeJob(
       document,
       JobKind.AiStep,

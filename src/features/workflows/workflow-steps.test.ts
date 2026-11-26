@@ -2,9 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import { AiToolId } from '@/features/ai/ai-tools'
 import { ExportFormat } from '@/features/export/export-settings'
-import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
+import {
+  createDocumentLayerStep,
+  createImageLayerStep,
+  createWorkflowLayerStep,
+} from '@/features/pipeline/layer-kinds'
+import type { LayerNames } from '@/features/pipeline/layer-kinds'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
@@ -17,7 +23,11 @@ import {
   stepSummary,
 } from '@/features/workflows/workflow-steps'
 
-const NAME = (id: string): string => `${id}.png`
+const NAME: LayerNames = {
+  image: (id) => `${id}.png`,
+  document: (id) => (id === 'd1' ? 'Badge' : undefined),
+  workflow: (id) => (id === 'w1' ? 'Brand' : undefined),
+}
 
 describe('stepLabel', () => {
   it('is the name a step was given, or its tool’s name', () => {
@@ -29,9 +39,26 @@ describe('stepLabel', () => {
 })
 
 describe('stepSummary', () => {
-  it('says an image layer with no image is where each input image goes', () => {
-    expect(stepSummary(createImageLayerStep(), NAME)).toBe(INPUT_SLOT_SUMMARY)
-    expect(stepSummary(createImageLayerStep('logo'), NAME)).toBe('logo.png')
+  it('says the input slot is where each input image goes, whatever image it has', () => {
+    const slot = createImageLayerStep('placeholder')
+
+    expect(stepSummary(slot, NAME, slot.id)).toBe(INPUT_SLOT_SUMMARY)
+    expect(stepSummary(createImageLayerStep(), NAME, slot.id)).toBe(
+      'No image yet',
+    )
+    expect(stepSummary(createImageLayerStep('logo'), NAME, slot.id)).toBe(
+      'logo.png',
+    )
+  })
+
+  it('names the document or workflow a layer draws, and a workflow layer’s image', () => {
+    expect(stepSummary(createDocumentLayerStep('d1'), NAME)).toBe('Badge')
+    expect(stepSummary(createWorkflowLayerStep('w1', 'logo'), NAME)).toBe(
+      'Brand · logo.png',
+    )
+    expect(stepSummary(createDocumentLayerStep('gone'), NAME)).toBe(
+      'Document not available',
+    )
   })
 
   it('says how many options a Sharp step still needs, or has set', () => {
@@ -51,12 +78,12 @@ describe('stepSummary', () => {
     expect(stepSummary(step, NAME)).toBe('m · 4×')
   })
 
-  it('counts the steps in a group and says when it has a picture of its own', () => {
-    const group = createGroupStep([createSharpStep('flip')])
+  it('counts the steps in a group, and says which is an embedded document layer', () => {
+    const steps = [createSharpStep('flip')]
 
-    expect(stepSummary(group, NAME)).toBe('1 step')
-    expect(stepSummary({ ...group, subDocument: true }, NAME)).toBe(
-      '1 step · own picture',
+    expect(stepSummary(createGroupStep(steps), NAME)).toBe('1 step')
+    expect(stepSummary(createEmbeddedDocumentStep(steps), NAME)).toBe(
+      '1 step · embedded document',
     )
   })
 })

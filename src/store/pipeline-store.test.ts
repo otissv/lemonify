@@ -31,6 +31,7 @@ describe('usePipelineStore', () => {
         status: PreviewStatus.Ready,
         key: 'a',
         pendingStepIds: [],
+        waitingLayerIds: [],
         problems: [],
       })
       store.setThumbnails(SECOND, [{ stepId: 's', key: 'b' }])
@@ -40,6 +41,23 @@ describe('usePipelineStore', () => {
       expect(usePipelineStore.getState().thumbnails[SECOND]).toEqual([
         { stepId: 's', key: 'b' },
       ])
+    })
+  })
+
+  describe('a picture that is out of date', () => {
+    it('counts each time something its layers use changed, and forgets the count with the pipeline', () => {
+      const store = usePipelineStore.getState()
+      expect(usePipelineStore.getState().pictureVersions[FIRST]).toBeUndefined()
+
+      store.pictureChanged(FIRST)
+      store.pictureChanged(FIRST)
+      store.pictureChanged(SECOND)
+
+      expect(usePipelineStore.getState().pictureVersions[FIRST]).toBe(2)
+      expect(usePipelineStore.getState().pictureVersions[SECOND]).toBe(1)
+
+      store.forgetPipeline(FIRST)
+      expect(usePipelineStore.getState().pictureVersions[FIRST]).toBeUndefined()
     })
   })
 
@@ -192,6 +210,7 @@ describe('usePipelineStore', () => {
       status: PreviewStatus.Ready,
       key: 'a',
       pendingStepIds: [],
+      waitingLayerIds: [],
       problems: [],
     })
     store.setAiRun(FIRST, {

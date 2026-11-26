@@ -1,7 +1,11 @@
 import { z } from 'zod'
 
 import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
-import { PipelineStepKind } from '@/features/pipeline/pipeline'
+import {
+  PipelineStepKind,
+  isContainerStep,
+  isGroupMember,
+} from '@/features/pipeline/pipeline'
 import type {
   LeafStep,
   Pipeline,
@@ -35,9 +39,7 @@ function layerIds(options: Record<string, unknown>): string[] {
  * Images are always Sources of the same User, never paths.
  */
 export function stepOperandSourceIds(step: PipelineStep): string[] {
-  if (step.kind === PipelineStepKind.Group) {
-    return step.steps.flatMap(stepOperandSourceIds)
-  }
+  if (isContainerStep(step)) return step.steps.flatMap(stepOperandSourceIds)
   if (isLayerStep(step)) return layerKind(step).sourceIds(step)
   if (step.kind !== PipelineStepKind.Sharp) return []
   if (step.op === 'boolean') {
@@ -115,14 +117,23 @@ export function remapPipelineSources(
   pipeline: Pipeline,
   ids: SourceIds,
 ): Pipeline {
-  const steps = pipeline.steps.map(
-    (step): PipelineStep =>
-      step.kind === PipelineStepKind.Group
-        ? {
-            ...step,
-            steps: step.steps.map((inner) => remapStepSources(inner, ids)),
-          }
-        : remapStepSources(step, ids),
-  )
-  return { ...pipeline, steps }
+  return { ...pipeline, steps: remapSteps(pipeline.steps, ids) }
+}
+
+function remapSteps(
+  steps: ReadonlyArray<PipelineStep>,
+  ids: SourceIds,
+): PipelineStep[] {
+  return steps.map((step): PipelineStep => {
+    if (step.kind === PipelineStepKind.Group) {
+      return {
+        ...step,
+        steps: remapSteps(step.steps, ids).filter(isGroupMember),
+      }
+    }
+    if (step.kind === PipelineStepKind.EmbeddedDocument) {
+      return { ...step, steps: remapSteps(step.steps, ids) }
+    }
+    return remapStepSources(step, ids)
+  })
 }

@@ -51,10 +51,12 @@ test('groups a step from the toolbar, folds, switches and places it, and takes i
   await steps.getByRole('button', { name: 'Show Group' }).click()
 
   await steps.getByRole('button', { name: 'Group Group' }).click()
-  await page.getByRole('switch', { name: 'Own picture' }).click()
-  await expect(page.getByRole('switch', { name: 'Own picture' })).toBeChecked()
+  await page.getByRole('switch', { name: 'Embedded document layer' }).click()
+  await expect(
+    page.getByRole('switch', { name: 'Embedded document layer' }),
+  ).toBeChecked()
   await expect(page.getByRole('slider', { name: 'Opacity' })).toBeVisible()
-  await page.getByRole('switch', { name: 'Own picture' }).click()
+  await page.getByRole('switch', { name: 'Embedded document layer' }).click()
   await expect(steps.getByText('1 step', { exact: true })).toBeVisible()
 
   // Saved: a second tab, which reads the document from the server, finds the group. This tab stays open, so its changes still get sent.

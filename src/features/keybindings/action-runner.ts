@@ -4,9 +4,11 @@ import { canRedoNow, canUndoNow } from '@/features/pipeline/pipeline-session'
 import { redoEdit, undoEdit } from '@/features/pipeline/pipeline-sync'
 import { Page, actionById } from '@/features/keybindings/actions'
 import {
-  PipelineStepKind,
+  childSteps,
+  findStep,
   groupableSteps,
   hasEdits,
+  isContainerStep,
   leafSteps,
 } from '@/features/pipeline/pipeline'
 import type { Pipeline, PipelineStep } from '@/features/pipeline/pipeline'
@@ -18,7 +20,14 @@ import {
   setStepOn,
   ungroupSteps,
 } from '@/features/pipeline/pipeline-actions'
-import { isLayerStep } from '@/features/pipeline/layer-kinds'
+import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
+import type { UsedItem } from '@/features/pipeline/layer-kinds'
+import { convertLayer } from '@/features/create-from/convert-layer'
+import {
+  afterSelected,
+  selectedContainer,
+} from '@/features/create-from/create-from-request'
+import { askForUsedLayer } from '@/features/create-from/add-used-layer'
 import { addTool } from '@/features/tools/add-tool'
 import { PAN_STEPS, panDistance } from '@/features/viewport/pan-step'
 import { viewportActionsFor } from '@/features/viewport/use-viewport'
@@ -28,6 +37,7 @@ import {
   currentPipeline,
   documentSession,
   usePipelineStore,
+  workflowSession,
 } from '@/store/pipeline-store'
 
 /** What an action needs from the page it runs on. */
@@ -76,7 +86,7 @@ type Place = {
   step: PipelineStep
   siblings: ReadonlyArray<PipelineStep>
   index: number
-  groupId?: string
+  parentId?: string
 }
 
 function placeOf(
@@ -84,33 +94,26 @@ function placeOf(
   id: string | undefined,
 ): Place | undefined {
   if (pipeline === undefined || id === undefined) return undefined
-  for (const [index, step] of pipeline.steps.entries()) {
-    if (step.id === id) return { step, siblings: pipeline.steps, index }
-    if (step.kind !== PipelineStepKind.Group) continue
-    const inner = step.steps.findIndex((leaf) => leaf.id === id)
-    const leaf = step.steps[inner]
-    if (leaf !== undefined) {
-      return {
-        step: leaf,
-        siblings: step.steps,
-        index: inner,
-        groupId: step.id,
-      }
-    }
-  }
-  return undefined
+  const found = findStep(pipeline, id)
+  if (found === undefined) return undefined
+  const siblings = childSteps(pipeline, found.parentId)
+  if (siblings === undefined) return undefined
+  return { ...found, siblings }
 }
 
-/** Every step in the order the sidebar lists them: each group, then the steps in it. */
-function listedStepIds(pipeline: Pipeline): string[] {
+/** Every step in the order the sidebar lists them: each container, then the steps in it, at any depth. */
+function listedStepIds(steps: ReadonlyArray<PipelineStep>): string[] {
   const ids: string[] = []
-  for (const step of pipeline.steps) {
+  for (const step of steps) {
     ids.push(step.id)
-    if (step.kind === PipelineStepKind.Group) {
-      for (const leaf of step.steps) ids.push(leaf.id)
-    }
+    if (isContainerStep(step)) ids.push(...listedStepIds(step.steps))
   }
   return ids
+}
+
+/** A document layer or a workflow layer, which uses another item. */
+function usesAnotherItem(step: PipelineStep): boolean {
+  return isLayerStep(step) && layerKind(step).uses(step) !== undefined
 }
 
 function hasLayer(pipeline: Pipeline | undefined): boolean {
@@ -133,7 +136,9 @@ function stepKeyEnabled(id: string, now: Snapshot): boolean {
         groupableSteps(now.pipeline, now.marked) !== undefined
       )
     case 'step.ungroup':
-      return place?.step.kind === PipelineStepKind.Group
+      return place !== undefined && isContainerStep(place.step)
+    case 'step.convertToEmbedded':
+      return place !== undefined && usesAnotherItem(place.step)
     case 'step.delete':
     case 'step.toggle':
       return place !== undefined
@@ -159,6 +164,21 @@ function documentEnabled(id: string, now: Snapshot): boolean {
     case 'file.exportImage':
     case 'file.exportDocument':
       return document !== undefined
+    case 'file.newWorkflowFromDocument':
+      return (
+        pipeline !== undefined &&
+        (document !== undefined || usedBySelected(now)?.kind === 'document')
+      )
+    case 'file.newDocumentFromWorkflow':
+      return (
+        pipeline !== undefined &&
+        (workflowSession(pipelines, documentId) !== undefined ||
+          usedBySelected(now)?.kind === 'workflow')
+      )
+    case 'edit.insertWorkflow':
+    case 'edit.addDocumentLayer':
+    case 'edit.addWorkflowLayer':
+      return pipeline !== undefined
     case 'edit.replaceImage':
       return document !== undefined && hasLayer(pipeline)
     case 'edit.showOriginal':
@@ -227,7 +247,7 @@ function runViewAction(id: string, documentId: string): void {
 
 function selectNeighbour(now: Snapshot, direction: -1 | 1): void {
   if (now.pipeline === undefined) return
-  const ids = listedStepIds(now.pipeline)
+  const ids = listedStepIds(now.pipeline.steps)
   const at = now.selectedId === undefined ? -1 : ids.indexOf(now.selectedId)
   const fallback = direction === 1 ? 0 : ids.length - 1
   const next = at === -1 ? ids[fallback] : ids[at + direction]
@@ -247,6 +267,9 @@ function runStepAction(id: string, now: Snapshot): void {
     case 'step.ungroup':
       if (place !== undefined) ungroupSteps(documentId, place.step.id)
       return
+    case 'step.convertToEmbedded':
+      if (place !== undefined) void convertLayer(documentId, place.step.id)
+      return
     case 'step.delete':
       if (place !== undefined) deleteStep(documentId, place.step.id)
       return
@@ -262,7 +285,7 @@ function runStepAction(id: string, now: Snapshot): void {
         documentId,
         place.step.id,
         place.index + (id === 'step.moveUp' ? -1 : 1),
-        place.groupId,
+        place.parentId,
       )
       return
     case 'step.selectUp':
@@ -272,6 +295,54 @@ function runStepAction(id: string, now: Snapshot): void {
       selectNeighbour(now, 1)
       return
   }
+}
+
+/** What the selected step uses, when it is a document layer or a workflow layer. */
+function usedBySelected(now: Snapshot): UsedItem | undefined {
+  const step = placeOf(now.pipeline, now.selectedId)?.step
+  if (step === undefined || !isLayerStep(step)) return undefined
+  return layerKind(step).uses(step)
+}
+
+/**
+ * Opens the dialog that makes a new item from the one on screen, from its
+ * selected group or embedded document layer, or, when a document layer or
+ * workflow layer is selected, from the item it uses as if that were open: a
+ * workflow layer's image is the new document's input image.
+ */
+function openCreateFrom(id: string, now: Snapshot): void {
+  if (now.pipeline === undefined) return
+  const used = usedBySelected(now)
+  const store = useUiStore.getState()
+  if (id === 'file.newWorkflowFromDocument' && used?.kind === 'document') {
+    store.setCreateFrom({
+      kind: 'workflow-from-document',
+      documentId: used.documentId,
+    })
+    return
+  }
+  if (id === 'file.newDocumentFromWorkflow' && used?.kind === 'workflow') {
+    store.setCreateFrom({
+      kind: 'document-from-workflow',
+      workflowId: used.workflowId,
+      inputImage: used.sourceId ?? null,
+    })
+    return
+  }
+  const from = selectedContainer(now.pipeline, now.selectedId)
+  useUiStore.getState().setCreateFrom(
+    id === 'file.newWorkflowFromDocument'
+      ? {
+          kind: 'workflow-from-document',
+          documentId: now.documentId,
+          ...from,
+        }
+      : {
+          kind: 'document-from-workflow',
+          workflowId: now.documentId,
+          ...from,
+        },
+  )
 }
 
 /** Where the canvas size is set: a document's Document panel, or a workflow's Canvas in Options. */
@@ -324,6 +395,23 @@ function runDocumentAction(
       return
     case 'edit.setCanvas':
       showCanvasSize(documentId, context.page)
+      return
+    case 'file.newWorkflowFromDocument':
+    case 'file.newDocumentFromWorkflow':
+      openCreateFrom(id, snapshot(documentId))
+      return
+    case 'edit.addDocumentLayer':
+      askForUsedLayer(documentId, 'document')
+      return
+    case 'edit.addWorkflowLayer':
+      askForUsedLayer(documentId, 'workflow')
+      return
+    case 'edit.insertWorkflow':
+      store.setCreateFrom({
+        kind: 'insert-workflow',
+        documentId,
+        ...afterSelected(store.selectedSteps[documentId]),
+      })
       return
   }
   const panel = PANELS[id]

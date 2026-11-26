@@ -5,10 +5,12 @@ import { canvasOfSize } from '@/features/pipeline/canvas'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
+  createGroupStep,
   createPipeline,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
-import { fillFirstSlot, inputSlots } from '@/features/workflows/segments'
+import { fillInputSlot, inputSlot } from '@/features/workflows/segments'
 import { createWorkflow } from '@/features/workflows/workflow'
 import {
   CANVAS_NODE_ID,
@@ -35,6 +37,42 @@ describe('omitAiSteps', () => {
   })
 })
 
+describe('omitAiSteps in embedded document layers', () => {
+  it('drops AI steps at any depth inside them', () => {
+    const blur = createSharpStep('blur')
+    const embedded = createEmbeddedDocumentStep([
+      createGroupStep([createAiStep(UPSCALE), blur]),
+      createEmbeddedDocumentStep([createAiStep(UPSCALE)]),
+    ])
+
+    const [kept] = omitAiSteps([embedded])
+
+    expect(kept).toMatchObject({
+      steps: [{ steps: [blur] }, { steps: [] }],
+    })
+  })
+})
+
+describe('shownForWorkflowNode with nesting', () => {
+  const slot = createImageLayerStep()
+  const blur = createSharpStep('blur')
+  const flip = createSharpStep('flip')
+  const group = createGroupStep([flip])
+  const embedded = createEmbeddedDocumentStep([blur, group])
+  const pipeline = createPipeline(canvasOfSize(80, 60), [slot, embedded])
+
+  it('shows a step inside an embedded document layer on that layer’s own picture', () => {
+    const shown = shownForWorkflowNode(pipeline, flip.id, slot.id)
+    expect(shown?.steps.map(({ id }) => id)).toEqual([blur.id, flip.id])
+  })
+
+  it('shows the picture an embedded document layer leaves, and none for a group', () => {
+    const shown = shownForWorkflowNode(pipeline, embedded.id, slot.id)
+    expect(shown?.steps.map(({ id }) => id)).toEqual([slot.id, embedded.id])
+    expect(shownForWorkflowNode(pipeline, group.id, slot.id)).toBeUndefined()
+  })
+})
+
 describe('shownForWorkflowNode', () => {
   const layer = createImageLayerStep()
   const sharpen = createSharpStep('sharpen')
@@ -43,16 +81,11 @@ describe('shownForWorkflowNode', () => {
 
   const workflow = {
     ...createWorkflow('Test'),
-    pipeline: createPipeline(canvasOfSize(80, 60), [
-      layer,
-      sharpen,
-      ai,
-      flop,
-    ]),
+    pipeline: createPipeline(canvasOfSize(80, 60), [layer, sharpen, ai, flop]),
     inputs: ['src-1'],
   }
-  const filled = fillFirstSlot(workflow.pipeline, 'src-1')
-  const [slot] = inputSlots(workflow.pipeline)
+  const filled = fillInputSlot(workflow.pipeline, 'src-1')
+  const slot = inputSlot(workflow.pipeline)
 
   it('shows only the canvas for the canvas node', () => {
     expect(

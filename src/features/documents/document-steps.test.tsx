@@ -13,15 +13,20 @@ import { followJob } from '@/features/jobs/follow-job'
 import { cancelJob } from '@/features/jobs/job-functions'
 import {
   createAiStep,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
-import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
+import {
+  createDocumentLayerStep,
+  createImageLayerStep,
+} from '@/features/pipeline/layer-kinds'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import {
   requestPreview,
   requestThumbnails,
 } from '@/features/render/render-functions'
+import { layerAsEmbeddedFn } from '@/features/workflows/create-from-functions'
 import { listWorkflows } from '@/features/workflows/workflow-functions'
 import { JobState } from '@/server/jobs/job-types'
 import { useUiStore } from '@/store/ui-store'
@@ -53,6 +58,10 @@ vi.mock('@/features/render/render-functions', () => ({
   requestAiStep: vi.fn(),
 }))
 vi.mock('@/features/jobs/follow-job', () => ({ followJob: vi.fn() }))
+vi.mock('@/features/workflows/create-from-functions', async (original) => ({
+  ...(await original<object>()),
+  layerAsEmbeddedFn: vi.fn(),
+}))
 vi.mock('@/features/jobs/job-functions', () => ({ cancelJob: vi.fn() }))
 
 const BLUR = createSharpStep('blur', { sigma: 2 })
@@ -515,30 +524,37 @@ describe('DocumentSteps', () => {
       ).toBeDisabled()
     })
 
-    it('says it has its own picture, and can be made one from its options', async () => {
+    it('can be made an embedded document layer from its options, and says so', async () => {
       const user = userEvent.setup()
       await showSteps([GROUP], user)
 
       await user.click(screen.getByRole('button', { name: 'Group Look' }))
       await user.click(
-        await screen.findByRole('switch', { name: 'Own picture' }),
+        await screen.findByRole('switch', { name: 'Embedded document layer' }),
       )
 
       await waitFor(() => {
         expect(lastChange()).toEqual({
-          type: 'set-sub-document',
+          type: 'set-embedded',
           stepId: GROUP.id,
-          subDocument: true,
+          embedded: true,
         })
       })
-      expect(await screen.findByText('Own picture · 2 steps')).toBeVisible()
+      expect(
+        await screen.findByText('Embedded document · 2 steps'),
+      ).toBeVisible()
     })
 
-    it('shows where it is placed only once it is a picture of its own', async () => {
+    it('shows where it is placed only once it is an embedded document layer', async () => {
       const user = userEvent.setup()
-      await showSteps([{ ...GROUP, subDocument: true }], user)
+      await showSteps(
+        [{ ...createEmbeddedDocumentStep(GROUP.steps, 'Look'), id: GROUP.id }],
+        user,
+      )
 
-      await user.click(screen.getByRole('button', { name: 'Group Look' }))
+      await user.click(
+        screen.getByRole('button', { name: 'Embedded document layer Look' }),
+      )
 
       expect(await screen.findByLabelText(/opacity/i)).toBeVisible()
     })
@@ -551,8 +567,129 @@ describe('DocumentSteps', () => {
       await user.click(await screen.findByRole('button', { name: 'Ungroup' }))
 
       await waitFor(() => {
-        expect(lastChange()).toEqual({ type: 'ungroup', groupId: GROUP.id })
+        expect(lastChange()).toEqual({ type: 'ungroup', stepId: GROUP.id })
       })
+    })
+  })
+
+  describe('a document or workflow layer', () => {
+    const USED = { ...SUMMARY, id: 'd2', name: 'Poster' }
+
+    async function showLayer(
+      user: ReturnType<typeof userEvent.setup>,
+    ): Promise<{ router: Awaited<ReturnType<typeof renderApp>>['router'] }> {
+      vi.mocked(listDocuments).mockResolvedValue([SUMMARY, USED])
+      const view = documentView([LAYER])
+      vi.mocked(getDocument).mockResolvedValue(view)
+      echoChanges(vi.mocked(changeDocument), view)
+      const rendered = await renderApp(`/documents/${DOCUMENT_ID}`)
+      await user.click(
+        await screen.findByRole('button', { name: 'Show steps of one.png' }),
+      )
+      await screen.findByRole('list', { name: 'Steps of one.png' })
+      return rendered
+    }
+
+    const LAYER = createDocumentLayerStep('d2')
+
+    function lastChange(): unknown {
+      const call = vi.mocked(changeDocument).mock.calls.at(-1)
+      return (call?.[0] as { data: { change: unknown } } | undefined)?.data
+        .change
+    }
+
+    it('has a menu that opens what it uses', async () => {
+      const user = userEvent.setup()
+      const { router } = await showLayer(user)
+
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'More actions for Document layer',
+        }),
+      )
+      await user.click(screen.getByRole('menuitem', { name: 'Open Poster' }))
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/documents/d2')
+      })
+    })
+
+    it('converts to an embedded document layer from its menu', async () => {
+      const embedded = {
+        ...createEmbeddedDocumentStep([createSharpStep('flip')]),
+        id: LAYER.id,
+      }
+      vi.mocked(layerAsEmbeddedFn).mockResolvedValue(embedded)
+      const user = userEvent.setup()
+      await showLayer(user)
+
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'More actions for Document layer',
+        }),
+      )
+      await user.click(
+        screen.getByRole('menuitem', {
+          name: 'Convert to embedded document layer',
+        }),
+      )
+
+      expect(layerAsEmbeddedFn).toHaveBeenCalledWith({
+        data: {
+          holder: { kind: 'document', id: DOCUMENT_ID },
+          stepId: LAYER.id,
+        },
+      })
+      await waitFor(() => {
+        expect(lastChange()).toEqual({ type: 'convert-step', step: embedded })
+      })
+    })
+
+    it('offers no Open for a document that is gone', async () => {
+      const user = userEvent.setup()
+      await showSteps([createDocumentLayerStep('gone')], user)
+
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'More actions for Document layer',
+        }),
+      )
+
+      expect(
+        screen.queryByRole('menuitem', { name: /^Open/ }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.getByRole('menuitem', {
+          name: 'Convert to embedded document layer',
+        }),
+      ).toBeVisible()
+    })
+
+    it('is the only kind of row with a menu', async () => {
+      const user = userEvent.setup()
+      const list = await showSteps([createImageLayerStep(), BLUR], user)
+
+      expect(
+        within(list).queryByRole('button', { name: /^More actions for/ }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('says it waits while an AI step in what it uses has not run', async () => {
+      const user = userEvent.setup()
+      const layer = createDocumentLayerStep('d2')
+      const list = await showSteps([layer], user)
+
+      usePipelineStore.getState().setPreview(DOCUMENT_ID, {
+        status: PreviewStatus.Ready,
+        key: 'k',
+        pendingStepIds: ['inner-ai'],
+        waitingLayerIds: [layer.id],
+        problems: [],
+      })
+
+      expect(
+        await within(list).findByText('Waiting for an AI step to run'),
+      ).toBeVisible()
     })
   })
 
@@ -565,6 +702,7 @@ describe('DocumentSteps', () => {
         status: PreviewStatus.Ready,
         key: 'k',
         pendingStepIds: [UPSCALE.id],
+        waitingLayerIds: [],
         problems: [],
       })
 

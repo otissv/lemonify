@@ -6,11 +6,13 @@ import { MAX_HISTORY_ENTRIES } from '@/features/pipeline/document-change'
 import { createSharpStep } from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import { MemoryDocumentDao } from '../dao/memory/document-dao'
+import { MemoryWorkflowDao } from '../dao/memory/workflow-dao'
 import { MemorySourceDao } from '../dao/memory/source-dao'
 import { MemoryStore } from '../dao/memory/store'
 import { ConflictError, NotFoundError, ValidationError } from '../errors'
 import { FixedClock, RecordingPublisher, SequenceIds } from '../testing/fakes'
 import { DocumentService } from './document-service'
+import { UsedItems } from './used-items'
 import type { DocumentCleanup } from './document-service'
 import { pipelineOf } from '@/test/pipelines'
 
@@ -79,6 +81,10 @@ beforeEach(async () => {
     ids: new SequenceIds('doc'),
     cleanup,
     changes: publisher,
+    usedItems: new UsedItems({
+      documents: new MemoryDocumentDao(store),
+      workflows: new MemoryWorkflowDao(),
+    }),
   })
   await addSource('src-1')
 })

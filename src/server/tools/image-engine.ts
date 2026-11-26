@@ -32,8 +32,8 @@ export type { EngineLayer } from './layer-compositor.ts'
  * A picture of its own, placed over the canvas like a layer: `steps` act on
  * the image at `input` only, and the result is drawn with the layer settings.
  */
-export interface EngineSubDocument extends LayerSettings {
-  kind: 'sub-document'
+export interface EngineEmbeddedDocument extends LayerSettings {
+  kind: 'embedded-document'
   input: EngineBase
   steps: ReadonlyArray<EngineStep>
 }
@@ -43,8 +43,8 @@ export type EngineBase =
   | { kind: 'file'; path: string }
   | { kind: 'canvas'; canvas: Canvas }
 
-/** One thing the engine does to the picture: a Sharp step, a layer placed over it, or a sub-document placed over it. */
-export type EngineStep = SharpStep | EngineLayer | EngineSubDocument
+/** One thing the engine does to the picture: a Sharp step, a layer placed over it, or an embedded document layer placed over it. */
+export type EngineStep = SharpStep | EngineLayer | EngineEmbeddedDocument
 
 const WHITE = '#ffffff'
 const CHANNELS = 4
@@ -293,8 +293,10 @@ async function blended(
   return fromPixels(await blendPictures(before, after, blend))
 }
 
-/** A sub-document's own picture: its image with its own steps applied, at its own size. */
-async function subPicture(step: EngineSubDocument): Promise<RawImage> {
+/** An embedded document layer's own picture: its image with its own steps applied, at its own size. Embedded document layers inside it are made the same way. */
+async function embeddedPicture(
+  step: EngineEmbeddedDocument,
+): Promise<RawImage> {
   return pixelsOf(await applySteps(baseImage(step.input), step.steps))
 }
 
@@ -313,14 +315,14 @@ async function applySteps(
   let stage: SharpOp[] = []
   const all: SharpOp[] = []
   for (const step of steps) {
-    if (step.kind === 'layer' || step.kind === 'sub-document') {
+    if (step.kind === 'layer' || step.kind === 'embedded-document') {
       pipeline = await applySharpOpsBlended(pipeline, stage, 'pixels')
       stage = []
       const canvas = await pixelsOf(pipeline)
       pipeline = fromPixels(
         step.kind === 'layer'
           ? await compositeLayer(canvas, step)
-          : await compositeImage(canvas, await subPicture(step), step),
+          : await compositeImage(canvas, await embeddedPicture(step), step),
       )
       continue
     }

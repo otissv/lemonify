@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 
 import { AppSidebar } from '@/features/app/app-sidebar'
 import { ImageOpenerProvider } from '@/features/app/image-opener'
+import { CreateFromDialog } from '@/features/create-from/create-from-dialog'
 import { NewDocumentDialog } from '@/features/documents/new-document-dialog'
 import { KeybindingsProvider } from '@/features/keybindings/keybindings-context'
 import { Page } from '@/features/keybindings/actions'
@@ -60,6 +61,7 @@ export function AppLayout(): React.JSX.Element {
           <AppSidebar />
           <ShortcutsDialog />
           <NewDocumentDialog />
+          <CreateFromDialog />
         </SidebarProvider>
       </ImageOpenerProvider>
     </KeybindingsProvider>

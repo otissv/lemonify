@@ -66,6 +66,7 @@ function show(): void {
     status: PreviewStatus.Ready,
     key: 'preview-key',
     pendingStepIds: [],
+    waitingLayerIds: [],
     problems: [],
   })
   useUiStore.getState().setViewFrame(DOCUMENT_ID, FRAME)

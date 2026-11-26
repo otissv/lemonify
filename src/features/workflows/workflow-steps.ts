@@ -3,12 +3,14 @@ import { EXPORT_FORMAT_LABELS } from '@/features/export/export-settings'
 import { isLayerStep, layerKind } from '@/features/pipeline/layer-kinds'
 import { PipelineStepKind } from '@/features/pipeline/pipeline'
 import type { AiStep, PipelineStep } from '@/features/pipeline/pipeline'
+import type { LayerNames } from '@/features/pipeline/layer-kinds'
 import { pipelineStepTitle } from '@/features/pipeline/step-problems'
 import type { OutputSettings } from '@/features/workflows/output-settings'
 import { missingSharpOptions } from '@/features/workflows/sharp-op-fields'
 
 export const INPUT_SLOT_SUMMARY = 'Each input image goes here'
 export const NO_IMAGES_SUMMARY = 'No images yet'
+export const NO_IMAGE_SUMMARY = 'No image yet'
 
 /** The name a step is shown by in the list and in the options. */
 export function stepLabel(step: PipelineStep): string {
@@ -27,20 +29,25 @@ function aiSummary(step: AiStep): string {
 }
 
 /**
- * A short line under the step's name saying how it is set up. `imageName`
- * finds the name of a layer's image, which only the page's list of images knows.
+ * A short line under the step's name saying how it is set up. `names` finds
+ * the names of what a layer uses (its image, document or workflow), which only
+ * the page knows; `slotId` is the workflow's input slot, where each input
+ * image goes.
  */
 export function stepSummary(
   step: PipelineStep,
-  imageName: (sourceId: string) => string,
+  names: LayerNames,
+  slotId?: string,
 ): string {
   if (isLayerStep(step)) {
-    const [sourceId] = layerKind(step).sourceIds(step)
-    return sourceId === undefined ? INPUT_SLOT_SUMMARY : imageName(sourceId)
+    if (step.id === slotId) return INPUT_SLOT_SUMMARY
+    return layerKind(step).display(step, names).text
   }
   switch (step.kind) {
     case PipelineStepKind.Group:
-      return `${plural(step.steps.length, 'step', 'steps')}${step.subDocument ? ' · own picture' : ''}`
+      return plural(step.steps.length, 'step', 'steps')
+    case PipelineStepKind.EmbeddedDocument:
+      return `${plural(step.steps.length, 'step', 'steps')} · embedded document`
     case PipelineStepKind.Ai:
       return aiSummary(step)
     case PipelineStepKind.Sharp: {

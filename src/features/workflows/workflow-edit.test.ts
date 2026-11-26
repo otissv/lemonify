@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { createGroupStep, createSharpStep } from '@/features/pipeline/pipeline'
+import {
+  createEmbeddedDocumentStep,
+  createGroupStep,
+  createSharpStep,
+} from '@/features/pipeline/pipeline'
 import type { PipelineStep } from '@/features/pipeline/pipeline'
 import { createWorkflow } from '@/features/workflows/workflow'
 import type { WorkflowDefinition } from '@/features/workflows/workflow'
@@ -81,18 +85,32 @@ describe('addStepChange', () => {
     expect(found?.kind === 'group' && found.steps.at(-1)?.id).toBe(added.id)
   })
 
-  it('adds a group at the top even when a step in a group is selected', () => {
+  it('adds a group inside the group a selected step is in, since groups nest', () => {
     const { workflow } = base()
     const inner = createSharpStep('blur')
-    const grouped = made(
-      workflow,
-      addStepChange(workflow, createGroupStep([inner]), null),
-    )
+    const outer = createGroupStep([inner])
+    const grouped = made(workflow, addStepChange(workflow, outer, null))
     const group = createGroupStep([])
 
     const next = made(grouped, addStepChange(grouped, group, inner.id))
 
-    expect(ids(next)).toContain(group.id)
+    const found = next.pipeline.steps.find(({ id }) => id === outer.id)
+    expect(found?.kind === 'group' && found.steps.map(({ id }) => id)).toEqual([
+      inner.id,
+      group.id,
+    ])
+  })
+
+  it('adds an embedded document layer after the group a selected step is in, since a group cannot hold one', () => {
+    const { workflow, slot } = base()
+    const inner = createSharpStep('blur')
+    const outer = createGroupStep([inner])
+    const grouped = made(workflow, addStepChange(workflow, outer, null))
+    const embedded = createEmbeddedDocumentStep([])
+
+    const next = made(grouped, addStepChange(grouped, embedded, inner.id))
+
+    expect(ids(next)).toEqual([slot.id, outer.id, embedded.id])
   })
 })
 

@@ -25,6 +25,12 @@ import type { Actor } from '../../../src/server/domain/actor.ts'
 import type { WorkflowView } from '../../../src/server/services/workflow-service.ts'
 import type { App } from '../../../src/server/composition.ts'
 import { defineAppCommand } from '../app-command.ts'
+import {
+  FROM_DOCUMENT_FLAGS,
+  FROM_DOCUMENT_HELP,
+  FROM_DOCUMENT_SHAPE,
+  workflowFromDocumentCommand,
+} from './create-from.ts'
 import { withWorkers } from '../in-process-workers.ts'
 import { writeWorkflowPreview } from '../preview-workflow.ts'
 import { parseRegion } from '../region.ts'
@@ -183,9 +189,9 @@ function chooseDefinition(
 
 export const workflowCreateCommand = defineAppCommand({
   name: 'workflow create',
-  summary: 'Create a workflow',
+  summary: 'Create a workflow, or make one from a document',
   synopsis:
-    '<name> [--canvas-size match-input|fixed] [--width <px> --height <px> --background <c>] [--sources <ids>] [--steps <json>] [--output <json>] [--pipeline <json>]',
+    '(<name> [--canvas-size match-input|fixed] [--width <px> --height <px> --background <c>] [--sources <ids>] [--steps <json>] [--output <json>] [--pipeline <json>] | [<name>] --from-document <id> [--group <stepId>] --images keep|remove|remove-input)',
   help: `Creates a workflow: a pipeline, like a document's, that runs on each source.
 The pipeline has an empty image layer, which is where each source is drawn, and
 then --steps in order: {"op":"resize","options":{"width":800}} for a Sharp
@@ -194,20 +200,47 @@ the size of each input image, as a document opened on it would, unless you give
 it a size (--width, --height) or --canvas-size fixed, which keeps 1920x1080. With --pipeline you give the whole pipeline
 ({canvas, steps}) yourself, with image layers and groups as in a document.
 
+With --from-document it makes the workflow from a document instead: a copy of
+its steps on its canvas, at a set size, with the default Output settings. The
+images --images removes become the workflow's sources; steps with no image layer
+get an empty one first, where each source is drawn.
+
 Options:
 ${CANVAS_HELP}
   ${SOURCES_HELP}
   --steps <json>       The steps after the input layer (${JSON_FLAG})
   ${OUTPUT_HELP}
-  --pipeline <json>    The whole pipeline (${JSON_FLAG}); not with --steps or the canvas flags`,
-  shape: { name: z.string().min(1), ...BUILD_SHAPE },
+  --pipeline <json>    The whole pipeline (${JSON_FLAG}); not with --steps or the canvas flags
+${FROM_DOCUMENT_HELP}`,
+  shape: {
+    name: z.string().min(1).optional(),
+    ...BUILD_SHAPE,
+    ...FROM_DOCUMENT_SHAPE,
+  },
   positionals: ['name'],
-  flags: BUILD_FLAGS,
+  flags: { ...BUILD_FLAGS, ...FROM_DOCUMENT_FLAGS },
   async run({ app, actor, options }) {
-    const definition = chooseDefinition(options, undefined)
-    return {
-      workflow: await app.workflows.create(actor, options.name, definition),
+    const { fromDocument, group, images, name, user: _user, ...build } = options
+    if (
+      fromDocument !== undefined ||
+      group !== undefined ||
+      images !== undefined
+    ) {
+      const others = Object.values(build).some((value) => value !== undefined)
+      return {
+        workflow: await workflowFromDocumentCommand(
+          app,
+          actor,
+          { fromDocument, group, images, name },
+          others,
+        ),
+      }
     }
+    if (name === undefined) {
+      throw new ValidationError('Give the workflow a <name>.')
+    }
+    const definition = chooseDefinition(build, undefined)
+    return { workflow: await app.workflows.create(actor, name, definition) }
   },
 })
 

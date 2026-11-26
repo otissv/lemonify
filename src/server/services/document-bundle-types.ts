@@ -7,10 +7,15 @@ import type { DocumentPlanner } from '../render/document-planner.ts'
 import type { DocumentService } from './document-service.ts'
 import type { ResultService } from './result-service.ts'
 import type { SourceService } from './source-service.ts'
+import type { UsedItems } from './used-items.ts'
+import type { WorkflowService } from './workflow-service.ts'
 
 export type DocumentBundleServiceDependencies = {
   documents: DocumentDao
   documentService: DocumentService
+  workflowService: WorkflowService
+  /** Finds the documents and workflows a document's layers use, which its file carries. */
+  usedItems: UsedItems
   sources: SourceService
   results: ResultService
   planner: DocumentPlanner

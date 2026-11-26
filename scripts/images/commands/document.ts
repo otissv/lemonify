@@ -5,6 +5,12 @@ import { z } from 'zod'
 import { canvasSchema } from '../../../src/features/pipeline/canvas.ts'
 import { ValidationError } from '../../../src/server/errors.ts'
 import { defineAppCommand } from '../app-command.ts'
+import {
+  FROM_WORKFLOW_FLAGS,
+  FROM_WORKFLOW_HELP,
+  FROM_WORKFLOW_SHAPE,
+  documentFromWorkflowCommand,
+} from './create-from.ts'
 import { withWorkers } from '../in-process-workers.ts'
 import { writePreview } from '../preview-document.ts'
 import { parseRegion } from '../region.ts'
@@ -21,9 +27,9 @@ const dimension = z.coerce.number().int().positive()
 
 export const documentCreateCommand = defineAppCommand({
   name: 'document create',
-  summary: 'Create a document from a source, or a blank one',
+  summary: 'Create a document from a source or a workflow, or a blank one',
   synopsis:
-    '(<sourceId> | --width <px> --height <px> [--background <colour>]) [--name <name>]',
+    '(<sourceId> | --width <px> --height <px> [--background <colour>] | [<sourceId>] --from-workflow <id> [--group <stepId>] [--width <px> --height <px>]) [--name <name>]',
   help: `Creates an editable document (and its undo history). With a <sourceId> it opens
 that image: the canvas is the size of the image, and the image is the first
 layer. The name defaults to the source's file name without its extension.
@@ -32,17 +38,25 @@ Without a source it makes a blank document on a canvas you size, with --width
 and --height in pixels and an optional --background (a colour like #ff8000, or
 transparent, the default). A blank document needs --name.
 
+With --from-workflow it makes the document from a workflow: the <sourceId>
+given, or else the workflow's input image (the last one added), goes in its
+first image layer, and every other step is copied. The canvas is the workflow's set size, or the input image's size when
+the workflow takes each input image's size. A workflow like that with no input
+image needs --width and --height.
+
 Options:
   --name <name>        Name the document
   --width <px>         Canvas width of a blank document
   --height <px>        Canvas height of a blank document
-  --background <c>     Canvas background of a blank document: #rrggbb or transparent`,
+  --background <c>     Canvas background of a blank document: #rrggbb or transparent
+${FROM_WORKFLOW_HELP}`,
   shape: {
     sourceId: id.optional(),
     name: z.string().optional(),
     width: dimension.optional(),
     height: dimension.optional(),
     background: z.string().optional(),
+    ...FROM_WORKFLOW_SHAPE,
   },
   positionals: ['sourceId'],
   flags: {
@@ -50,9 +64,15 @@ Options:
     width: { type: 'string' },
     height: { type: 'string' },
     background: { type: 'string' },
+    ...FROM_WORKFLOW_FLAGS,
   },
   async run({ app, actor, options }) {
     const { sourceId, name, width, height, background } = options
+    if (options.fromWorkflow !== undefined || options.group !== undefined) {
+      return {
+        document: await documentFromWorkflowCommand(app, actor, options),
+      }
+    }
     if (sourceId !== undefined) {
       if (
         width !== undefined ||

@@ -10,7 +10,9 @@ import {
   createGroupStep,
   findStep,
   groupableSteps,
+  isContainerStep,
   leafSteps,
+  placeAfter,
 } from '@/features/pipeline/pipeline'
 import type {
   AiStep,
@@ -20,7 +22,9 @@ import type {
 } from '@/features/pipeline/pipeline'
 import {
   createImageLayerStep,
+  isImageLayer,
   isLayerStep,
+  layerKind,
 } from '@/features/pipeline/layer-kinds'
 import { Tool, useUiStore } from '@/store/ui-store'
 import {
@@ -33,7 +37,7 @@ import { errorMessage } from '@/lib/error-message'
 
 const OPEN_FAILED = 'That image could not be opened.'
 export const GROUPING_NEEDS_STEPS =
-  'Pick steps that are next to each other and not in a group.'
+  'Pick steps that are next to each other in one list, none of them an embedded document layer.'
 
 type SharpOptions = SharpStep['options']
 
@@ -41,13 +45,13 @@ function addStepAt(
   documentId: string,
   step: PipelineStep,
   index: number,
-  groupId?: string,
+  parentId?: string,
 ): void {
   void applyEdit(documentId, {
     type: 'add-step',
     step,
     index,
-    ...(groupId === undefined ? {} : { groupId }),
+    ...(parentId === undefined ? {} : { parentId }),
   })
   const ui = useUiStore.getState()
   ui.selectStep(documentId, step.id)
@@ -55,7 +59,7 @@ function addStepAt(
   ui.setActiveTool(Tool.Options)
 }
 
-/** Adds a step after `afterId` (at the end by default), selects it and shows its options, as one undoable change. After a step in a group it goes in that group; after a group, after the whole group. A group cannot be added inside a group. */
+/** Adds a step after `afterId` (at the end by default), selects it and shows its options, as one undoable change. After a step in a group or an embedded document layer it goes in that list; after a container, after the whole container. Where the list cannot hold the step (an embedded document layer in a group), it goes after the nearest container that can. */
 export function addStepAfter(
   documentId: string,
   step: PipelineStep,
@@ -63,25 +67,8 @@ export function addStepAfter(
 ): void {
   const pipeline = currentPipeline(usePipelineStore.getState(), documentId)
   if (!pipeline) return
-  const after = afterId === undefined ? undefined : findStep(pipeline, afterId)
-  const groupId =
-    step.kind === PipelineStepKind.Group ? undefined : after?.groupId
-  const siblings =
-    groupId === undefined
-      ? pipeline.steps
-      : (findGroup(pipeline.steps, groupId)?.steps ?? [])
-  const index = after === undefined ? siblings.length : after.index + 1
-  addStepAt(documentId, step, index, groupId)
-}
-
-function findGroup(
-  steps: ReadonlyArray<PipelineStep>,
-  groupId: string,
-): Extract<PipelineStep, { kind: typeof PipelineStepKind.Group }> | undefined {
-  for (const step of steps) {
-    if (step.kind === PipelineStepKind.Group && step.id === groupId) return step
-  }
-  return undefined
+  const { index, parentId } = placeAfter(pipeline, step, afterId)
+  addStepAt(documentId, step, index, parentId)
 }
 
 export function deleteStep(documentId: string, stepId: string): void {
@@ -92,22 +79,22 @@ export function deleteStep(documentId: string, stepId: string): void {
   }
 }
 
-/** Moves a step to `index` in the order the steps have once it is taken out, at the top level or, with `groupId`, inside that group. */
+/** Moves a step to `index` in the order the steps have once it is taken out, at the top level or, with `parentId`, inside that group or embedded document layer. */
 export function reorderStep(
   documentId: string,
   stepId: string,
   index: number,
-  groupId?: string,
+  parentId?: string,
 ): void {
   void applyEdit(documentId, {
     type: 'move-step',
     stepId,
     to: index,
-    ...(groupId === undefined ? {} : { groupId }),
+    ...(parentId === undefined ? {} : { parentId }),
   })
 }
 
-/** Puts the steps in a new group, as one undoable change, and selects the group. The steps must be next to each other at the top level; returns why they cannot be grouped, or nothing when the change was made. */
+/** Puts the steps in a new group, as one undoable change, and selects the group. The steps must be next to each other in one list, none an embedded document layer; returns why they cannot be grouped, or nothing when the change was made. */
 export function groupSteps(
   documentId: string,
   stepIds: ReadonlyArray<string>,
@@ -116,7 +103,7 @@ export function groupSteps(
   if (!pipeline) return undefined
   const members = groupableSteps(pipeline, stepIds)
   if (members === undefined) return GROUPING_NEEDS_STEPS
-  const group = createGroupStep(members)
+  const group = createGroupStep(members.steps)
   void applyEdit(documentId, { type: 'group-steps', group })
   const ui = useUiStore.getState()
   ui.selectStep(documentId, group.id)
@@ -124,9 +111,9 @@ export function groupSteps(
   return undefined
 }
 
-/** Takes the steps out of a group, leaving them where it was, as one undoable change. */
+/** Takes the steps out of a group or an embedded document layer, leaving them where it was, as one undoable change. */
 export function ungroupSteps(documentId: string, groupId: string): void {
-  void applyEdit(documentId, { type: 'ungroup', groupId })
+  void applyEdit(documentId, { type: 'ungroup', stepId: groupId })
   const ui = useUiStore.getState()
   if (ui.selectedSteps[documentId] === groupId) {
     ui.selectStep(documentId, undefined)
@@ -202,8 +189,14 @@ function replaceTarget(
 ): string | undefined {
   const selected =
     selectedId === undefined ? undefined : findStep(pipeline, selectedId)?.step
-  if (selected !== undefined && isLayerStep(selected)) return selected.id
-  return (firstImageLayer(pipeline) ?? leafSteps(pipeline).find(isLayerStep))
+  if (
+    selected !== undefined &&
+    isLayerStep(selected) &&
+    layerKind(selected).withImage !== undefined
+  ) {
+    return selected.id
+  }
+  return (firstImageLayer(pipeline) ?? leafSteps(pipeline).find(isImageLayer))
     ?.id
 }
 
@@ -260,7 +253,7 @@ export function setStepBlend(
   void applyEdit(documentId, { type: 'set-blend', stepId, blend })
 }
 
-/** Sets how a layer, or a group that is a sub-document, is drawn on the picture, as one undoable change; nothing if the step is gone or is neither. */
+/** Sets how a layer or an embedded document layer is drawn on the picture, as one undoable change; nothing if the step is gone or is neither. */
 export function setLayerSettings(
   documentId: string,
   stepId: string,
@@ -268,18 +261,21 @@ export function setLayerSettings(
 ): void {
   const step = stepOf(documentId, stepId)
   if (step === undefined) return
-  if (!isLayerStep(step) && step.kind !== PipelineStepKind.Group) return
+  const placed =
+    isLayerStep(step) || step.kind === PipelineStepKind.EmbeddedDocument
+  if (!placed) return
   void applyEdit(documentId, { type: 'set-layer', stepId, settings })
 }
 
-/** Makes a group a picture of its own, or a plain group again, as one undoable change; nothing if the step is gone or is not a group. */
-export function setSubDocument(
+/** Makes a group an embedded document layer, or one a group again, as one undoable change; nothing if the step is gone or holds no steps. */
+export function setEmbedded(
   documentId: string,
   stepId: string,
-  subDocument: boolean,
+  embedded: boolean,
 ): void {
-  if (stepOf(documentId, stepId)?.kind !== PipelineStepKind.Group) return
-  void applyEdit(documentId, { type: 'set-sub-document', stepId, subDocument })
+  const step = stepOf(documentId, stepId)
+  if (step === undefined || !isContainerStep(step)) return
+  void applyEdit(documentId, { type: 'set-embedded', stepId, embedded })
 }
 
 /** Sets the settings of an AI step, as one undoable change; nothing if the step is gone. */

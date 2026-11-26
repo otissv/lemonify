@@ -1,3 +1,4 @@
+import type { CreateFromRequest } from '@/features/create-from/create-from-request'
 import { OverlayGuide } from '@/features/overlay/grid-guides'
 import type { StepViewPart } from '@/features/overlay/step-view'
 import { create } from 'zustand'
@@ -99,6 +100,8 @@ interface UiStateData {
   shortcutsOpen: boolean
   /** Whether the new document dialog is showing. */
   newDocumentOpen: boolean
+  /** The new workflow or document being made from the one on screen; its dialog shows while it is set. */
+  createFrom: CreateFromRequest | undefined
 }
 
 interface UiStateActions {
@@ -132,6 +135,7 @@ interface UiStateActions {
   setLiveNotice: (notice: string | undefined) => void
   setShortcutsOpen: (open: boolean) => void
   setNewDocumentOpen: (open: boolean) => void
+  setCreateFrom: (request: CreateFromRequest | undefined) => void
   visitItem: (id: string) => void
   closeVisit: (id: string) => void
   /** Drops everything the screen remembers about a document or workflow. */
@@ -167,6 +171,7 @@ export const INITIAL_UI_STATE: Readonly<UiStateData> = {
   liveNotice: undefined,
   shortcutsOpen: false,
   newDocumentOpen: false,
+  createFrom: undefined,
 }
 
 /** What a workflow's options panel shows: its focused part, else its selected step, else nothing. */
@@ -355,6 +360,9 @@ export const useUiStore = create<UiState>()(
       },
       setNewDocumentOpen: (newDocumentOpen) => {
         set({ newDocumentOpen })
+      },
+      setCreateFrom: (createFrom) => {
+        set({ createFrom })
       },
       visitItem: (id) => {
         set(({ visitTrail }) => ({ visitTrail: visitInTrail(visitTrail, id) }))

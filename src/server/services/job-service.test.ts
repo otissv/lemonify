@@ -155,6 +155,7 @@ describe('JobService', () => {
           width: 8,
           height: 6,
           pendingStepIds: [],
+          waitingLayerIds: [],
           problems: [],
         },
       },

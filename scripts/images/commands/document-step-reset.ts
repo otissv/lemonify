@@ -44,8 +44,8 @@ change that 'document undo' takes back. A Sharp step gets the options a new one
 starts with (100% for scale, red for tint, the document's own image for a step
 that needs another, the size of the picture it acts on for resize) and loses
 its blend; an AI step gets the settings its tool's catalogue starts from; an
-image layer, or a group that is its own picture, gets the default placement and
-keeps its image or steps. The step's name and whether it is on are kept. A
+image layer, or an embedded document layer, gets the default placement and
+keeps its image or steps; a group has nothing to reset. The step's name and whether it is on are kept. A
 resize whose picture cannot be made yet, such as after an AI step with no
 result, is left with no size.
 

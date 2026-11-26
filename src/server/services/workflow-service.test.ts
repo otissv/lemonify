@@ -9,7 +9,7 @@ import { canvasOfSize } from '@/features/pipeline/canvas'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import {
   createAiStep,
-  createGroupStep,
+  createEmbeddedDocumentStep,
   createPipeline,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
@@ -611,35 +611,45 @@ describe('running a workflow', () => {
 })
 
 describe('image layers and canvases in a workflow', () => {
-  it('refuses a workflow with no empty image layer to put an input image in', async () => {
+  it('refuses a workflow with no image layer to put an input image in', async () => {
     const source = await t.uploadImage(t.ann)
     const workflow = await t.app.workflows.create(t.ann, 'No slot', {
       ...definitionOf([source.id]),
       pipeline: createPipeline(CANVAS, [createSharpStep('flip')]),
     })
     await expect(t.app.workflows.run(t.ann, workflow.id)).rejects.toThrow(
-      /image layer with no image/,
+      /Add an image layer/,
     )
     expect(await t.app.workflows.listRuns(t.ann)).toEqual([])
   })
 
-  it('refuses an AI step inside a sub-document, before queueing anything', async () => {
+  it('runs an AI step inside an embedded document layer on that layer’s own picture', async () => {
     const source = await t.uploadImage(t.ann)
-    const sub = {
-      ...createGroupStep([
-        createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
-      ]),
-      subDocument: true,
-    }
-    const workflow = await t.app.workflows.create(
-      t.ann,
-      'Sub',
-      definitionOf([source.id], sub),
-    )
-    await expect(t.app.workflows.run(t.ann, workflow.id)).rejects.toThrow(
-      /sub-document/,
-    )
-    expect(await t.app.jobs.list(t.ann)).toEqual([])
+    const logo = await t.uploadImage(t.ann, '#0000ff', 'logo.png')
+    const embedded = createEmbeddedDocumentStep([
+      createImageLayerStep(logo.id),
+      createAiStep({ tool: AiToolId.Upscale, settings: SETTINGS }),
+      createSharpStep('flop'),
+    ])
+    const definition = definitionOf([source.id], embedded)
+    const { run } = await startRun(definition)
+
+    expect((await runFinished(run.id)).state).toBe(RunState.Done)
+    expect(t.aiEngine.batches).toHaveLength(1)
+    const [drawn, finished] = t.imageEngine.requests
+    expect(drawn?.target.kind).toBe(EngineTargetKind.Intermediate)
+    expect(drawn?.input).toEqual({ kind: 'canvas', canvas: CANVAS })
+    expect(stepNames(drawn)).toEqual(['layer'])
+    expect(finished?.target.kind).toBe(EngineTargetKind.Export)
+    const placed = finished?.steps.at(-1)
+    expect(placed).toMatchObject({
+      kind: 'embedded-document',
+      input: { kind: 'file' },
+    })
+    expect(
+      placed?.kind === 'embedded-document' &&
+        placed.steps.map((step) => ('op' in step ? step.op : step.kind)),
+    ).toEqual(['flop'])
   })
 
   it('refuses an image layer whose image is another User’s', async () => {

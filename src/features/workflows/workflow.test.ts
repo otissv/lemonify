@@ -150,7 +150,7 @@ describe('WorkflowSchema', () => {
     expect(WorkflowSchema.safeParse(broken).success).toBe(false)
   })
 
-  it('takes the steps a document takes, groups and sub-documents too', () => {
+  it('takes the steps a document takes, groups and embedded document layers too', () => {
     const { id: _id, name: _name, ...created } = createWorkflow('Test')
     const definition = WorkflowDefinitionSchema.parse({
       ...created,

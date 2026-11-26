@@ -17,14 +17,13 @@ interface StepResetButtonProps {
   onReset: (change: DocumentChange) => void
 }
 
-/** The reset of a step, or nothing for a step with nothing to reset: a plain group, or an AI step whose tool has no catalogue here. */
+/** The reset of a step, or nothing for a step with nothing to reset: a group, or an AI step whose tool has no catalogue here. */
 function resetChangeOf(
   step: PipelineStep,
   catalogues: AiCatalogues,
   size: PictureSize | undefined,
 ): DocumentChange | undefined {
-  if (step.kind === PipelineStepKind.Group && !step.subDocument)
-    return undefined
+  if (step.kind === PipelineStepKind.Group) return undefined
   if (step.kind !== PipelineStepKind.Ai) return resetChangeFor(step, { size })
   const catalogue = catalogueFor(catalogues, step.tool)
   if (catalogue === undefined) return undefined

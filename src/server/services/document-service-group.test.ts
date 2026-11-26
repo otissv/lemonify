@@ -3,16 +3,19 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import {
   MAX_GROUP_STEPS,
+  createEmbeddedDocumentStep,
   createGroupStep,
   createSharpStep,
 } from '@/features/pipeline/pipeline'
 import { createImageLayerStep } from '@/features/pipeline/layer-kinds'
 import { MemoryDocumentDao } from '../dao/memory/document-dao'
+import { MemoryWorkflowDao } from '../dao/memory/workflow-dao'
 import { MemorySourceDao } from '../dao/memory/source-dao'
 import { MemoryStore } from '../dao/memory/store'
 import { NotFoundError, ValidationError } from '../errors'
 import { FixedClock, RecordingPublisher, SequenceIds } from '../testing/fakes'
 import { DocumentService } from './document-service'
+import { UsedItems } from './used-items'
 
 const ANN = { userId: 'ann', name: 'Ann' }
 const BEA = { userId: 'bea', name: 'Bea' }
@@ -44,6 +47,10 @@ beforeEach(async () => {
     ids: new SequenceIds('doc'),
     cleanup: { onDocumentDeleted: async () => undefined },
     changes: new RecordingPublisher(),
+    usedItems: new UsedItems({
+      documents: new MemoryDocumentDao(store),
+      workflows: new MemoryWorkflowDao(),
+    }),
   })
   await addSource('src-1')
   await addSource('src-2')
@@ -65,7 +72,10 @@ describe('groups through the document service', () => {
       step: flip,
       index: 2,
     })
-    const group = { ...createGroupStep([blur, flip], 'Look'), opacity: 70 }
+    const group = {
+      ...createEmbeddedDocumentStep([blur, flip], 'Look'),
+      opacity: 70,
+    }
 
     const grouped = await service.change(ANN, created.id, 2, {
       type: 'group-steps',
@@ -73,7 +83,7 @@ describe('groups through the document service', () => {
     })
     expect(grouped.pipeline.steps).toHaveLength(2)
     expect(grouped.pipeline.steps[1]).toMatchObject({
-      kind: 'group',
+      kind: 'embedded-document',
       name: 'Look',
       opacity: 70,
     })
@@ -159,9 +169,9 @@ describe('groups through the document service', () => {
     await expect(
       service.change(ANN, created.id, first.revision, {
         type: 'add-step',
-        step: createGroupStep([]),
+        step: createEmbeddedDocumentStep([]),
         index: 0,
-        groupId: outer.id,
+        parentId: outer.id,
       }),
     ).rejects.toThrow(ValidationError)
   })
@@ -184,7 +194,7 @@ describe('groups through the document service', () => {
     ).rejects.toThrow(ValidationError)
   })
 
-  it('makes a group a sub-document and places it, with undo', async () => {
+  it('makes a group an embedded document layer and places it, with undo', async () => {
     const group = createGroupStep([createSharpStep('flip')])
     const created = await service.create(ANN, 'src-1')
     const added = await service.change(ANN, created.id, 0, {
@@ -193,9 +203,9 @@ describe('groups through the document service', () => {
       index: 1,
     })
     const sub = await service.change(ANN, created.id, added.revision, {
-      type: 'set-sub-document',
+      type: 'set-embedded',
       stepId: group.id,
-      subDocument: true,
+      embedded: true,
     })
     const placed = await service.change(ANN, created.id, sub.revision, {
       type: 'set-layer',
@@ -203,11 +213,13 @@ describe('groups through the document service', () => {
       settings: { ...DEFAULT_LAYER_SETTINGS, opacity: 25 },
     })
     expect(placed.pipeline.steps[1]).toMatchObject({
-      subDocument: true,
+      kind: 'embedded-document',
       opacity: 25,
     })
 
     const undone = await service.undo(ANN, created.id, placed.revision)
     expect(undone.pipeline.steps[1]).toMatchObject({ opacity: 100 })
+    const plain = await service.undo(ANN, created.id, undone.revision)
+    expect(plain.pipeline.steps[1]).toEqual(group)
   })
 })

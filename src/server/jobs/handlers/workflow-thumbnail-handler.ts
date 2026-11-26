@@ -46,7 +46,7 @@ export class WorkflowThumbnailHandler implements JobHandler {
           const shown = shownForWorkflowNode(
             filled.pipeline,
             nodeId,
-            filled.firstSlotId,
+            filled.slotId,
           )
           if (shown === undefined) {
             thumbnails.push({ stepId: nodeId, key: null })

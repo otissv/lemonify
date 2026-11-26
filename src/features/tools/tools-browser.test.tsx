@@ -86,12 +86,50 @@ describe('ToolsBrowser', () => {
     const user = userEvent.setup()
     expect(
       screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
-    ).toEqual(GROUPS)
+    ).toEqual(['Layers', ...GROUPS])
     await expandAll(user)
-    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(39)
+    expect(screen.getAllByRole('button', { name: /^Add / })).toHaveLength(42)
     expect(
       screen.queryByRole('button', { name: 'Add Jpeg' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('leaves the layers out while searching, so only matching tools show', async () => {
+    const user = userEvent.setup()
+
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search tools' }),
+      'tint',
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Add Document layer' }),
+    ).toBeNull()
+  })
+
+  it('offers layers: an empty image layer, and a document or workflow layer chosen in a picker', async () => {
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Add Document layer' }))
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'add-used-layer',
+      itemId: DOCUMENT_ID,
+      layer: 'document',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Add Workflow layer' }))
+    expect(useUiStore.getState().createFrom).toEqual({
+      kind: 'add-used-layer',
+      itemId: DOCUMENT_ID,
+      layer: 'workflow',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Add Image layer' }))
+    await waitFor(() => {
+      expect(
+        currentPipeline(usePipelineStore.getState(), DOCUMENT_ID)?.steps,
+      ).toHaveLength(2)
+    })
   })
 
   it('adds a tool as a step at the end, selects it and shows its options', async () => {
@@ -205,7 +243,11 @@ describe('ToolsBrowser', () => {
       for (const name of GROUPS) {
         expect(groupToggle(name)).toHaveAttribute('aria-expanded', 'false')
       }
-      expect(screen.queryAllByRole('button', { name: /^Add / })).toHaveLength(0)
+      expect(
+        screen
+          .queryAllByRole('button', { name: /^Add / })
+          .map((b) => b.textContent),
+      ).toEqual(['Image layer', 'Document layer', 'Workflow layer'])
     })
 
     it('shows the tools of a group and hides them again', async () => {
@@ -259,7 +301,7 @@ describe('ToolsBrowser', () => {
 
       expect(
         screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
-      ).toEqual(GROUPS)
+      ).toEqual(['Layers', ...GROUPS])
     })
 
     it('shows matching tools of a closed group while searching', async () => {

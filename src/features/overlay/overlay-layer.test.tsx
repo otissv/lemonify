@@ -45,6 +45,7 @@ function ready(overrides: Partial<DocumentPreview> = {}): void {
     size: { width: 4000, height: 2000 },
     view: { stepId: EXTRACT.id, part: StepViewPart.Tool },
     pendingStepIds: [],
+    waitingLayerIds: [],
     problems: [],
     ...overrides,
   })
@@ -152,6 +153,7 @@ describe('OverlayLayer', () => {
     usePipelineStore.getState().setPreview(DOCUMENT_ID, {
       status: PreviewStatus.Rendering,
       pendingStepIds: [],
+      waitingLayerIds: [],
       problems: [],
     })
     await mount()
