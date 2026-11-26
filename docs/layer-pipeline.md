@@ -90,8 +90,6 @@ On the website a workflow is drawn as a diagram in the middle of the page: the c
 
 A workflow has an Edit history exactly as a document has: each change on the page (a step, a layer, the canvas, the input images, the output settings) is one entry that can be undone and redone from the Run tab, the Edit menu or the keys, and a workflow is held in the client like a document (see the plan's "Client state"). A rename is not an edit.
 
-Workflows saved before this model stored a graph of nodes and edges. They are not converted: they fail to read and must be deleted.
-
 ## Layer settings
 
 A layer has an image, switched on or off like any step, and:
@@ -133,6 +131,8 @@ Render keys start from the canvas (`canvas:<width>x<height>:<background>`), so a
 The first model let a document hold several "Open image" steps, of which the first was the picture and the rest only made their image available to later steps. The second model made the extra ones layers and kept one locked "Image" step at the bottom. The third model removed that special step: every image is a layer, and the first layer that was switched on set the canvas. The current model gives the document an explicit canvas, so no layer is special. The Composite tool, which did the same job with a list of images in its options, is not offered in documents or workflows; only the `sharp` command keeps it.
 
 Existing documents are migrated in two steps. `20260101000500-layers` made extra image steps layers (or dropped those that only supplied a second image to a boolean or join channel step) and each Composite step a layer per image, with its blend mode and placement. `20260101000600-layers-only` turns the remaining image step into a layer with the default settings, in the same place. Undo history of a migrated document is cleared because the steps change. Document files (`.lemon`) made before layers (bundle version 1) are refused with an explanation, and so are documents and files made before the canvas was explicit: their pipeline has no `canvas`, so it fails validation. There is no conversion for either.
+
+Workflows saved before the pipeline model stored a graph of nodes and edges. They are not converted: they fail to read and must be deleted. The diagram on the workflow page is drawn from the pipeline each time and is not stored.
 
 ## Where it lives
 

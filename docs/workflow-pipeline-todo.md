@@ -109,7 +109,13 @@ Each decision is cited by its number and short name, for example "decision 9, ne
 
 ## 5. Shared shell and the workflow page
 
-- [ ] The floating panel and the menu take a context (`document` or `workflow`) and build their tabs and items from a list for it. Items that do not apply are not shown.
+### Section 5 decisions
+
+| #   | Short name    | Decided                                                                                                                                                                                                                                                                               |
+| --- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Panel context | Each page composes its own panel from the shared `ToolTabs` and its own list of tabs, instead of one panel that takes a `document` or `workflow` context and chooses its tabs itself, as `CLAUDE.md` asks ("compose, don't configure"). The menu filters by each action's `contexts`. |
+
+- [x] Each page shows only the panel tabs and menu items that apply to it (decision 1, panel context): the document page composes `ToolsPanel` from `DOCUMENT_TOOLS` and the workflow page `WorkflowPanel` from `WORKFLOW_TOOLS`, both on the shared `ToolTabs` (`src/features/tools/tool-tabs.tsx`), and the menu hides each action whose `contexts` (section 6) leave the page out.
 - [x] Canvas size mode on the Canvas node (see the decisions), with `workflow create|update` flags; `workflow run --canvas` and the per-browser choice go.
 - [x] Runs on chosen images (`workflow run --sources`) and a zip download of a run's results, on the website and the CLI.
 - [x] The Runs tab in the right-hand panel, and View > Run panel (Alt+R).
@@ -128,6 +134,12 @@ Each decision is cited by its number and short name, for example "decision 9, ne
 
 ## 7. Done when
 
-- [ ] Vitest, `tsc`, `biome check .`, `pnpm build` and the Playwright run all pass.
-- [ ] `parity.test.ts` passes with entries for everything new.
-- [ ] Docs, `schema` and the skill describe the new model; the old graph and "first layer sets the canvas" are gone everywhere.
+### Section 7 decisions
+
+| #   | Short name            | Decided                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Deterministic e2e run | No e2e test may depend on timing or on files another test writes. A test writes the pictures it uploads to its own output folder (`testInfo.outputPath`), never to a path shared by repeats and parallel workers. "Stops a run part of the way" relies on the scheduler's hold: a run uses at most half of at most four CPU workers, so six of its eight images wait in the queue when Stop is pressed. |
+
+- [x] Vitest, `tsc`, `biome check .`, `pnpm build` and the Playwright run all pass.
+- [x] `parity.test.ts` passes with entries for everything new.
+- [x] Docs, `schema` and the skill describe the new model; the old graph and "first layer sets the canvas" are gone everywhere.

@@ -1,11 +1,8 @@
-import { mkdirSync } from 'node:fs'
-import path from 'node:path'
-
 import { expect, test } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import type { Locator, Page, TestInfo } from '@playwright/test'
 import sharp from 'sharp'
 
-import { RUN_DIR, SCRATCH_ACCOUNTS } from './global-setup.ts'
+import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 import {
   addInputs,
   addTool,
@@ -152,13 +149,14 @@ test('says which images failed and why, retries them, runs again and deletes a r
   await expect(list.getByRole('button', { name: /^Run \d/ })).toHaveCount(2)
 })
 
-/** Pictures of different colours, so each is an image of its own and not the same one uploaded twice. */
-async function distinctPictures(count: number): Promise<string[]> {
-  const folder = path.join(RUN_DIR, 'workflow-run-actions')
-  mkdirSync(folder, { recursive: true })
+/** Pictures of different colours, so each is an image of its own and not the same one uploaded twice. They go in the test's own folder, so no other test writes over them while they upload. */
+async function distinctPictures(
+  testInfo: TestInfo,
+  count: number,
+): Promise<string[]> {
   const files: string[] = []
   for (let index = 0; index < count; index += 1) {
-    const file = path.join(folder, `extra-${index}.png`)
+    const file = testInfo.outputPath(`extra-${index}.png`)
     const shade = 40 + index * 30
     await sharp({
       create: {
@@ -177,13 +175,17 @@ async function distinctPictures(count: number): Promise<string[]> {
 
 test('stops a run part of the way', async ({ page }, testInfo) => {
   await newWorkflow(page, uniqueName(testInfo, 'Stop'))
-  // More images than the server works on at once, so some are still waiting
-  // when Stop is pressed, and those are never drawn.
+  // A run may use at most half of the CPU workers, of which there are at most
+  // four (LEMONIFY_GROUP_SHARE, config.ts), so at most two of these eight
+  // images are drawn at once and the scheduler holds the other six in the
+  // queue until Stop takes them out; they are never drawn.
   await addInputs(page, ['scene.png', 'mask.png', 'overlay.png', 'cutout.png'])
   const chooser = page.waitForEvent('filechooser')
   await options(page).getByRole('button', { name: 'Upload images…' }).click()
-  await (await chooser).setFiles(await distinctPictures(4))
-  await expect(node(page, 'Input images')).toContainText('8 images')
+  await (await chooser).setFiles(await distinctPictures(testInfo, 4))
+  await expect(node(page, 'Input images')).toContainText('8 images', {
+    timeout: START_TIMEOUT,
+  })
   await addTool(page, 'Geometry', 'Resize')
   await setNumber(options(page), 'Width', 9000)
 

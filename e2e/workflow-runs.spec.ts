@@ -1,10 +1,8 @@
-import { mkdirSync } from 'node:fs'
-import path from 'node:path'
-
 import { expect, test } from '@playwright/test'
+import type { TestInfo } from '@playwright/test'
 import sharp from 'sharp'
 
-import { RUN_DIR, SCRATCH_ACCOUNTS } from './global-setup.ts'
+import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 
 const ACCOUNT = SCRATCH_ACCOUNTS.runs
 const RUN_TIMEOUT = 60_000
@@ -12,10 +10,9 @@ const RUN_TIMEOUT = 60_000
 test.use({ storageState: ACCOUNT.authFile })
 test.setTimeout(120_000)
 
-async function avifFile(): Promise<string> {
-  const directory = path.join(RUN_DIR, 'workflow-runs')
-  mkdirSync(directory, { recursive: true })
-  const file = path.join(directory, 'photo.avif')
+/** An AVIF picture in the test's own folder, so no other test writes over it while it uploads. */
+async function avifFile(testInfo: TestInfo): Promise<string> {
+  const file = testInfo.outputPath('photo.avif')
   await sharp({
     create: { width: 64, height: 48, channels: 3, background: '#3366cc' },
   })
@@ -47,7 +44,7 @@ test('runs a workflow on chosen input images and downloads the results', async (
   const options = page.getByRole('tabpanel', { name: 'Options' })
   const chooser = page.waitForEvent('filechooser')
   await options.getByRole('button', { name: 'Upload images…' }).click()
-  await (await chooser).setFiles(await avifFile())
+  await (await chooser).setFiles(await avifFile(testInfo))
   await options.getByRole('button', { name: 'Add scene.png' }).click()
 
   await page
