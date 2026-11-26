@@ -6,6 +6,7 @@ import type { Canvas } from '@/features/pipeline/canvas'
 import { DEFAULT_LAYER_SETTINGS } from '@/features/pipeline/layer'
 import {
   createDocumentLayerStep,
+  createImageLayerStep,
   createWorkflowLayerStep,
 } from '@/features/pipeline/layer-kinds'
 import type { UsedItem } from '@/features/pipeline/layer-kinds'
@@ -116,8 +117,8 @@ describe('planning a document layer', () => {
   })
 })
 
-describe('who owns an AI step', () => {
-  it('names the used document, at any depth, and no one for steps the holder owns', async () => {
+describe('the AI steps a picture needs', () => {
+  it('lists each use of a step, with its own key, and the used document that owns it', async () => {
     const own = createAiStep(UPSCALE)
     const inB = createAiStep(UPSCALE)
     const inC = createAiStep(UPSCALE)
@@ -128,27 +129,41 @@ describe('who owns an AI step', () => {
       [
         own,
         createDocumentLayerStep('doc-b'),
+        createWorkflowLayerStep('flow-1', 'a'),
         createWorkflowLayerStep('flow-1'),
       ],
-      lookups({
-        'doc-b': {
-          canvas: OWN,
-          steps: [inB, createDocumentLayerStep('doc-c')],
+      {
+        ...lookups({
+          'doc-b': {
+            canvas: OWN,
+            steps: [inB, createDocumentLayerStep('doc-c')],
+          },
+          'doc-c': { canvas: OWN, steps: [inC] },
+        }),
+        // As the real lookup does, the layer's image fills the workflow's input slot.
+        used: async (item: UsedItem) => {
+          if (item.kind === 'workflow') {
+            return {
+              canvas: OWN,
+              steps: [createImageLayerStep(item.sourceId), inFlow],
+            }
+          }
+          return item.documentId === 'doc-b'
+            ? { canvas: OWN, steps: [inB, createDocumentLayerStep('doc-c')] }
+            : { canvas: OWN, steps: [inC] }
         },
-        'doc-c': { canvas: OWN, steps: [inC] },
-        'flow-1': { canvas: OWN, steps: [inFlow] },
-      }),
+      },
     )
 
-    expect(plan.aiOwners).toEqual(
-      new Map([
-        [inB.id, 'doc-b'],
-        [inC.id, 'doc-c'],
-      ]),
-    )
-    expect([...plan.aiKeys.keys()]).toEqual(
-      expect.arrayContaining([own.id, inB.id, inC.id, inFlow.id]),
-    )
+    expect(plan.aiSteps).toEqual([
+      { stepId: own.id, key: expect.any(String) },
+      { stepId: inB.id, key: expect.any(String), documentId: 'doc-b' },
+      { stepId: inC.id, key: expect.any(String), documentId: 'doc-c' },
+      { stepId: inFlow.id, key: expect.any(String) },
+      { stepId: inFlow.id, key: expect.any(String) },
+    ])
+    const [, , , first, second] = plan.aiSteps
+    expect(first?.key).not.toBe(second?.key)
   })
 })
 

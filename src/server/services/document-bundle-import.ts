@@ -184,7 +184,7 @@ class BundleImport {
     return ids
   }
 
-  /** The key each AI step of the new document stores its result under, and the used document that owns it when one does. */
+  /** Every use of an AI step in the new document's picture: the key its result is stored under, and the used document that owns it when one does. */
   async #expectedPlan(documentId: string): Promise<PipelinePlan> {
     const { documents, planner } = this.#deps
     const record = await documents.findById(documentId)
@@ -197,11 +197,14 @@ class BundleImport {
   ): Promise<ImportedBundle['summary']['results']> {
     const counts = { imported: 0, existing: 0, skipped: 0 }
     if (this.#manifest.results.length === 0) return counts
-    const { aiKeys, aiOwners } = await this.#expectedPlan(documentId)
+    const { aiSteps } = await this.#expectedPlan(documentId)
+    const owners = new Map<string, string>()
     for (const entry of this.#manifest.results) {
-      if (aiKeys.get(entry.stepId) !== entry.key) {
-        throw new ValidationError(FOREIGN_RESULT)
-      }
+      const planned = aiSteps.find(
+        ({ stepId, key }) => stepId === entry.stepId && key === entry.key,
+      )
+      if (planned === undefined) throw new ValidationError(FOREIGN_RESULT)
+      owners.set(entry.key, planned.documentId ?? documentId)
     }
     for (const entry of this.#manifest.results) {
       if (await this.#deps.results.find(this.#actor.userId, entry.key)) {
@@ -217,7 +220,7 @@ class BundleImport {
         await this.#deps.results.record(this.#actor, {
           kind: ResultKind.AiStep,
           key: entry.key,
-          documentId: aiOwners.get(entry.stepId) ?? documentId,
+          documentId: owners.get(entry.key) ?? documentId,
           stepId: entry.stepId,
           file: target,
           fileName: entry.fileName,

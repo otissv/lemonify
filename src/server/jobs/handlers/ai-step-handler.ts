@@ -154,11 +154,15 @@ export class AiStepHandler implements JobHandler {
     plan: PipelinePlan,
     stepId: string,
   ): Promise<string> {
-    const key = plan.aiKeys.get(stepId)
-    if (key === undefined) throw new ValidationError(NOT_AN_AI_STEP)
-    const existing = await this.#deps.results.find(ownerId, key)
-    if (existing !== undefined) return existing.id
-    throw new ValidationError(EARLIER_FIRST)
+    let made: string | undefined
+    for (const planned of plan.aiSteps) {
+      if (planned.stepId !== stepId) continue
+      const existing = await this.#deps.results.find(ownerId, planned.key)
+      if (existing === undefined) throw new ValidationError(EARLIER_FIRST)
+      made ??= existing.id
+    }
+    if (made === undefined) throw new ValidationError(NOT_AN_AI_STEP)
+    return made
   }
 
   async #runGroup(

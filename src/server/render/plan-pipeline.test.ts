@@ -14,6 +14,13 @@ import type { LeafStep, PipelineStep } from '@/features/pipeline/pipeline'
 import type { ImageLayerStep } from '@/features/pipeline/layer-kinds'
 
 import { awaitingPlan, planKey, planPipeline } from './plan-pipeline.ts'
+
+function aiKeyOf(
+  plan: { aiSteps: ReadonlyArray<{ stepId: string; key: string }> },
+  stepId: string,
+): string | undefined {
+  return plan.aiSteps.find((planned) => planned.stepId === stepId)?.key
+}
 import type { PlanLookups } from './plan-pipeline.ts'
 import { renderKey } from './render-key.ts'
 
@@ -124,7 +131,7 @@ describe('planPipeline', () => {
       )
       const copy = await planPipeline(CANVAS, [boolean('copy'), ai], lookups())
 
-      expect(copy.aiKeys.get(ai.id)).toBe(first.aiKeys.get(ai.id))
+      expect(aiKeyOf(copy, ai.id)).toBe(aiKeyOf(first, ai.id))
       expect(planKey(copy)).toBe(planKey(first))
     })
   })
@@ -492,7 +499,7 @@ describe('planPipeline', () => {
 
         const plan = await planPipeline(CANVAS, [g, flop, after], lookups())
 
-        const key = plan.aiKeys.get(upscale.id)
+        const key = aiKeyOf(plan, upscale.id)
         expect(key).toBe(
           renderKey(BASE_KEY, [keyed(layer), g.steps[1] as LeafStep, upscale]),
         )
@@ -514,7 +521,7 @@ describe('planPipeline', () => {
       it('starts from its result once it has one, keeping the steps after it', async () => {
         const g = embedded([layer, upscale, createSharpStep('flop')])
         const waiting = await planPipeline(CANVAS, [g], lookups())
-        const key = waiting.aiKeys.get(upscale.id) ?? ''
+        const key = aiKeyOf(waiting, upscale.id) ?? ''
 
         const plan = await planPipeline(
           CANVAS,
@@ -537,7 +544,7 @@ describe('planPipeline', () => {
         const g = group()
         const later = createAiStep(UPSCALE)
         const waiting = await planPipeline(CANVAS, [g, later], lookups())
-        const key = waiting.aiKeys.get(upscale.id) ?? ''
+        const key = aiKeyOf(waiting, upscale.id) ?? ''
 
         const done = await planPipeline(
           CANVAS,
@@ -545,7 +552,7 @@ describe('planPipeline', () => {
           lookups({ [key]: '/results/logo' }),
         )
 
-        expect(done.aiKeys.get(later.id)).toBe(waiting.aiKeys.get(later.id))
+        expect(aiKeyOf(done, later.id)).toBe(aiKeyOf(waiting, later.id))
       })
     })
   })

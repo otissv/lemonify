@@ -37,6 +37,15 @@ export interface PendingAiStep {
   documentId?: string
 }
 
+/** One use of an AI step in the picture: a step inside a workflow used twice is listed once for each use, under its own key. */
+export interface PlannedAiStep {
+  stepId: string
+  /** The key its Result is stored under. */
+  key: string
+  /** The used document that runs and keeps the Result, when it is inside a document layer; the item being planned otherwise. */
+  documentId?: string
+}
+
 export interface StepProblem {
   stepId: string
   message: string
@@ -90,10 +99,8 @@ export interface PipelinePlan {
   waitingLayerIds: ReadonlyArray<string>
   /** Steps left out because they are not set up. */
   skipped: ReadonlyArray<StepProblem>
-  /** The key each AI Step's Result is stored under, whether or not it exists yet, including those of the steps in embedded document layers. */
-  aiKeys: ReadonlyMap<string, string>
-  /** The document that owns each AI Step inside a document layer, at any depth, by step id: it runs and keeps that Result. A step not in it belongs to the item being planned. */
-  aiOwners: ReadonlyMap<string, string>
+  /** Every use of an AI Step the picture needs, in pipeline order and at any depth, with the key its Result is stored under, whether or not it exists yet. */
+  aiSteps: ReadonlyArray<PlannedAiStep>
   /** The plan of each embedded document layer that is applied or waiting, by its step id: its own picture, steps and AI steps. */
   subPlans: ReadonlyMap<string, PipelinePlan>
   /** Every step that can be applied, as the key sees it, whether or not it waits for an AI step before it. */
@@ -136,9 +143,13 @@ function planEmbeddedDocument(
 /** The plan of a used document, whose AI steps that document runs and keeps. */
 function ownedBy(plan: PipelinePlan, item: UsedItem): PipelinePlan {
   if (item.kind !== 'document') return plan
-  const aiOwners = new Map(plan.aiOwners)
-  for (const stepId of plan.aiKeys.keys()) {
-    if (!aiOwners.has(stepId)) aiOwners.set(stepId, item.documentId)
+  const aiSteps: PlannedAiStep[] = []
+  for (const planned of plan.aiSteps) {
+    aiSteps.push(
+      planned.documentId === undefined
+        ? { ...planned, documentId: item.documentId }
+        : planned,
+    )
   }
   const pending: PendingAiStep[] = []
   for (const waiting of plan.pending) {
@@ -148,7 +159,7 @@ function ownedBy(plan: PipelinePlan, item: UsedItem): PipelinePlan {
         : waiting,
     )
   }
-  return { ...plan, pending, aiOwners }
+  return { ...plan, pending, aiSteps }
 }
 
 /** The plan of what a document layer or workflow layer draws, or why it cannot be drawn. */
@@ -294,26 +305,22 @@ export async function planPipeline(
   }
   const pending: Array<PendingAiStep> = []
   const waitingLayerIds: Array<string> = []
-  const aiKeys = new Map<string, string>()
-  const aiOwners = new Map<string, string>()
+  const aiSteps: PlannedAiStep[] = []
   for (const [index, step] of usable.entries()) {
     const inner = subPlans.get(step.id)
     if (inner !== undefined) {
-      for (const [id, key] of inner.aiKeys) aiKeys.set(id, key)
-      for (const [id, owner] of inner.aiOwners) aiOwners.set(id, owner)
+      aiSteps.push(...inner.aiSteps)
       if (isLayerStep(step) && inner.pending.length > 0) {
         waitingLayerIds.push(step.id)
       }
       waitingLayerIds.push(...inner.waitingLayerIds)
     }
-    if (step.kind === PipelineStepKind.Ai) {
-      aiKeys.set(
-        step.id,
-        renderKey(baseKey, usable.slice(0, index + 1).map(identityOf)),
-      )
-    }
+    const key =
+      step.kind === PipelineStepKind.Ai
+        ? renderKey(baseKey, usable.slice(0, index + 1).map(identityOf))
+        : undefined
+    if (key !== undefined) aiSteps.push({ stepId: step.id, key })
     if (pending.length > 0) {
-      const key = aiKeys.get(step.id)
       if (step.kind === PipelineStepKind.Ai && key !== undefined) {
         pending.push({ step, key })
       }
@@ -331,7 +338,6 @@ export async function planPipeline(
       appliedIdentity.push(identityOf(step))
       continue
     }
-    const key = aiKeys.get(step.id)
     if (key === undefined) continue
     const result = await lookups.aiResultPath(key)
     if (result === undefined) {
@@ -353,8 +359,7 @@ export async function planPipeline(
     pending,
     waitingLayerIds,
     skipped,
-    aiKeys,
-    aiOwners,
+    aiSteps,
     subPlans,
     fullIdentity: usable.map(identityOf),
   }

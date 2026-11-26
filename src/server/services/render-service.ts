@@ -271,7 +271,7 @@ export class RenderService {
     const plan = await this.#deps.planner.plan(document)
     const waiting = plan.pending.find(({ step }) => step.id === stepId)
     if (waiting === undefined) {
-      throw plan.aiKeys.has(stepId)
+      throw plan.aiSteps.some((planned) => planned.stepId === stepId)
         ? new ConflictError(ALREADY_RUN)
         : new ValidationError(NOT_AN_AI_STEP)
     }
@@ -435,7 +435,8 @@ export class RenderService {
     const plan = await this.#deps.planner.plan(document, {
       assumeAiResults: true,
     })
-    const used = new Set(plan.aiKeys.values())
+    const used = new Set<string>()
+    for (const { key } of plan.aiSteps) used.add(key)
     const stored = await this.#deps.results.list(actor, {
       documentId,
       kind: ResultKind.AiStep,

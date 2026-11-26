@@ -157,4 +157,26 @@ describe('an AI step inside a workflow layer', () => {
     expect((await previewOf(poster.id)).pendingStepIds).toEqual([])
     expect(t.aiEngine.batches).toHaveLength(2)
   })
+
+  it('keeps the Result of each use when unused Results are cleared', async () => {
+    const ai = upscale()
+    const flow = await workflow('Brand', [ai])
+    const one = await t.uploadImage(t.ann, '#111111')
+    const two = await t.uploadImage(t.ann, '#222222')
+    const poster = await document('Poster', [
+      createWorkflowLayerStep(flow.id, one.id),
+      createWorkflowLayerStep(flow.id, two.id),
+    ])
+    for (let run = 0; run < 2; run += 1) {
+      await finished(await t.app.renders.requestAiStep(t.ann, poster.id, ai.id))
+    }
+
+    const cleared = await t.app.renders.clearUnusedResults(t.ann, poster.id)
+
+    expect(cleared.removed).toBe(0)
+    expect(
+      await t.app.results.list(t.ann, { kind: ResultKind.AiStep }),
+    ).toHaveLength(2)
+    expect((await previewOf(poster.id)).pendingStepIds).toEqual([])
+  })
 })

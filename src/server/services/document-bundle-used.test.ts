@@ -200,4 +200,42 @@ describe('a document file with layers that use other items', () => {
 
     expect(await t.app.results.list(t.bob)).toHaveLength(1)
   })
+
+  it('carries the Result of each use of a workflow used twice, and import keeps both', async () => {
+    const one = await t.uploadImage(t.ann, '#111111', 'one.png')
+    const two = await t.uploadImage(t.ann, '#222222', 'two.png')
+    const upscale = createAiStep({
+      tool: AiToolId.Upscale,
+      settings: { model: 'm', scale: 4, iterations: 1, tta: false },
+    })
+    const { pipeline, output } = createWorkflow('x', CANVAS)
+    const brand = await t.app.workflows.create(t.ann, 'Brand', {
+      pipeline: createPipeline(CANVAS, [...pipeline.steps, upscale]),
+      canvasSize: CanvasSize.Fixed,
+      inputs: [],
+      output,
+    })
+    const holder = await document('Poster', [
+      createWorkflowLayerStep(brand.id, one.id),
+      createWorkflowLayerStep(brand.id, two.id),
+    ])
+    await runAiStep(holder.id, upscale.id)
+    await runAiStep(holder.id, upscale.id)
+    const bundle = file('twice.lemon')
+
+    const exported = await t.app.bundles.exportDocument(
+      t.ann,
+      holder.id,
+      bundle,
+    )
+    const imported = await t.app.bundles.importDocument(t.bob, bundle)
+
+    expect(exported.results).toBe(2)
+    expect(imported.summary.results).toMatchObject({ imported: 2 })
+    const results = await t.app.results.list(t.bob)
+    expect(results.map(({ documentId }) => documentId)).toEqual([
+      imported.document.id,
+      imported.document.id,
+    ])
+  })
 })

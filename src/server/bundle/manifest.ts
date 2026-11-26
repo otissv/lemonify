@@ -91,9 +91,7 @@ export const ManifestSchema = z
     'An image is listed twice.',
   )
   .refine(
-    ({ results }) =>
-      isUnique(results.map(({ key }) => key)) &&
-      isUnique(results.map(({ stepId }) => stepId)),
+    ({ results }) => isUnique(results.map(({ key }) => key)),
     'A result is listed twice.',
   )
 

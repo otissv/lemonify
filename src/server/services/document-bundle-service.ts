@@ -21,6 +21,7 @@ import type { Manifest } from '../bundle/manifest.ts'
 import { fileHash } from '../bundle/file-hash.ts'
 import { ZipWriter } from '../bundle/zip.ts'
 import type { DocumentRecord } from '../dao/document-dao.ts'
+import type { PlannedAiStep } from '../render/plan-pipeline.ts'
 import type { Actor } from '../domain/actor.ts'
 import { requireOwned } from '../domain/ownership.ts'
 import { LimitError, ValidationError } from '../errors.ts'
@@ -200,7 +201,10 @@ export class DocumentBundleService {
     objects: Map<string, StoredObject>,
   ): Promise<void> {
     const { results } = this.#deps
-    for (const [stepId, key] of await this.#aiKeys(document)) {
+    const listed = new Set<string>()
+    for (const { stepId, key } of await this.#aiSteps(document)) {
+      if (listed.has(key)) continue
+      listed.add(key)
       const record = await results.find(actor.userId, key)
       const file = await results.findPath(actor.userId, key)
       if (record === undefined || file === undefined) continue
@@ -225,11 +229,11 @@ export class DocumentBundleService {
     }
   }
 
-  /** The key each AI step's result is stored under. */
-  async #aiKeys(
+  /** Every use of an AI step in the document's picture, with the key its result is stored under. */
+  async #aiSteps(
     document: DocumentRecord,
-  ): Promise<ReadonlyMap<string, string>> {
-    return (await this.#deps.planner.plan(document)).aiKeys
+  ): Promise<ReadonlyArray<PlannedAiStep>> {
+    return (await this.#deps.planner.plan(document)).aiSteps
   }
 
   /** The document as a file to send: a stream that removes its temporary file when it ends, however it ends. */

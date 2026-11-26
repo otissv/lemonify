@@ -574,6 +574,21 @@ describe('DocumentBundleService', () => {
       await nothingKept()
     })
 
+    it('refuses the same result listed twice', async () => {
+      const bundle = await tampered(await exported(), (manifest) => ({
+        ...manifest,
+        results: [
+          ...(manifest.results as Entries),
+          ...(manifest.results as Entries),
+        ],
+      }))
+
+      await expect(t.app.bundles.importDocument(t.bob, bundle)).rejects.toThrow(
+        ValidationError,
+      )
+      await nothingKept()
+    })
+
     it('refuses a result for a step the document does not have', async () => {
       const bundle = await tampered(await exported(), (manifest) => ({
         ...manifest,
