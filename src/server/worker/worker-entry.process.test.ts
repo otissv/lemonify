@@ -8,7 +8,11 @@ import { z } from 'zod'
 
 import { WorkerPool } from '@/features/ai/ai-tools'
 
-import { JobState } from '../jobs/job-types'
+import { canvasOfSize } from '@/features/pipeline/canvas'
+import { createPipeline, createSharpStep } from '@/features/pipeline/pipeline'
+import { CanvasSize, createWorkflow } from '@/features/workflows/workflow'
+
+import { JobState, isTerminal } from '../jobs/job-types'
 import { createTestApp } from '../testing/test-app'
 import type { TestApp } from '../testing/test-app'
 import { WORKER_ENTRY, WORKER_EXEC_ARGV } from './fork-worker'
@@ -95,7 +99,55 @@ async function queuedPreview(): Promise<string> {
   return (await t.app.renders.requestPreview(t.ann, document.id)).id
 }
 
+async function queuedWorkflowPictures(): Promise<string[]> {
+  const source = await t.uploadImage(t.ann)
+  const { pipeline, output } = createWorkflow('Pictures')
+  const layer = pipeline.steps[0]
+  if (layer === undefined) throw new Error('missing layer')
+  const sharpen = createSharpStep('sharpen')
+  const workflow = await t.app.workflows.create(t.ann, 'Pictures', {
+    pipeline: createPipeline(canvasOfSize(40, 30), [layer, sharpen]),
+    canvasSize: CanvasSize.Fixed,
+    inputs: [source.id],
+    output,
+  })
+  const preview = await t.app.renders.requestWorkflowPreview(
+    t.ann,
+    workflow.id,
+    sharpen.id,
+  )
+  const thumbnails = await t.app.renders.requestWorkflowThumbnails(
+    t.ann,
+    workflow.id,
+  )
+  return [preview.id, thumbnails.id]
+}
+
 describe('the worker process', () => {
+  it(
+    "renders a workflow's preview and thumbnails",
+    async () => {
+      const ids = await queuedWorkflowPictures()
+      const { child, output } = startWorker('cpu')
+
+      await eventually(async () => {
+        const jobs = await Promise.all(
+          ids.map((id) => t.app.jobs.get(t.ann, id)),
+        )
+        return jobs.every((job) => isTerminal(job.state))
+      })
+      const jobs = await Promise.all(ids.map((id) => t.app.jobs.get(t.ann, id)))
+      child.kill('SIGTERM')
+      await exited(child, output)
+
+      expect(
+        jobs.map((job) => job.state),
+        output(),
+      ).toEqual([JobState.Done, JobState.Done])
+    },
+    PROCESS_TIMEOUT,
+  )
+
   it(
     'runs the jobs of its pool, and stops cleanly when it is told to',
     async () => {

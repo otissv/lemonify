@@ -979,6 +979,37 @@ describe('workflow thumbnails', () => {
   })
 })
 
+describe('a workflow with no image layer', () => {
+  async function workflowWithoutSlot() {
+    const source = await t.uploadImage(t.ann)
+    const { pipeline, output } = createWorkflow('No slot')
+    return t.app.workflows.create(t.ann, 'No slot', {
+      pipeline: createPipeline(pipeline.canvas, []),
+      canvasSize: CanvasSize.MatchInput,
+      inputs: [source.id],
+      output,
+    })
+  }
+
+  it('renders its pictures without an input image, as a run would have nowhere to put one', async () => {
+    const workflow = await workflowWithoutSlot()
+
+    const preview = await run(
+      await t.app.renders.requestWorkflowPreview(
+        t.ann,
+        workflow.id,
+        INPUTS_NODE_ID,
+      ),
+    )
+    const thumbnails = await run(
+      await t.app.renders.requestWorkflowThumbnails(t.ann, workflow.id),
+    )
+
+    expect([preview.state, preview.error]).toEqual([JobState.Done, null])
+    expect([thumbnails.state, thumbnails.error]).toEqual([JobState.Done, null])
+  })
+})
+
 describe('workflow previews', () => {
   async function previewWorkflow() {
     const source = await t.uploadImage(t.ann)

@@ -58,7 +58,7 @@ export class WorkflowPlanner {
     )
   }
 
-  /** The pipeline with the workflow's last input image drawn in, on the canvas a run would give it, which is what its diagram pictures show. Left empty when it has no input image that can be found. */
+  /** The pipeline with the workflow's last input image drawn in, on the canvas a run would give it, which is what its diagram pictures show. Left as it is when it has no input image that can be found, or no image layer to put one in (decision 17, input slot). */
   async filled(workflow: WorkflowRecord): Promise<FilledWorkflow> {
     const { definition } = workflow
     const slot = inputSlot(definition.pipeline)
@@ -69,7 +69,7 @@ export class WorkflowPlanner {
         : await this.sourceSize(workflow.ownerId, shownSourceId)
     return {
       pipeline:
-        shownSourceId === undefined || image === undefined
+        slot === undefined || shownSourceId === undefined || image === undefined
           ? definition.pipeline
           : itemPipeline(definition, { id: shownSourceId, ...image }),
       slotId: slot?.id,
