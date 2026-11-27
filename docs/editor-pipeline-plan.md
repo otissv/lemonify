@@ -61,21 +61,21 @@ All of it follows the production bar below: nothing transitional, and the old "v
 
 Built. An opened image used to be spread across a memory-only id, a path hash and saved edits, so ids differed per tab and server restart, a moved Source orphaned its edits, and images could only be picked in a native dialog on the server's own machine. The web editor now works from any browser, as an add-on to the CLI: images are uploaded as Sources, and the editable thing is a Document with its own record. Terms: `docs/glossary.md`.
 
-- **Standalone**: Lemonify keeps its own SQLite database and disk. It does not use the 365 CMS database or storage.
+- **Standalone**: Lemonify keeps its own Postgres database and disk. It does not use the 365 CMS database or storage.
 - **Document record**: Permanent UUID, owner, Source reference, the Pipeline and the Edit history. Replaces `.data/file-edits/*.json`.
 - **Source**: Uploaded from the browser and kept as plain files in the folder `.data/sources/<content hash>` on the server (images are never stored as database blobs), so the same image uploaded twice is stored once. Replaces the native open dialog and the path registry.
 - **Export**: The browser downloads the full-size export Result. Replaces the server's native Save dialog. The CLI writes it to `--out` with the format and options set in the command.
 - **Image operands**: The boolean and join channel images in Step 5 are Sources too, uploaded or chosen from the User's own Sources. Replaces the system file dialog in the image chooser.
-- **Storage**: SQLite, with Knex migrations, so writes are atomic and Documents can be listed. The render cache stays as plain files.
+- **Storage**: Postgres, with Knex migrations, so writes are atomic and Documents can be listed. The render cache stays as plain files.
 - **Edit history**: Reversible patches (add, remove, move, set options, switch on or off), one row each, not full Pipeline snapshots. Capped at 100 as now.
-- **Authentication**: Better Auth, applied as middleware (see "Middleware"): sign-up and sign-in pages open to anyone, sessions in HTTP-only cookies and CSRF protection. Its tables live in the same SQLite file. No verification or reset email for now: a forgotten password means a new account, and the old Documents are not recoverable (see "Technical decisions").
+- **Authentication**: Better Auth, applied as middleware (see "Middleware"): sign-up and sign-in pages open to anyone, sessions in HTTP-only cookies and CSRF protection. Its tables live in the same Postgres database. No verification or reset email for now: a forgotten password means a new account, and the old Documents are not recoverable (see "Technical decisions").
 - **Open Documents**: The server's list of the User's Documents is the source of truth; every tab and device loads it. Replaces the in-memory `OpenedFileRegistry` list.
 - **Routes and names**: The editor route is `/documents/$id`; the type is `Document`; the action is "Open image".
 - **Upload limits**: Allowed types are checked by content type and magic number, with a size limit, random stored names, and uploads handled one at a time per User (security rules).
 - **Existing saved edits**: Dropped, with no migration (production bar).
 - **Rendering**: Unchanged: Sharp and the AI tools (Upscayl first) run on the server, so AI tools need the GPU there.
 
-Driver: `better-sqlite3`. Better Auth supports it directly and Knex supports it, so one SQLite file serves both. It needs a native build, so the user runs `pnpm add`; the tests use an in-memory database. Better Auth's tables come from its own `generate` command and are committed as a Knex migration, so one migration history covers the database (see "Technical decisions").
+Driver: `pg`. Knex and Better Auth each keep their own `pg` pool on the same `POSTGRES_` settings. Better Auth's tables are what its `generate` command makes for Postgres, created by the starting Knex migration, so one migration history covers the database (see "Technical decisions"). Why Postgres replaced SQLite, and how the processes share it: [architecture](architecture.md).
 
 ## Server architecture
 
@@ -97,10 +97,10 @@ Built. Before it there was no queue: a preview rendered as soon as it was asked 
   - Talks to: The database
 
 - **Why services sit in the middle:** a service never imports Knex, Sharp or a driver, only the DAO and tool interfaces, which are defined next to the services. Changing the database means writing new DAO classes; the services, API and tests of the rules do not change.
-- **Several databases:** the SQLite DAOs are the first implementation. A second set (for example Postgres) implements the same interfaces, and a config value picks the set once at startup, in one composition file that builds every service. No service reads that config.
+- **Several databases:** the Postgres DAOs (`src/server/dao/postgres/`) are the implementation, and the in-memory fakes implement the same interfaces for the service tests. Another database would be another set of DAO classes that passes the same contract suite, chosen in the composition file that builds every service. No service knows which database it uses.
 - **Tests:** services are tested against in-memory fakes of the DAOs and tools, so the rules are checked without a database, a GPU or Sharp.
 - **Better Auth:** it owns its own tables and has its own database adapter, so it sits beside the DAOs, not behind them. Changing database also means changing its adapter, one line in its config.
-- **No singletons:** every service, DAO and tool is an object built in the composition file (`src/server/composition.ts`) and passed in; the composition also builds the `Scheduler` and the daily cleanup (`runMaintenance`).
+- **No singletons:** every service, DAO and tool is an object built in the composition file (`src/server/composition.ts`) and passed in; the composition also builds the `Scheduler`, the web server's worker pool and the daily cleanup (`runMaintenance`).
 
 **Middleware.** Everything that applies to many endpoints is middleware (TanStack Start `createMiddleware`), run before the handler, so handlers never repeat it and an endpoint cannot forget it. Routes and server functions opt in by listing a chain; the ones that need a User use the full chain.
 
@@ -129,22 +129,22 @@ Built. Before it there was no queue: a preview rendered as soon as it was asked 
 
 The CLI always runs on the machine that holds the data. On a deployed server, a person or agent signs in to that machine and runs it there; on a developer's machine, that machine is the server. There is no CLI-to-server network connection, so there are no API keys and no remote client.
 
-- **How it runs**: A CLI command builds the same services from the composition file as the server does and calls them in its own process. It needs no running server and no credential: whoever has a shell on the machine can already read the database file.
+- **How it runs**: A CLI command builds the same services from the composition file as the server does and calls them in its own process. It needs no running server and no credential: whoever has a shell on the machine can already read the database settings in `.env`. When a web server is running, the Jobs a command queues are done by the server's worker processes (see "Jobs and workers").
 - **Ownership**: The CLI acts as an existing User, the `actor` every service checks. `--user <name>` picks one who signed up on the website; with no `--user` it uses the only User, and with no Users at all it creates one local User on first use (through Better Auth's sign-up with a random password that is never stored or shown, so no one can sign in as that User on the website). With several Users and no `--user` it refuses. The CLI has no account of its own and is not a way around ownership.
 - **Shared queue**: The queue is the `jobs` table, so the server and any CLI process on the machine feed and drain the same queue. A worker claims a Job with one atomic update, so two processes never take the same Job, and fairness is worked out from the table, not from one process's memory.
-- **Concurrent writers**: SQLite runs in WAL mode so the server and a CLI process can use the database together; writes are short transactions through the DAOs.
+- **Concurrent writers**: Every process has its own Postgres pool, and writes are short transactions through the DAOs. A DAO method that reads a row and then writes the next value takes the row with `FOR UPDATE`, and every connection sets `lock_timeout` and `statement_timeout`, so a wait for another process ends in a conflict or a clear error, never a frozen process (see [architecture](architecture.md)).
 - **Engine commands**: The existing stateless commands (`lemonify sharp`, `upscale`, and the rest, each a JSON job in and JSON out) stay as they are. They are the tools layer: workers run Sharp and the AI tools through them, and agents can still call them directly on any image with no database or sign-in.
 - **Output**: Every command prints JSON and reports errors as JSON, so agents can parse it; `--follow` streams a Job's progress.
 
 **Jobs and workers.** All slow work is a Job, and a Job is a row in the database, so it survives a restart and can be listed, cancelled and shown with progress.
 
 - **Job kinds**: Render (a preview or thumbnails), an AI Step, export, and a workflow run, which is split into one Job per Source.
-- **Worker pools**: A CPU pool for Sharp work and a GPU pool for AI tools, each with its own limit (the GPU pool is 1 per GPU). A Job waits for a free slot in its own pool, so a long AI Step never blocks a preview.
+- **Worker pools**: A CPU pool for Sharp work and a GPU pool for AI tools. The web server runs no Job itself: it starts one worker process per CPU slot, each running one Job at a time, and the GPU worker processes (1 per GPU) only while AI Jobs are waiting or running. A Job waits for a free worker of its own pool, so a long AI Step never blocks a preview. A CLI command does its own Jobs only when no web server is running. See [architecture](architecture.md).
 - **Fairness**: Waiting Jobs are grouped by what they belong to: a Document, or a workflow run. The scheduler serves each group in turn, and no group may hold more than a set share of a pool's slots, so one Document or one workflow cannot hog it. A per-User limit on waiting Jobs stops a flood.
 - **Priority**: Interactive work (a preview the User is looking at) goes before background work (a workflow run), within the fairness rule.
 - **Latest wins**: A new preview for a Document replaces its waiting one, and cancels its running one, so the queue never fills with stale previews. `RenderService` cancels the older-revision Jobs, and a handler that finds the Document's revision changed throws `StaleJobError`.
-- **Cancel**: A waiting Job is dropped; a running one is stopped through its process group. A Job asked to cancel ends as `cancelled` even if it finished meanwhile, keeps any Result it made, and queues no following Jobs. Progress is read by polling.
-- **Restart**: Jobs found running at startup are marked failed with a plain-words reason, and waiting Jobs continue. Renders are a cache, so a lost Render is simply queued again.
+- **Cancel**: A waiting Job is dropped; a running AI tool is stopped through its process group, and a render already inside Sharp, which cannot be stopped part way, finishes first. A Job asked to cancel ends as `cancelled` even if it finished meanwhile, keeps any Result it made, and queues no following Jobs. Progress is read by polling.
+- **Restart**: Jobs left running by a process that is gone (a worker that stopped, a server or command that was killed) are marked failed with a plain-words reason, and waiting Jobs continue. Renders are a cache, so a lost Render is simply queued again.
 
 **Batching.** A Pipeline is cut into segments at each AI Step.
 
@@ -156,7 +156,7 @@ The CLI always runs on the machine that holds the data. On a deployed server, a 
 
 ## Data model
 
-One SQLite file, `.data/lemonify.sqlite`, in WAL mode, changed only through Knex migrations. Better Auth's own tables (`user`, `session`, `account`, `verification`) are generated into the same migration history; the `owner_id` columns below refer to its `user.id`. Ids are UUIDs. Times are UTC ISO strings. Each JSON column is validated by the Zod schema that is the source of truth for its shape, and a row that fails its schema is reported as unreadable, never converted.
+One Postgres database (the `POSTGRES_` settings; the tables live in `POSTGRES_SCHEMA`), changed only through Knex migrations. Better Auth's own tables (`user`, `session`, `account`, `verification`) are created by the same migration history; the `owner_id` columns below refer to its `user.id`. Ids are UUIDs. Times are `timestamptz`, read as UTC ISO strings. JSON columns are `jsonb`, each validated by the Zod schema that is the source of truth for its shape, and a row that fails its schema is reported as unreadable, never converted. Flags are `boolean`.
 
 - **`sources`**
   - Columns: `id`, `owner_id`, `content_hash`, `file_name`, `media_type`, `bytes`, `width`, `height`, `created_at`
@@ -293,7 +293,7 @@ Everything is defined next to the services as TypeScript interfaces; a DAO or to
 - **`JobService`**: `get`, `list`, `cancel`, `follow` (progress events for the CLI and, polled, the web)
 - **`WorkflowService`**: `create`, `update(actor, id, revision, changes)`, `list`, `get`, `delete`, `run(actor, id)` (queues one Job per Source), `getRun`, `listRuns`, `cancelRun`, `deleteRun`, `runOutputs`
 - **`UserService`**: `list`, `findByName`, `ensureLocalUser`. Used only by the CLI. Sign-up and sign-in on the website are Better Auth's, behind the Session middleware
-- **`Scheduler`**: Not called by the API. Picks the next Job by pool, priority and fairness and starts it; run by every process that has workers
+- **`Scheduler`**: Not called by the API. Picks the next Job by pool, priority and fairness and starts it; run by each worker process, and by a CLI command when no web server is running. The web server's has no slots: it only fails the Jobs of processes that are gone
 
 - **`SourceDao`**: `insert` (finds the existing row for the same owner and hash), `findById`, `listByOwner`, `isReferenced`, `delete`, `countByHash`
 - **`DocumentDao`**: `insert`, `findById`, `listByOwner`, `delete`, `applyChange(id, expectedRevision, patch)` (one transaction as described above, conflict when the revision differs), `undo`, `redo`, `listBySource`
@@ -338,26 +338,26 @@ The commands are added to the existing `lemonify` launcher (`scripts/images/`). 
 - **`workflow runs [--workflow <id>]`, `workflow cancel <runId>`, `workflow run delete <runId>`**: Lists runs with state and progress, cancels a run, or deletes a run that is not running together with its Results.
 - **`result list`, `result show <id>`, `result delete <id>`, `result save <id> --out <path>`, `result clear-unused <documentId>`**: Lists, shows, deletes or writes Results to disk, or clears the unused AI Step Results of a Document.
 - **`job list`, `job show <id>`, `job cancel <id>`**: Lists, shows or cancels Jobs.
-- **`worker`**: Runs workers on this machine until stopped, taking Jobs from the shared queue. For a machine that has a GPU but no web server.
+- **`worker`**: Takes Jobs from the shared queue in this process until stopped, for doing queued work when no web server is running (the web server starts its own worker processes).
 
-`document step add` and `workflow create` list the Sharp operations through `pnpm images sharp --help` and `pnpm images schema sharp`. A command that queues a Job and waits for it (`export`, `workflow run --follow`) runs workers in its own process for the duration, using the same pools and fairness rules, so the CLI works with no server and no `worker` process. If it is stopped, its unfinished Jobs stay `waiting` in the table and are picked up by the server or a `worker` later; a Job it was running becomes `failed` at the next startup, as in "Job states".
+`document step add` and `workflow create` list the Sharp operations through `pnpm images sharp --help` and `pnpm images schema sharp`. A command that queues a Job and waits for it (`export`, `workflow run --follow`) leaves it to the web server's worker processes when a web server is running (its socket answers), and otherwise runs workers in its own process for the duration, using the same pools and fairness rules, so the CLI works with no server and no `worker` process. It also takes over if the web server stops while it waits. If it is stopped, its unfinished Jobs stay `waiting` in the table and are picked up by the server or a `worker` later; a Job it was running becomes `failed` at the next startup, as in "Job states".
 
 ## Configuration
 
-Read once at startup in `src/server/config/config.ts`, validated by one Zod schema, and passed to the composition file. Nothing else reads the environment. Each setting is an environment variable named `LEMONIFY_<setting>` (`LEMONIFY_DATA_DIR`), and the Better Auth secret `LEMONIFY_AUTH_SECRET` must be at least 32 characters.
+Read once at startup in `src/server/config/config.ts`, validated by one Zod schema, and passed to the composition file. Nothing else reads the environment. Each setting is an environment variable named `LEMONIFY_<setting>` (`LEMONIFY_DATA_DIR`), and the Better Auth secret `LEMONIFY_AUTH_SECRET` must be at least 32 characters. The database is set by the required `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DATABASE` and `POSTGRES_SCHEMA`, read from the environment and from `.env` (the environment wins).
 
 - **`DATA_DIR`**
   - Default: `.data`
-  - Meaning: Holds `lemonify.sqlite`, `sources/`, `render-cache/`, `results/` and `work/`.
-- **`DATABASE`**
-  - Default: `sqlite`
-  - Meaning: Picks the DAO set. Only `sqlite` exists; the setting is the seam for others.
+  - Meaning: Holds `sources/`, `render-cache/`, `results/`, `work/` and `run/` (the web server's socket).
+- **`DATABASE_POOL_SIZE`**
+  - Default: 10
+  - Meaning: The most connections the web server and each CLI command keep open; each worker process keeps 2.
 - **`CPU_WORKERS`**
   - Default: CPU count, at least 1, at most 4
-  - Meaning: Slots in the CPU pool.
+  - Meaning: CPU worker processes the web server starts, each running one Job at a time; a CLI command doing its own Jobs runs this many at once.
 - **`GPU_WORKERS`**
   - Default: 1
-  - Meaning: Slots in the GPU pool; set to the number of GPUs.
+  - Meaning: GPU worker processes the web server starts while there is AI work; set to the number of GPUs.
 - **`GROUP_SHARE`**
   - Default: 50 (percent)
   - Meaning: The most of a pool's slots one Document or workflow run may hold while others wait.
@@ -399,8 +399,8 @@ Facts checked before building, and decisions that close the questions they raise
   - Decision: Knex runs a `migrationSource` that lists statically imported modules from `migrations/`, with no directory scan, so the same migrations run under Vite, Vitest and the CLI.
   - Checked: Decided; the slice 1 tests run them.
 - **Better Auth and the database**
-  - Decision: Better Auth gets its own `better-sqlite3` handle on `.data/lemonify.sqlite`, and Knex another. WAL mode lets both write safely.
-  - Checked: Better Auth takes a `better-sqlite3` instance (Kysely underneath). Sharing one handle with Knex is not documented, so not done.
+  - Decision: Better Auth gets its own `pg` pool on the `POSTGRES_` settings, and Knex another.
+  - Checked: Better Auth takes a `pg` `Pool` (Kysely underneath). Sharing one pool with Knex is not documented, so not done.
 - **Better Auth schema**
   - Decision: `auth generate` writes SQL for its Kysely adapter. That SQL is committed as a Knex migration, and `auth check schema` runs in the slice 2 tests.
   - Checked: Documentation.
@@ -423,7 +423,7 @@ Facts checked before building, and decisions that close the questions they raise
   - Decision: Better Auth's own limiter covers `/api/auth`. Ours is in-memory fixed windows in the web server process. The per-User waiting-Jobs cap in the database is the limit that holds across processes. The CLI is not rate-limited, because shell access is already trust.
   - Checked: Decided.
 - **One web server process**
-  - Decision: One web server process per machine; scaling out is not planned. This is what makes in-memory rate limits and an in-process Scheduler correct.
+  - Decision: One web server process per data folder (its socket refuses a second); scaling out is not planned. This is what makes in-memory rate limits correct. Jobs run in its worker processes, not in it.
   - Checked: Decided.
 - **Workflow results on the web**
   - Decision: Each Result of a run has its own download, and Download all gives the run's finished images as one zip (`GET /api/workflow-runs/<id>/archive`, the same zip `workflow results --zip` writes).
@@ -443,7 +443,7 @@ Settled while building; they refine the sections above, which they replace where
 - **Edit history patches**: An entry stores the forward change and its inverse change. Undo applies the inverse of the entry below the cursor and redo applies the forward change of the entry at the cursor. `history_cursor` is the position the next change takes, and positions never shift, so trimming the oldest entries moves nothing.
 - **Source files**: Deleting a Source removes only its row. Files with no row are removed by a sweep (startup and daily) once older than a grace period, which closes the race between a delete and an upload of the same image. An upload writes its row before keeping the file.
 - **Job claiming**: The DAO offers primitives (`listWaiting`, `countRunningByGroup`, `claim` as one atomic update), and a pure `pickNextJob` holds the fairness rule and is tested alone.
-- **Job liveness**: `claimed_by` names the process and its start time. Running Jobs are failed when their process is gone, checked at startup and every minute by every scheduler, so a server start does not kill Jobs a CLI process is running. Cancelling a running Job sets `cancel_requested`; its worker polls and stops it.
+- **Job liveness**: `claimed_by` names the process and its start time. Running Jobs are failed when their process is gone, checked at startup and every minute by every scheduler, and at once by the web server's pool when one of its workers stops, so a server start does not kill Jobs a CLI process is running. Cancelling a running Job sets `cancel_requested`; its worker polls and stops it.
 - **Job completion**: Finishing a Job and enqueueing the Jobs that follow it are one transaction, so a crash cannot lose a workflow run's next segment.
 - **Run retention**: A run is kept until the User deletes it, because its Results cascade-delete with it; only Jobs are swept at `JOB_RETENTION_DAYS`. Work images live in `.data/work/run-<id>` and are removed when the run ends, and the daily cleanup removes work folders older than a day.
 - **Workflow runs**: A run is one Job per Source per segment. A segment is the Sharp steps between AI steps, or one AI step, and the last segment also encodes the output. Intermediate images are work files that are removed when the run ends. A GPU worker that claims an AI Job also claims waiting Jobs with the same `batchKey`, up to `AI_BATCH_SIZE`, and runs them as one batch.
@@ -456,7 +456,7 @@ Settled while building; they refine the sections above, which they replace where
 Each layer is tested at its own level, and a slice is not done without its tests (written first).
 
 - **Services:** against in-memory fakes of the DAOs and tools. Every ownership rule, every error in "Errors", and every History case (add, remove, move, set, enable, undo, redo, a new change after an undo, the 100-entry cap, a revision conflict) is a test.
-- **DAOs:** one shared contract test suite, run against every implementation (the in-memory fake and SQLite now, any later database), so a new database is accepted when it passes the same suite. SQLite tests use an in-memory database with the real migrations.
+- **DAOs:** one shared contract test suite, run against every implementation (the in-memory fake and Postgres), so a new database is accepted when it passes the same suite. Postgres tests each use a database of their own, copied from a template the real migrations built.
 - **Scheduler and queue:** against a fake clock and fake engines: fairness between two Documents, a workflow run that cannot starve a preview, priority, latest wins, cancel, the restart rule, and two claimants taking different Jobs.
 - **Middleware:** each on its own, then the full chain on one route: unauthenticated is 401, a missing CSRF token is rejected, a bad body is 422, an oversized upload is refused before storage, and no response contains a stack trace.
 - **CLI:** each command through the real dispatcher with the composition built on in-memory fakes; the JSON output and exit code are asserted.
@@ -467,7 +467,7 @@ Each layer is tested at its own level, and a slice is not done without its tests
 All five slices are built. Each slice shipped complete: when it replaces something, the old code, tests, stored-data handling and documentation go in the same change (production bar), and the "Built" section, README and glossary are updated in that change. A slice that only adds a layer (1, 2, 5) leaves nothing legacy behind. The order puts the layers a later slice stands on first, and the replacement of the editor's storage in a single slice (3) rather than half-migrating it.
 
 - **1. Foundation**
-  - Adds: `knex` and `better-sqlite3` (the user runs `pnpm add`), `src/config`, the database setup (WAL), the migration runner and migrations for every table in "Data model", the composition file, the error classes, the shared DAO contract test harness, the CLI loader (`scripts/images/register-alias.ts` and the `--experimental-transform-types` flag in `pnpm images` and the `lemonify` launcher), and a smoke test that the composition file loads under plain Node.
+  - Adds: `knex` and `better-sqlite3` (the user runs `pnpm add`), `src/config`, the database setup (WAL), the migration runner and migrations for every table in "Data model", the composition file, the error classes, the shared DAO contract test harness, the CLI loader (`scripts/images/register-alias.ts` and the `--experimental-transform-types` flag in `pnpm images` and the `lemonify` launcher), and a smoke test that the composition file loads under plain Node. (SQLite has since been replaced by Postgres; see [architecture](architecture.md).)
   - Replaces (removed in the same change): Nothing.
   - Done when: Migrations run on an in-memory database and on a file; the config schema rejects bad values; the composition file builds with fakes; `pnpm build` and the CLI both load the database module.
 - **2. Users and the middleware**

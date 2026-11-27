@@ -92,8 +92,8 @@ Found on the way:
 
 ## 7. Docs
 
-- [ ] `docs/editor-pipeline-plan.md` or a new architecture note: Postgres and why (decision 9, Postgres), the web server, the worker pool, the channel, the database waits and why (the findings above). The SQLite statements in `docs/editor-pipeline-plan.md` (Standalone, Storage, Authentication, the driver, several databases, concurrent writers, the database section and the `LEMONIFY_DATA_DIR` and `LEMONIFY_DATABASE` settings) and the store column of `docs/glossary.md` are updated.
-- [ ] README and `docs/` configuration: `LEMONIFY_DATABASE_URL`, starting Postgres with `compose.yaml`, and what `LEMONIFY_CPU_WORKERS` and `LEMONIFY_GPU_WORKERS` now mean.
+- [x] `docs/editor-pipeline-plan.md` or a new architecture note: Postgres and why (decision 9, Postgres), the web server, the worker pool, the channel, the database waits and why (the findings above). The SQLite statements in `docs/editor-pipeline-plan.md` (Standalone, Storage, Authentication, the driver, several databases, concurrent writers, the database section and the `LEMONIFY_DATA_DIR` and `LEMONIFY_DATABASE` settings) and the store column of `docs/glossary.md` are updated. (New note: `docs/architecture.md`. The plan's worker pools, cancel, restart, Scheduler, `worker` command, CLI and Job liveness statements now describe the worker processes too; slice 1 of its build order, which is history, says SQLite was since replaced.)
+- [x] README and `docs/` configuration: the `POSTGRES_` settings, starting Postgres with `compose.yaml`, and what `LEMONIFY_CPU_WORKERS` and `LEMONIFY_GPU_WORKERS` now mean. (The `POSTGRES_` settings and `compose.yaml` were documented in section 1; there is no `LEMONIFY_DATABASE_URL`. `docs/live-updates.md` describes the `queued` message.)
 
 ## 8. Done when
 
