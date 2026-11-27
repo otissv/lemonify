@@ -1,33 +1,18 @@
-import { mkdirSync } from 'node:fs'
-
 import type { Knex } from 'knex'
 
 import { WorkerPool } from '@/features/ai/ai-tools'
 
-import { AiToolRegistry, upscaleEntry } from './ai/ai-tool-registry.ts'
+import type { AiToolRegistry } from './ai/ai-tool-registry.ts'
 import type { AiEngine } from './ai/ai-engine.ts'
-import { UpscaylCliEngine } from './ai/upscayl-cli-engine.ts'
 import type { AuthGateway } from './auth/auth-gateway.ts'
 import { resolveAuthSecret } from './auth/auth-secret.ts'
 import { BetterAuthGateway } from './auth/better-auth-gateway.ts'
-import {
-  channelSocketPath,
-  renderCacheDir,
-  resultsDir,
-  sourcesDir,
-  workDir,
-} from './config/config.ts'
+import { channelSocketPath, workDir } from './config/config.ts'
 import type { Config } from './config/config.ts'
-import { PostgresDocumentDao } from './dao/postgres/document-dao.ts'
-import { PostgresJobDao } from './dao/postgres/job-dao.ts'
-import { PostgresResultDao } from './dao/postgres/result-dao.ts'
-import { PostgresSourceDao } from './dao/postgres/source-dao.ts'
+import { connectDatabase, prepareDataDirectories } from './compose/database.ts'
+import { buildJobCore } from './compose/job-core.ts'
 import { PostgresKeybindingDao } from './dao/postgres/keybinding-dao.ts'
 import { PostgresUserDao } from './dao/postgres/user-dao.ts'
-import { PostgresWorkflowDao } from './dao/postgres/workflow-dao.ts'
-import { openDatabase } from './database/connection.ts'
-import { migrateToLatest } from './database/migrate.ts'
-import { UnavailableError } from './errors.ts'
 import { systemClock, uuidGenerator } from './domain/clock.ts'
 import type { Clock, IdGenerator } from './domain/clock.ts'
 import { ResendEmailSender } from './email/email-sender.ts'
@@ -38,35 +23,19 @@ import type { ChangePublisher } from './realtime/change-publisher.ts'
 import { RealtimeHub } from './realtime/hub.ts'
 import type { HubLimits } from './realtime/hub.ts'
 import type { Logger } from './http/logger.ts'
-import { AiStepHandler } from './jobs/handlers/ai-step-handler.ts'
-import { ExportHandler } from './jobs/handlers/export-handler.ts'
-import { RunItemHandler } from './jobs/handlers/run-item-handler.ts'
-import { PreviewHandler } from './jobs/handlers/preview-handler.ts'
-import { ThumbnailHandler } from './jobs/handlers/thumbnail-handler.ts'
-import { WorkflowPreviewHandler } from './jobs/handlers/workflow-preview-handler.ts'
-import { WorkflowThumbnailHandler } from './jobs/handlers/workflow-thumbnail-handler.ts'
-import { JobKind } from './jobs/job-types.ts'
-import type { JobRecord } from './jobs/job-types.ts'
-import { Scheduler } from './jobs/scheduler.ts'
-import { DocumentPlanner } from './render/document-planner.ts'
-import { WorkflowPlanner } from './render/workflow-planner.ts'
+import type { Scheduler } from './jobs/scheduler.ts'
 import { CreateFromService } from './services/create-from-service.ts'
 import { DocumentService } from './services/document-service.ts'
-import { JobService } from './services/job-service.ts'
+import type { JobService } from './services/job-service.ts'
 import { DocumentBundleService } from './services/document-bundle-service.ts'
 import { RenderService } from './services/render-service.ts'
-import { ResultService } from './services/result-service.ts'
+import type { ResultService } from './services/result-service.ts'
 import { SourceService } from './services/source-service.ts'
 import { KeybindingService } from './services/keybinding-service.ts'
-import { UsedItems } from './services/used-items.ts'
 import { UserService } from './services/user-service.ts'
-import { WorkflowService } from './services/workflow-service.ts'
-import { SharpImageEngine } from './tools/image-engine.ts'
+import type { WorkflowService } from './services/workflow-service.ts'
 import type { ImageEngine } from './tools/image-engine.ts'
 import { SharpImageInspector } from './tools/image-inspector.ts'
-import { FileRenderStore } from './tools/render-store.ts'
-import { FileResultStore } from './tools/result-store.ts'
-import { FileSourceStore } from './tools/source-store.ts'
 import { removeOlderThan } from './tools/work-directory.ts'
 
 const MILLISECONDS_PER_DAY = 86_400_000
@@ -140,60 +109,6 @@ export type AppOverrides = {
   changes?: ChangePublisher
 }
 
-function prepareDataDirectories(config: Config): void {
-  for (const dir of [
-    config.dataDir,
-    sourcesDir(config),
-    resultsDir(config),
-    renderCacheDir(config),
-    workDir(config),
-  ]) {
-    mkdirSync(dir, { recursive: true })
-  }
-}
-
-/** Network errors, and the Postgres codes for a refused login, a missing database and a server still starting. */
-const CONNECTION_FAILURES: ReadonlySet<string> = new Set([
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'ENOTFOUND',
-  'EAI_AGAIN',
-  'ETIMEDOUT',
-  'EHOSTUNREACH',
-  '28000',
-  '28P01',
-  '3D000',
-  '57P03',
-])
-
-function isConnectionFailure(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  if (error.name === 'KnexTimeoutError') return true
-  return 'code' in error && CONNECTION_FAILURES.has(String(error.code))
-}
-
-/**
- * Opens the database and brings its schema up to date. A database that
- * cannot be reached stops the app with a message that says where it looked
- * and how to start the local one.
- */
-async function connectDatabase(config: Config): Promise<Knex> {
-  const database = openDatabase(config.database)
-  try {
-    await migrateToLatest(database)
-    return database
-  } catch (error) {
-    await database.destroy()
-    if (!isConnectionFailure(error)) throw error
-    const { host, port, database: name } = config.database
-    const reason = error instanceof Error ? error.message : String(error)
-    throw new UnavailableError(
-      `The database ${name} at ${host}:${port} could not be reached (${reason}). Start it with "docker compose up -d", or check the POSTGRES_ settings.`,
-      { cause: error },
-    )
-  }
-}
-
 function buildAuth(
   config: Config,
   email: EmailSender | null,
@@ -219,7 +134,7 @@ export async function createApp(
   overrides: AppOverrides = {},
 ): Promise<App> {
   prepareDataDirectories(config)
-  const database = await connectDatabase(config)
+  const database = await connectDatabase(config.database)
 
   const clock = overrides.clock ?? systemClock
   const ids = overrides.ids ?? uuidGenerator
@@ -240,92 +155,47 @@ export async function createApp(
       : undefined
   const changes = overrides.changes ?? sentChanges ?? realtime
 
-  const sourceDao = new PostgresSourceDao(database)
-  const documentDao = new PostgresDocumentDao(database)
-  const resultDao = new PostgresResultDao(database)
-  const jobDao = new PostgresJobDao(database)
-  const workflowDao = new PostgresWorkflowDao(database)
-  const sourceStore = new FileSourceStore(sourcesDir(config))
-  const resultStore = new FileResultStore(resultsDir(config))
-  const renderStore = new FileRenderStore(
-    renderCacheDir(config),
-    config.renderCacheBytes,
-  )
-
-  const results = new ResultService({
-    results: resultDao,
-    store: resultStore,
+  const core = buildJobCore({
+    config,
+    database,
     clock,
     ids,
-    maxBytesPerUser: config.maxResultBytesPerUser,
+    logger,
     changes,
+    imageEngine: overrides.imageEngine,
+    aiEngine: overrides.aiEngine,
+    slots: {
+      [WorkerPool.Cpu]: config.cpuWorkers,
+      [WorkerPool.Gpu]: config.gpuWorkers,
+    },
   })
+  const { daos, stores, results, usedItems, jobs, workflows, aiTools } = core
   const inspector = new SharpImageInspector()
   const sources = new SourceService({
-    sources: sourceDao,
-    store: sourceStore,
+    sources: daos.sources,
+    store: stores.sources,
     inspector,
     clock,
     ids,
     maxUploadBytes: config.maxUploadBytes,
   })
-  const usedItems = new UsedItems({
-    documents: documentDao,
-    workflows: workflowDao,
-  })
   const documents = new DocumentService({
-    documents: documentDao,
-    sources: sourceDao,
+    documents: daos.documents,
+    sources: daos.sources,
     clock,
     ids,
     cleanup: results,
     changes,
     usedItems,
   })
-
-  const imageEngine = overrides.imageEngine ?? new SharpImageEngine()
-  const aiTools = new AiToolRegistry([
-    upscaleEntry(
-      overrides.aiEngine ?? new UpscaylCliEngine({ workRoot: workDir(config) }),
-    ),
-  ])
-  const planner = new DocumentPlanner({
-    documents: documentDao,
-    workflows: workflowDao,
-    sources: sourceDao,
-    sourceStore,
-    results,
-  })
-
-  let scheduler: Scheduler | undefined
-  const jobs = new JobService({
-    jobs: jobDao,
-    clock,
-    ids,
-    maxWaitingPerUser: config.maxWaitingJobsPerUser,
-    onQueued: () => scheduler?.wake(),
-  })
-  const workflows = new WorkflowService({
-    workflows: workflowDao,
-    sources: sourceDao,
-    jobs,
-    jobDao,
-    registry: aiTools,
-    clock,
-    ids,
-    workRoot: workDir(config),
-    results,
-    changes,
-    usedItems,
-  })
   const bundles = new DocumentBundleService({
-    documents: documentDao,
+    documents: daos.documents,
     documentService: documents,
     workflowService: workflows,
     usedItems,
     sources,
     results,
-    planner,
+    planner: core.planner,
     inspector,
     logger,
     workRoot: workDir(config),
@@ -334,103 +204,25 @@ export async function createApp(
   const createFrom = new CreateFromService({
     documents,
     workflows,
-    sources: sourceDao,
+    sources: daos.sources,
   })
   const keybindings = new KeybindingService({
     keybindings: new PostgresKeybindingDao(database),
     clock,
     changes,
   })
-  const workflowPlanner = new WorkflowPlanner({
-    documents: documentDao,
-    workflows: workflowDao,
-    sources: sourceDao,
-    sourceStore,
-  })
-
   const renders = new RenderService({
-    documents: documentDao,
-    workflows: workflowDao,
-    planner,
+    documents: daos.documents,
+    workflows: daos.workflows,
+    planner: core.planner,
     jobs,
-    jobDao,
+    jobDao: daos.jobs,
     results,
-    renders: renderStore,
+    renders: stores.renders,
     registry: aiTools,
     clock,
   })
-
-  const running = new Scheduler({
-    jobs: jobDao,
-    clock,
-    logger,
-    slots: {
-      [WorkerPool.Cpu]: config.cpuWorkers,
-      [WorkerPool.Gpu]: config.gpuWorkers,
-    },
-    groupSharePercent: config.groupSharePercent,
-    batchLimit: (job) => batchLimitOf(job, aiTools, config.aiBatchSize),
-    onFinished: (job) => workflows.onJobFinished(job),
-    handlers: {
-      [JobKind.Preview]: new PreviewHandler({
-        planner,
-        renders: renderStore,
-        engine: imageEngine,
-        logger,
-      }),
-      [JobKind.Thumbnail]: new ThumbnailHandler({
-        planner,
-        renders: renderStore,
-        engine: imageEngine,
-        logger,
-      }),
-      [JobKind.WorkflowThumbnail]: new WorkflowThumbnailHandler({
-        planner,
-        renders: renderStore,
-        engine: imageEngine,
-        logger,
-        workflows: workflowDao,
-        workflowPlanner,
-      }),
-      [JobKind.WorkflowPreview]: new WorkflowPreviewHandler({
-        planner,
-        renders: renderStore,
-        engine: imageEngine,
-        logger,
-        workflows: workflowDao,
-        workflowPlanner,
-      }),
-      [JobKind.Export]: new ExportHandler({
-        planner,
-        engine: imageEngine,
-        results,
-        workRoot: workDir(config),
-        logger,
-      }),
-      [JobKind.AiStep]: new AiStepHandler({
-        planner,
-        engine: imageEngine,
-        registry: aiTools,
-        results,
-        workRoot: workDir(config),
-        logger,
-        usedItems,
-        changes,
-      }),
-      [JobKind.RunItem]: new RunItemHandler({
-        workflows: workflowDao,
-        sources: sourceDao,
-        sourceStore,
-        engine: imageEngine,
-        registry: aiTools,
-        results,
-        jobs,
-        workRoot: workDir(config),
-        logger,
-      }),
-    },
-  })
-  scheduler = running
+  const running = core.scheduler
 
   async function runMaintenance(): Promise<void> {
     await sources.sweepOrphans(ORPHAN_GRACE_MS)
@@ -480,23 +272,4 @@ export async function createApp(
       await database.destroy()
     },
   }
-}
-
-/** How many Jobs may run together with `job`: the configured size, lowered by the AI tool if it asks. */
-function batchLimitOf(
-  job: JobRecord,
-  registry: AiToolRegistry,
-  configured: number,
-): number {
-  const { payload } = job
-  if (
-    (payload.kind === JobKind.AiStep || payload.kind === JobKind.RunItem) &&
-    payload.tool !== undefined
-  ) {
-    return Math.min(
-      configured,
-      registry.get(payload.tool).maxBatch ?? configured,
-    )
-  }
-  return configured
 }

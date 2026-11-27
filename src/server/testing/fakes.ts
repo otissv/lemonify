@@ -232,6 +232,8 @@ export class FakeImageEngine implements ImageEngine {
 /** An AiEngine that writes a small file per image and records every batch; it can be held, failed or cancelled. */
 export class FakeAiEngine implements AiEngine {
   readonly batches: AiBatch[] = []
+  /** How many times a running batch was told to stop. */
+  cancelled = 0
   failWith: Error | undefined
   gate: Promise<void> | undefined
   /** What each image is written as; a short text by default, which is not an image. */
@@ -264,6 +266,7 @@ export class FakeAiEngine implements AiEngine {
     return {
       result: Promise.race([work(), stopped]),
       cancel: () => {
+        if (!cancelled) this.cancelled += 1
         cancelled = true
         stop?.()
       },

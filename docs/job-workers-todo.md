@@ -65,10 +65,10 @@ Written before the sections that make them pass. The row-lock test passes alread
 
 ## 4. The worker process (decisions 2, pool shape; 3, work per image)
 
-- [ ] A worker entry (`src/server/worker/`) that composes the services a job needs, without the web server, the realtime server or auth, and runs a scheduler for one pool (CPU or GPU) with one job at a time for a CPU worker.
-- [ ] Its helper thread pool is sized for its work in the `fork` environment (`UV_THREADPOOL_SIZE`), set before the process starts.
-- [ ] Its database pool is small (one or two connections), so the total of every process's pool stays inside Postgres's connection limit.
-- [ ] Tests: a worker takes a job from the queue, runs it, records its result and finishes it; two workers never take the same job; a cancel stops a job in a worker; the job's progress and its result (`picture.changed`, job progress and finish) reach the owner's open tabs over the channel (section 3).
+- [x] A worker entry (`src/server/worker/main.ts`, forked with the pool as its one argument) and its composition (`src/server/worker/worker.ts`): the services a job needs, built by the same job core the web server and CLI use (`src/server/compose/job-core.ts`), without the web server, the realtime server or auth, and a scheduler for one pool with one job at a time (the GPU worker batches AI jobs inside its one). It stops on SIGTERM, SIGINT or when the process that started it goes away, letting the running job finish.
+- [x] Its helper thread pool is sized for its work in the `fork` environment (`workerEnvironment` sets `UV_THREADPOOL_SIZE`, read only at start), and a CPU worker's Sharp threads are the machine's cores shared between the CPU workers (`src/server/worker/worker-environment.ts`).
+- [x] Its database pool is two connections (`WORKER_DATABASE_POOL_SIZE`), so the total of every process's pool stays inside Postgres's connection limit.
+- [x] Tests: a worker takes a job from the queue, runs it, records its result and finishes it; a CPU worker runs one job at a time and leaves GPU jobs alone; two workers never take the same job; a cancel stops a job in the GPU worker and tells the AI tool to stop; closing lets the running job finish and takes no other; what a job changes reaches the owner's open tabs over the channel (section 3). Job progress is saved to the database, which tabs read, as section 3 decided. The entry is tested as a forked process: it runs a job, stops cleanly on SIGTERM and when its parent goes away, and refuses an unknown pool (`src/server/worker/*.test.ts`).
 
 ## 5. The pool in the web server (decisions 1, worker processes; 2, pool shape)
 

@@ -1,0 +1,132 @@
+// @vitest-environment node
+import { fork } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import path from 'node:path'
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { WorkerPool } from '@/features/ai/ai-tools'
+
+import { JobState } from '../jobs/job-types'
+import { createTestApp } from '../testing/test-app'
+import type { TestApp } from '../testing/test-app'
+import { databaseEnvironment } from '../testing/test-database'
+import { workerEnvironment } from './worker-environment'
+
+const ROOT = path.resolve(import.meta.dirname, '../../..')
+const ENTRY = path.join(ROOT, 'src/server/worker/main.ts')
+const LOADER = [
+  '--disable-warning=ExperimentalWarning',
+  '--experimental-transform-types',
+  '--import',
+  path.join(ROOT, 'scripts/images/register-alias.ts'),
+]
+const PROCESS_TIMEOUT = 60_000
+
+let t: TestApp
+const children: ChildProcess[] = []
+
+beforeEach(async () => {
+  t = await createTestApp()
+})
+
+afterEach(async () => {
+  for (const child of children.splice(0)) {
+    if (child.exitCode === null && child.signalCode === null)
+      child.kill('SIGKILL')
+  }
+  await t.close()
+})
+
+/** Starts `main.ts` the way the pool will: forked, with the worker's environment. */
+function startWorker(pool: string): {
+  child: ChildProcess
+  output: () => string
+} {
+  const env = workerEnvironment(WorkerPool.Cpu, {
+    ...process.env,
+    ...databaseEnvironment(t.app.config.database),
+    LEMONIFY_DATA_DIR: t.directory,
+  })
+  const child = fork(ENTRY, [pool], {
+    cwd: ROOT,
+    env,
+    execArgv: LOADER,
+    silent: true,
+  })
+  children.push(child)
+  let output = ''
+  child.stdout?.on('data', (chunk: Buffer) => {
+    output += chunk.toString()
+  })
+  child.stderr?.on('data', (chunk: Buffer) => {
+    output += chunk.toString()
+  })
+  return { child, output: () => output }
+}
+
+function exited(child: ChildProcess): Promise<number | null> {
+  return new Promise((resolve) => {
+    if (child.exitCode !== null) resolve(child.exitCode)
+    else child.once('exit', (code) => resolve(code))
+  })
+}
+
+async function eventually(
+  check: () => Promise<boolean> | boolean,
+): Promise<void> {
+  const deadline = Date.now() + PROCESS_TIMEOUT / 2
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error('timed out waiting')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+async function queuedPreview(): Promise<string> {
+  const source = await t.uploadImage(t.ann)
+  const document = await t.app.documents.create(t.ann, source.id)
+  return (await t.app.renders.requestPreview(t.ann, document.id)).id
+}
+
+describe('the worker process', () => {
+  it(
+    'runs the jobs of its pool, and stops cleanly when it is told to',
+    async () => {
+      const id = await queuedPreview()
+      const { child, output } = startWorker('cpu')
+
+      await eventually(
+        async () => (await t.app.jobs.get(t.ann, id)).state === JobState.Done,
+      )
+      child.kill('SIGTERM')
+
+      expect(await exited(child)).toBe(0)
+      expect(output()).toContain('"message":"Worker started"')
+    },
+    PROCESS_TIMEOUT,
+  )
+
+  it(
+    'stops when the process that started it goes away',
+    async () => {
+      const { child, output } = startWorker('cpu')
+      await eventually(() => output().includes('Worker started'))
+
+      child.disconnect()
+
+      expect(await exited(child)).toBe(0)
+    },
+    PROCESS_TIMEOUT,
+  )
+
+  it(
+    'refuses to start without a pool it knows, saying which it takes',
+    async () => {
+      const { child, output } = startWorker('quantum')
+
+      expect(await exited(child)).not.toBe(0)
+      expect(output()).toMatch(/cpu.*gpu/)
+    },
+    PROCESS_TIMEOUT,
+  )
+})
