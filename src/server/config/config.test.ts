@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { ValidationError } from '../errors'
 import { DEFAULT_SITE_PORT, sitePort } from './site-port'
 import {
+  channelSocketPath,
   defaultCpuWorkers,
   loadConfig,
   renderCacheDir,
@@ -373,6 +374,21 @@ describe('loadConfig', () => {
           '/work',
         ),
       ).toThrow(/LEMONIFY_DATABASE_POOL_SIZE/)
+    })
+  })
+
+  describe('the channel socket', () => {
+    it('is in a folder of its own in the data directory', () => {
+      expect(channelSocketPath({ dataDir: '/data' })).toBe(
+        path.join('/data', 'run', 'lemonify.sock'),
+      )
+    })
+
+    it('refuses a data directory so deep that the socket path is too long for the system, naming the variable', () => {
+      const deep = `/${'d'.repeat(120)}`
+      expect(() =>
+        loadConfig({ ...POSTGRES, LEMONIFY_DATA_DIR: deep }, 8, '/work'),
+      ).toThrow(/LEMONIFY_DATA_DIR.*too long/)
     })
   })
 

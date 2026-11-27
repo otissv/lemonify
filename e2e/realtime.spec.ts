@@ -4,9 +4,14 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import WebSocket from 'ws'
 
+import { z } from 'zod'
+
 import { E2E_ORIGIN, E2E_REALTIME_URL } from '../playwright.config.ts'
+import { SourcesResult, cliResult } from './cli.ts'
+import { E2E_STORE } from './database.ts'
 import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 import type { Manifest } from './seed.ts'
+import { uniqueName } from './workflow-page.ts'
 
 const ACCOUNT = SCRATCH_ACCOUNTS.live
 const manifest: Manifest = JSON.parse(
@@ -125,6 +130,49 @@ test.describe('two tabs of the same account', () => {
         .getByRole('list', { name: `Steps of ${targetName}`, exact: true })
         .getByRole('button', { name: 'Blur', exact: true }),
     ).toHaveCount(before + 1, { timeout: 15_000 })
+  })
+})
+
+const DocumentResult = z.object({ document: z.object({ id: z.string() }) })
+const USER = ['--user', ACCOUNT.user.name]
+
+test.describe('an open tab and the command line', () => {
+  test('shows a document made and renamed with a command, without a reload', async ({
+    page,
+  }, testInfo) => {
+    const { sources } = await cliResult(
+      E2E_STORE,
+      ['source', 'list', ...USER],
+      SourcesResult,
+    )
+    const sourceId = sources[0]?.id
+    if (sourceId === undefined) throw new Error('The account has no image.')
+    const name = uniqueName(testInfo, 'Made by a command')
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const { document } = await cliResult(
+      E2E_STORE,
+      ['document', 'create', sourceId, '--name', name, ...USER],
+      DocumentResult,
+    )
+    try {
+      await expect(page.getByRole('link', { name, exact: true })).toBeVisible()
+      await cliResult(
+        E2E_STORE,
+        ['document', 'rename', document.id, `${name} renamed`, ...USER],
+        z.unknown(),
+      )
+      await expect(
+        page.getByRole('link', { name: `${name} renamed`, exact: true }),
+      ).toBeVisible()
+    } finally {
+      await cliResult(
+        E2E_STORE,
+        ['document', 'delete', document.id, ...USER],
+        z.unknown(),
+      )
+    }
   })
 })
 

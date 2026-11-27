@@ -8,6 +8,8 @@ import { ValidationError } from '../errors.ts'
 import { DEFAULT_SITE_PORT } from './site-port.ts'
 
 const MAX_DEFAULT_CPU_WORKERS = 4
+/** The longest socket path every system Lemonify runs on takes (macOS allows 104 bytes with the terminating null). */
+const MAX_SOCKET_PATH_BYTES = 103
 const MEGABYTE = 1024 * 1024
 const GIGABYTE = 1024 * MEGABYTE
 
@@ -207,8 +209,10 @@ export function loadConfig(
     )
   }
   const env = parsed.data
+  const dataDir = path.resolve(cwd, env.LEMONIFY_DATA_DIR)
+  checkSocketPath(dataDir)
   return {
-    dataDir: path.resolve(cwd, env.LEMONIFY_DATA_DIR),
+    dataDir,
     database: {
       host: env.POSTGRES_HOST,
       port: env.POSTGRES_PORT,
@@ -235,6 +239,19 @@ export function loadConfig(
     realtime: realtimeConfig(env),
     email: emailConfig(env),
   }
+}
+
+/** Where the web server listens for changes from the other processes, in a folder only its user can enter. */
+export function channelSocketPath(config: Pick<Config, 'dataDir'>): string {
+  return path.join(config.dataDir, 'run', 'lemonify.sock')
+}
+
+function checkSocketPath(dataDir: string): void {
+  const socketPath = channelSocketPath({ dataDir })
+  if (Buffer.byteLength(socketPath) <= MAX_SOCKET_PATH_BYTES) return
+  throw new ValidationError(
+    `The configuration is not valid. LEMONIFY_DATA_DIR: the path is too long for the web server's socket (${socketPath}); choose a folder at most ${MAX_SOCKET_PATH_BYTES - (socketPath.length - dataDir.length)} characters long.`,
+  )
 }
 
 export function sourcesDir(config: Pick<Config, 'dataDir'>): string {

@@ -1,8 +1,10 @@
 import '@tanstack/react-start/server-only'
 
-import { createApp } from '../composition.ts'
+import { startChannelServer } from '../channel/channel-server.ts'
+import type { ChannelServer } from '../channel/channel-server.ts'
+import { AppRole, createApp } from '../composition.ts'
 import type { App } from '../composition.ts'
-import { loadConfig } from '../config/config.ts'
+import { channelSocketPath, loadConfig } from '../config/config.ts'
 import { readEnvironment } from '../config/environment.ts'
 import type { HttpRuntime } from './guard.ts'
 import { consoleLogger } from './logger.ts'
@@ -16,6 +18,8 @@ export type WebRuntime = HttpRuntime & {
   app: App
   /** Tells open tabs about changes. */
   realtime: RealtimeServer
+  /** Hears the changes made by the other processes, for the open tabs. */
+  channel: ChannelServer
 }
 
 type Holder = { [KEY]?: Promise<WebRuntime> }
@@ -45,7 +49,9 @@ async function listen(
 }
 
 async function build(): Promise<WebRuntime> {
-  const app = await createApp(loadConfig(readEnvironment()))
+  const app = await createApp(loadConfig(readEnvironment()), {
+    role: AppRole.WebServer,
+  })
   await app.startBackground()
   const rateLimiter = new FixedWindowRateLimiter(
     Date.now,
@@ -57,6 +63,11 @@ async function build(): Promise<WebRuntime> {
     logger: consoleLogger,
     rateLimiter,
     realtime: await listen(app, rateLimiter),
+    channel: await startChannelServer({
+      socketPath: channelSocketPath(app.config),
+      logger: consoleLogger,
+      onChange: (userId, event) => app.realtime.publish(userId, event),
+    }),
   }
 }
 

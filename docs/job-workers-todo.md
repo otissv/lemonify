@@ -57,11 +57,11 @@ Written before the sections that make them pass. The row-lock test passes alread
 
 ## 3. The channel from the core to the web server (decisions 4, live updates; 7, CLI and website)
 
-- [ ] A message schema (zod) for what a process sends: realtime events, job progress, and that a worker is ready or stopping. Messages that fail the schema are logged and dropped.
-- [ ] The web server listens on a local socket in the data folder, created readable only by its user, removed when the server stops, and replaced when a stale one is found at start.
-- [ ] A `ChangePublisher` for every process that is not the web server (workers and the CLI): it sends over the socket, and does nothing when no server is listening, without slowing the command.
-- [ ] The receiver in the web server passes events to `RealtimeHub`.
-- [ ] Tests: an event sent from another process reaches the owner's open tabs; an edit made with the CLI reaches them; several CLI processes at once all reach them; a bad message changes nothing; a CLI command with no server running finishes as fast as before.
+- [x] A message schema (zod) for what a process sends (`src/server/channel/channel-message.ts`): one change, the person it is for and the same realtime event the tabs get, one JSON line each. Messages that fail the schema are logged and dropped. Worker ready and stopping messages are not on this socket: the pool hears them from its own children over `fork`'s IPC channel (section 5). Job progress is not either: it is saved to the database, which tabs already read, so the channel carries only changes.
+- [x] The web server listens on a local socket in the data folder (`run/lemonify.sock`), in a folder only its user can enter and owns, the socket itself 0600, removed when the server stops, a stale one from a killed server replaced at start, and a second web server on the same data folder refused (`src/server/channel/channel-server.ts`). A data folder too deep for a socket path is refused at configuration.
+- [x] A `ChangePublisher` for every process that is not the web server (workers and the CLI, `AppRole.Process`, the default): it writes to the socket without waiting, does nothing when no server is listening, bounds what waits to be written, reconnects after the server restarts, and writes what is waiting when the command ends (`src/server/channel/socket-change-publisher.ts`).
+- [x] The receiver in the web server passes events to `RealtimeHub` (`src/server/http/runtime.ts`).
+- [x] Tests: an event sent from another process reaches the owner's open tabs; an edit made with the CLI reaches them; several CLI processes at once all reach them; a bad message changes nothing; a CLI command with no server running finishes as fast as before (`src/server/channel/*.test.ts`, `scripts/images/live-updates-flow.test.ts`); and through the real web server, a document made and renamed with the CLI shows in an open tab without a reload (`e2e/realtime.spec.ts`).
 
 ## 4. The worker process (decisions 2, pool shape; 3, work per image)
 

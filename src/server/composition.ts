@@ -11,6 +11,7 @@ import type { AuthGateway } from './auth/auth-gateway.ts'
 import { resolveAuthSecret } from './auth/auth-secret.ts'
 import { BetterAuthGateway } from './auth/better-auth-gateway.ts'
 import {
+  channelSocketPath,
   renderCacheDir,
   resultsDir,
   sourcesDir,
@@ -32,6 +33,7 @@ import type { Clock, IdGenerator } from './domain/clock.ts'
 import { ResendEmailSender } from './email/email-sender.ts'
 import type { EmailSender } from './email/email-sender.ts'
 import { consoleLogger } from './http/logger.ts'
+import { SocketChangePublisher } from './channel/socket-change-publisher.ts'
 import type { ChangePublisher } from './realtime/change-publisher.ts'
 import { RealtimeHub } from './realtime/hub.ts'
 import type { HubLimits } from './realtime/hub.ts'
@@ -114,8 +116,18 @@ export type App = {
   close(): Promise<void>
 }
 
+/** Which process the app runs in, which decides how its changes reach open tabs (decision 4, live updates). */
+export enum AppRole {
+  /** The web server: the services tell its own tabs through the realtime hub. */
+  WebServer = 'web-server',
+  /** A worker or a CLI command: the services send their changes to the web server's socket. */
+  Process = 'process',
+}
+
 /** Parts a test can replace; the real ones are built from the configuration. */
 export type AppOverrides = {
+  /** Which process this is; a CLI command or worker unless the web server says otherwise. */
+  role?: AppRole
   auth?: AuthGateway
   imageEngine?: ImageEngine
   aiEngine?: AiEngine
@@ -221,7 +233,12 @@ export async function createApp(
   const auth = overrides.auth ?? buildAuth(config, email, logger)
   const users = new UserService({ users: new PostgresUserDao(database), auth })
   const realtime = new RealtimeHub(REALTIME_LIMITS, logger)
-  const changes = overrides.changes ?? realtime
+  const sentChanges =
+    overrides.changes === undefined &&
+    (overrides.role ?? AppRole.Process) === AppRole.Process
+      ? new SocketChangePublisher(channelSocketPath(config), logger)
+      : undefined
+  const changes = overrides.changes ?? sentChanges ?? realtime
 
   const sourceDao = new PostgresSourceDao(database)
   const documentDao = new PostgresDocumentDao(database)
@@ -458,6 +475,7 @@ export async function createApp(
     async close() {
       if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer)
       await running.stop({ abort: true })
+      await sentChanges?.close()
       await auth.close()
       await database.destroy()
     },
