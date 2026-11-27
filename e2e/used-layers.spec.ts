@@ -1,16 +1,14 @@
-import path from 'node:path'
-
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { z } from 'zod'
 
-import { E2E_DATA_DIR } from '../playwright.config.ts'
 import { WorkflowResult, cliFailure, cliResult } from './cli.ts'
+import { E2E_STORE } from './database.ts'
 import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 import { menu, uniqueName } from './workflow-page.ts'
 
 const ACCOUNT = SCRATCH_ACCOUNTS.usedLayers
-const DATA = path.resolve(E2E_DATA_DIR)
+const DATA = E2E_STORE
 const USER = ['--user', ACCOUNT.user.name]
 
 const StepSchema = z.looseObject({ id: z.string(), kind: z.string() })

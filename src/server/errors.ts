@@ -6,6 +6,7 @@ export const ErrorKind = {
   Limit: 'limit',
   Unauthorized: 'unauthorized',
   JobFailed: 'job-failed',
+  Unavailable: 'unavailable',
 } as const
 
 export type ErrorKind = (typeof ErrorKind)[keyof typeof ErrorKind]
@@ -21,6 +22,7 @@ export const ERROR_REPORTING: Record<
   [ErrorKind.Limit]: { httpStatus: 429, exitCode: 5 },
   [ErrorKind.Unauthorized]: { httpStatus: 401, exitCode: 1 },
   [ErrorKind.JobFailed]: { httpStatus: 200, exitCode: 6 },
+  [ErrorKind.Unavailable]: { httpStatus: 503, exitCode: 7 },
 }
 
 /** Base of every error a service raises on purpose; the message is safe to show. */
@@ -68,6 +70,13 @@ export class UnauthorizedError extends AppError {
 export class JobFailedError extends AppError {
   constructor(message: string, options?: ErrorOptions) {
     super(ErrorKind.JobFailed, message, options)
+  }
+}
+
+/** Something the app needs, such as the database, cannot be reached; trying again later may work. */
+export class UnavailableError extends AppError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(ErrorKind.Unavailable, message, options)
   }
 }
 

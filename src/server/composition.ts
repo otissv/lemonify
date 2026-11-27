@@ -11,22 +11,22 @@ import type { AuthGateway } from './auth/auth-gateway.ts'
 import { resolveAuthSecret } from './auth/auth-secret.ts'
 import { BetterAuthGateway } from './auth/better-auth-gateway.ts'
 import {
-  databaseFile,
   renderCacheDir,
   resultsDir,
   sourcesDir,
   workDir,
 } from './config/config.ts'
 import type { Config } from './config/config.ts'
-import { SqliteDocumentDao } from './dao/sqlite/document-dao.ts'
-import { SqliteJobDao } from './dao/sqlite/job-dao.ts'
-import { SqliteResultDao } from './dao/sqlite/result-dao.ts'
-import { SqliteSourceDao } from './dao/sqlite/source-dao.ts'
-import { SqliteKeybindingDao } from './dao/sqlite/keybinding-dao.ts'
-import { SqliteUserDao } from './dao/sqlite/user-dao.ts'
-import { SqliteWorkflowDao } from './dao/sqlite/workflow-dao.ts'
+import { PostgresDocumentDao } from './dao/postgres/document-dao.ts'
+import { PostgresJobDao } from './dao/postgres/job-dao.ts'
+import { PostgresResultDao } from './dao/postgres/result-dao.ts'
+import { PostgresSourceDao } from './dao/postgres/source-dao.ts'
+import { PostgresKeybindingDao } from './dao/postgres/keybinding-dao.ts'
+import { PostgresUserDao } from './dao/postgres/user-dao.ts'
+import { PostgresWorkflowDao } from './dao/postgres/workflow-dao.ts'
 import { openDatabase } from './database/connection.ts'
 import { migrateToLatest } from './database/migrate.ts'
+import { UnavailableError } from './errors.ts'
 import { systemClock, uuidGenerator } from './domain/clock.ts'
 import type { Clock, IdGenerator } from './domain/clock.ts'
 import { ResendEmailSender } from './email/email-sender.ts'
@@ -140,16 +140,57 @@ function prepareDataDirectories(config: Config): void {
   }
 }
 
+/** Network errors, and the Postgres codes for a refused login, a missing database and a server still starting. */
+const CONNECTION_FAILURES: ReadonlySet<string> = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  '28000',
+  '28P01',
+  '3D000',
+  '57P03',
+])
+
+function isConnectionFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'KnexTimeoutError') return true
+  return 'code' in error && CONNECTION_FAILURES.has(String(error.code))
+}
+
+/**
+ * Opens the database and brings its schema up to date. A database that
+ * cannot be reached stops the app with a message that says where it looked
+ * and how to start the local one.
+ */
+async function connectDatabase(config: Config): Promise<Knex> {
+  const database = openDatabase(config.database)
+  try {
+    await migrateToLatest(database)
+    return database
+  } catch (error) {
+    await database.destroy()
+    if (!isConnectionFailure(error)) throw error
+    const { host, port, database: name } = config.database
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new UnavailableError(
+      `The database ${name} at ${host}:${port} could not be reached (${reason}). Start it with "docker compose up -d", or check the POSTGRES_ settings.`,
+      { cause: error },
+    )
+  }
+}
+
 function buildAuth(
   config: Config,
-  file: string,
   email: EmailSender | null,
   logger: Logger,
 ): AuthGateway {
   return new BetterAuthGateway({
     email,
     logger,
-    databaseFile: file,
+    database: config.database,
     secret: resolveAuthSecret(config.authSecret, config.dataDir),
     baseUrl: config.baseUrl,
     trustedOrigins: config.trustedOrigins,
@@ -166,9 +207,7 @@ export async function createApp(
   overrides: AppOverrides = {},
 ): Promise<App> {
   prepareDataDirectories(config)
-  const file = databaseFile(config)
-  const database = openDatabase(file)
-  await migrateToLatest(database)
+  const database = await connectDatabase(config)
 
   const clock = overrides.clock ?? systemClock
   const ids = overrides.ids ?? uuidGenerator
@@ -179,16 +218,16 @@ export async function createApp(
       : config.email === null
         ? null
         : new ResendEmailSender(config.email)
-  const auth = overrides.auth ?? buildAuth(config, file, email, logger)
-  const users = new UserService({ users: new SqliteUserDao(database), auth })
+  const auth = overrides.auth ?? buildAuth(config, email, logger)
+  const users = new UserService({ users: new PostgresUserDao(database), auth })
   const realtime = new RealtimeHub(REALTIME_LIMITS, logger)
   const changes = overrides.changes ?? realtime
 
-  const sourceDao = new SqliteSourceDao(database)
-  const documentDao = new SqliteDocumentDao(database)
-  const resultDao = new SqliteResultDao(database)
-  const jobDao = new SqliteJobDao(database)
-  const workflowDao = new SqliteWorkflowDao(database)
+  const sourceDao = new PostgresSourceDao(database)
+  const documentDao = new PostgresDocumentDao(database)
+  const resultDao = new PostgresResultDao(database)
+  const jobDao = new PostgresJobDao(database)
+  const workflowDao = new PostgresWorkflowDao(database)
   const sourceStore = new FileSourceStore(sourcesDir(config))
   const resultStore = new FileResultStore(resultsDir(config))
   const renderStore = new FileRenderStore(
@@ -281,7 +320,7 @@ export async function createApp(
     sources: sourceDao,
   })
   const keybindings = new KeybindingService({
-    keybindings: new SqliteKeybindingDao(database),
+    keybindings: new PostgresKeybindingDao(database),
     clock,
     changes,
   })
@@ -419,7 +458,7 @@ export async function createApp(
     async close() {
       if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer)
       await running.stop({ abort: true })
-      auth.close()
+      await auth.close()
       await database.destroy()
     },
   }

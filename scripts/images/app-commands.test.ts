@@ -10,13 +10,19 @@ import { ConflictError, NotFoundError } from '../../src/server/errors.ts'
 import { CliUsageError, runCli } from './cli.ts'
 import { COMMANDS } from './commands/index.ts'
 import { dispatch } from './dispatch.ts'
+import { stubTestDatabase } from './flow-test-kit.ts'
+import type { TestDatabase } from '../../src/server/testing/test-database.ts'
 
 let dataDir = ''
-beforeEach(() => {
+let database: TestDatabase | undefined
+beforeEach(async () => {
   dataDir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-cli-'))
   vi.stubEnv('LEMONIFY_DATA_DIR', dataDir)
+  database = await stubTestDatabase()
 })
-afterEach(() => {
+afterEach(async () => {
+  await database?.close()
+  database = undefined
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
   process.exitCode = undefined

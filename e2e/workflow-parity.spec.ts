@@ -2,7 +2,6 @@ import path from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { E2E_DATA_DIR } from '../playwright.config.ts'
 import {
   RunResult,
   RunsResult,
@@ -10,6 +9,7 @@ import {
   WorkflowResult,
   cliResult,
 } from './cli.ts'
+import { E2E_STORE } from './database.ts'
 import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 import {
   addTool,
@@ -28,7 +28,7 @@ import { z } from 'zod'
  * in as.
  */
 const ACCOUNT = SCRATCH_ACCOUNTS.workflowParity
-const DATA = path.resolve(E2E_DATA_DIR)
+const DATA = E2E_STORE
 const USER = ['--user', ACCOUNT.user.name]
 const RUN_TIMEOUT = 60_000
 

@@ -1,14 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-
-import Database from 'better-sqlite3'
 import { getMigrations } from 'better-auth/db/migration'
-import { afterEach, describe, expect, it } from 'vitest'
+import pg from 'pg'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { MIGRATIONS } from '../../../migrations/index'
 import { createTestDatabase } from '../testing/test-database'
-import { applyPragmas, openDatabase } from './connection'
+import type { TestDatabase } from '../testing/test-database'
+import { connectionSettings } from './connection'
 import { migrateToLatest } from './migrate'
 
 const TABLES = [
@@ -21,25 +18,56 @@ const TABLES = [
   'document_operands',
   'history_entries',
   'workflows',
+  'workflow_history',
   'workflow_runs',
   'jobs',
   'results',
+  'keybindings',
 ]
 
-const cleanup: Array<() => void> = []
-afterEach(() => {
-  for (const fn of cleanup.splice(0)) fn()
+let test: TestDatabase
+
+beforeEach(async () => {
+  test = await createTestDatabase()
 })
+
+afterEach(async () => {
+  await test.close()
+})
+
+async function columnType(table: string, column: string): Promise<string> {
+  const row: { data_type: string } | undefined = await test
+    .database('information_schema.columns')
+    .where({
+      table_schema: test.config.schema,
+      table_name: table,
+      column_name: column,
+    })
+    .first('data_type')
+  return row?.data_type ?? 'missing'
+}
 
 describe('migrations', () => {
   it('create every table in the plan', async () => {
-    const database = await createTestDatabase()
-    const rows = await database('sqlite_master')
-      .where({ type: 'table' })
-      .select('name')
-    const names = rows.map((row: { name: string }) => row.name)
+    const rows: Array<{ table_name: string }> = await test
+      .database('information_schema.tables')
+      .where({ table_schema: test.config.schema })
+      .select('table_name')
+    const names = rows.map((row) => row.table_name)
     for (const table of TABLES) expect(names).toContain(table)
-    await database.destroy()
+  })
+
+  it('give JSON, flags, times and byte counts their Postgres types', async () => {
+    expect(await columnType('documents', 'pipeline')).toBe('jsonb')
+    expect(await columnType('jobs', 'payload')).toBe('jsonb')
+    expect(await columnType('jobs', 'cancel_requested')).toBe('boolean')
+    expect(await columnType('jobs', 'progress')).toBe('double precision')
+    expect(await columnType('jobs', 'created_at')).toBe(
+      'timestamp with time zone',
+    )
+    expect(await columnType('sources', 'bytes')).toBe('bigint')
+    expect(await columnType('results', 'bytes')).toBe('bigint')
+    expect(await columnType('user', 'emailVerified')).toBe('boolean')
   })
 
   it('are listed once each, in order', () => {
@@ -49,35 +77,28 @@ describe('migrations', () => {
   })
 
   it('run again without changing anything', async () => {
-    const database = await createTestDatabase()
-    expect(await migrateToLatest(database)).toEqual([])
-    await database.destroy()
+    expect(await migrateToLatest(test.database)).toEqual([])
   })
 
   it('leave nothing for Better Auth to create', async () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-auth-'))
-    cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
-    const file = path.join(dir, 'db.sqlite')
-    const database = openDatabase(file)
-    await migrateToLatest(database)
-    await database.destroy()
-
-    const handle = new Database(file)
-    cleanup.push(() => handle.close())
-    const { toBeCreated, toBeAdded } = await getMigrations({
-      database: handle,
-      secret: 's'.repeat(32),
-      baseURL: 'http://localhost:3000',
-      emailAndPassword: { enabled: true },
-    })
-    expect(toBeCreated).toEqual([])
-    expect(toBeAdded).toEqual([])
+    const pool = new pg.Pool(connectionSettings(test.config))
+    try {
+      const { toBeCreated, toBeAdded } = await getMigrations({
+        database: pool,
+        secret: 's'.repeat(32),
+        baseURL: 'http://localhost:3000',
+        emailAndPassword: { enabled: true },
+      })
+      expect(toBeCreated).toEqual([])
+      expect(toBeAdded).toEqual([])
+    } finally {
+      await pool.end()
+    }
   })
 
-  it('enforces foreign keys and cascades', async () => {
-    const database = await createTestDatabase()
+  it('enforce foreign keys', async () => {
     await expect(
-      database('sources').insert({
+      test.database('sources').insert({
         id: 's1',
         owner_id: 'nobody',
         content_hash: 'h',
@@ -86,22 +107,8 @@ describe('migrations', () => {
         bytes: 1,
         width: 1,
         height: 1,
-        created_at: 'now',
+        created_at: new Date().toISOString(),
       }),
-    ).rejects.toThrow(/FOREIGN KEY/)
-    await database.destroy()
-  })
-})
-
-describe('openDatabase', () => {
-  it('uses WAL mode on a file and waits for locks', () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-wal-'))
-    cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
-    const handle = new Database(path.join(dir, 'x.sqlite'))
-    cleanup.push(() => handle.close())
-    applyPragmas(handle)
-    expect(handle.pragma('journal_mode', { simple: true })).toBe('wal')
-    expect(handle.pragma('foreign_keys', { simple: true })).toBe(1)
-    expect(handle.pragma('busy_timeout', { simple: true })).toBe(5000)
+    ).rejects.toThrow(/foreign key/)
   })
 })

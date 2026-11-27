@@ -1,9 +1,10 @@
-import Database from 'better-sqlite3'
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
+import pg from 'pg'
 
 import { MIN_PASSWORD_LENGTH } from '@/features/auth/password-rules'
-import { applyPragmas } from '../database/connection.ts'
+import type { DatabaseConfig } from '../config/config.ts'
+import { connectionSettings } from '../database/connection.ts'
 import type { Actor } from '../domain/actor.ts'
 import { ValidationError } from '../errors.ts'
 import { passwordResetEmail, verificationEmail } from '../email/auth-emails.ts'
@@ -13,7 +14,7 @@ import type { Logger } from '../http/logger.ts'
 import type { AuthGateway, NewAccount } from './auth-gateway.ts'
 
 export type BetterAuthOptions = {
-  databaseFile: string
+  database: DatabaseConfig
   secret: string
   baseUrl: string
   trustedOrigins: string[]
@@ -30,21 +31,23 @@ const SECONDS_PER_MINUTE = 60
 const CLIENT_ERROR_STATUSES = new Set([400, 401, 403, 409, 422, 429])
 
 /**
- * Better Auth keeps its own handle on the database file, next to Knex's, as
- * both are safe together in WAL mode. Its tables come from the migrations,
- * not from Better Auth, so there is one migration history.
+ * Better Auth keeps its own pool on the database, next to Knex's, with the
+ * driver's own ways of reading values, which it expects. Its tables come from
+ * the migrations, not from Better Auth, so there is one migration history.
  */
 export class BetterAuthGateway implements AuthGateway {
-  readonly #handle: Database.Database
+  readonly #pool: pg.Pool
   readonly #auth: ReturnType<typeof createAuthInstance>
   /** Creates accounts for trusted callers, so it never sends mail. */
   readonly #accounts: ReturnType<typeof createAuthInstance>
 
   constructor(options: BetterAuthOptions) {
-    this.#handle = new Database(options.databaseFile)
-    applyPragmas(this.#handle)
-    this.#auth = createAuthInstance(this.#handle, options)
-    this.#accounts = createAuthInstance(this.#handle, {
+    this.#pool = new pg.Pool({
+      ...connectionSettings(options.database),
+      max: options.database.poolSize,
+    })
+    this.#auth = createAuthInstance(this.#pool, options)
+    this.#accounts = createAuthInstance(this.#pool, {
       ...options,
       email: null,
     })
@@ -64,9 +67,10 @@ export class BetterAuthGateway implements AuthGateway {
   async signUp(account: NewAccount): Promise<{ userId: string }> {
     try {
       const created = await this.#accounts.api.signUpEmail({ body: account })
-      this.#handle
-        .prepare('UPDATE user SET emailVerified = 1 WHERE id = ?')
-        .run(created.user.id)
+      await this.#pool.query(
+        'UPDATE "user" SET "emailVerified" = true WHERE id = $1',
+        [created.user.id],
+      )
       return { userId: created.user.id }
     } catch (error) {
       if (
@@ -83,8 +87,8 @@ export class BetterAuthGateway implements AuthGateway {
     return this.#auth.handler(request)
   }
 
-  close(): void {
-    this.#handle.close()
+  close(): Promise<void> {
+    return this.#pool.end()
   }
 }
 
@@ -116,13 +120,10 @@ function deliverInBackground(
   })
 }
 
-function createAuthInstance(
-  handle: Database.Database,
-  options: BetterAuthOptions,
-) {
+function createAuthInstance(pool: pg.Pool, options: BetterAuthOptions) {
   const sender = options.email
   return betterAuth({
-    database: handle,
+    database: pool,
     secret: options.secret,
     baseURL: options.baseUrl,
     trustedOrigins: options.trustedOrigins,

@@ -6,7 +6,7 @@ type UserRow = {
   id: string
   name: string
   email: string
-  createdAt: string | number
+  createdAt: string
 }
 
 const COLUMNS = ['id', 'name', 'email', 'createdAt'] as const
@@ -16,11 +16,11 @@ function toRecord(row: UserRow): UserRecord {
     id: row.id,
     name: row.name,
     email: row.email,
-    createdAt: new Date(row.createdAt).toISOString(),
+    createdAt: row.createdAt,
   }
 }
 
-export class SqliteUserDao implements UserDao {
+export class PostgresUserDao implements UserDao {
   readonly #database: Knex
 
   constructor(database: Knex) {

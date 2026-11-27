@@ -1,7 +1,7 @@
 import { createTestDatabase } from '../testing/test-database'
 import { userDaoContract } from './contract/user-dao.contract'
 import { MemoryUserDao } from './memory/user-dao'
-import { SqliteUserDao } from './sqlite/user-dao'
+import { PostgresUserDao } from './postgres/user-dao'
 
 userDaoContract('memory', async () => {
   const dao = new MemoryUserDao()
@@ -12,20 +12,20 @@ userDaoContract('memory', async () => {
   }
 })
 
-userDaoContract('sqlite', async () => {
-  const database = await createTestDatabase()
+userDaoContract('postgres', async () => {
+  const { database, close } = await createTestDatabase()
   return {
-    dao: new SqliteUserDao(database),
+    dao: new PostgresUserDao(database),
     seedUser: async (user) => {
       await database('user').insert({
         id: user.id,
         name: user.name,
         email: user.email,
-        emailVerified: 0,
-        createdAt: new Date(user.createdAt).getTime(),
-        updatedAt: new Date(user.createdAt).getTime(),
+        emailVerified: false,
+        createdAt: user.createdAt,
+        updatedAt: user.createdAt,
       })
     },
-    close: () => database.destroy(),
+    close,
   }
 })

@@ -7,10 +7,15 @@ const ORIGIN = `http://localhost:${PORT}`
 export const E2E_ORIGIN = ORIGIN
 export const E2E_REALTIME_URL = `ws://localhost:${REALTIME_PORT}/realtime`
 export const E2E_DATA_DIR = 'e2e/.data'
+/** The run's own database on the Postgres server in .env; it is emptied when the server starts. */
+export const E2E_DATABASE = 'lemonify_e2e'
+const RESPONSIVENESS_SPEC = /responsiveness\.spec\.ts/
+const RESET_DATABASE = `node --disable-warning=ExperimentalWarning --experimental-transform-types --import ./scripts/images/register-alias.ts e2e/reset-database.ts`
 
 /**
  * End-to-end tests run against a development server of their own with an empty
- * data directory, so they never touch the data of the person running them.
+ * data directory and database, so they never touch the data of the person
+ * running them.
  * Global setup signs an account up and fills the server with one document per
  * test case; the specs then open those documents and compare what the editor
  * shows with the snapshots in `e2e/snapshots`.
@@ -35,14 +40,31 @@ export default defineConfig({
     colorScheme: 'light',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: RESPONSIVENESS_SPEC,
+    },
+    /**
+     * Times the server's answers, so it runs after every other spec, when no
+     * other spec's renders share the server (e2e/responsiveness.spec.ts).
+     */
+    {
+      name: 'responsiveness',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: RESPONSIVENESS_SPEC,
+      dependencies: ['chromium'],
+    },
+  ],
   webServer: {
-    command: `sh -c "rm -rf ${E2E_DATA_DIR} && exec pnpm exec vite dev --port ${PORT} --strictPort"`,
+    command: `sh -c "rm -rf ${E2E_DATA_DIR} && ${RESET_DATABASE} && exec pnpm exec vite dev --port ${PORT} --strictPort"`,
     url: `${ORIGIN}/sign-in`,
     timeout: 120_000,
     reuseExistingServer: false,
     env: {
       LEMONIFY_DATA_DIR: E2E_DATA_DIR,
+      POSTGRES_DATABASE: E2E_DATABASE,
       LEMONIFY_BASE_URL: ORIGIN,
       LEMONIFY_REALTIME_PORT: String(REALTIME_PORT),
       LEMONIFY_RATE_LIMIT_MULTIPLIER: '100',

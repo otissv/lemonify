@@ -26,10 +26,10 @@
     "@tanstack/react-start": "^1.169.5",
     "@xyflow/react": "^12.12.1",
     "better-auth": "^1.7.25",
-    "better-sqlite3": "^13.2.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "knex": "^3.3.0",
+    "pg": "^8.23.1",
     "radix-ui": "^1.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -48,8 +48,8 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.10",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/ws": "^8.18.2",
@@ -63,7 +63,6 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3",
       "esbuild",
       "lightningcss"
     ]

@@ -5,20 +5,38 @@ import path from 'node:path'
 import sharp from 'sharp'
 import { afterEach, beforeEach, vi } from 'vitest'
 
+import {
+  createTestDatabase,
+  databaseEnvironment,
+} from '../../src/server/testing/test-database.ts'
+import type { TestDatabase } from '../../src/server/testing/test-database.ts'
 import { COMMANDS } from './commands/index.ts'
 import { dispatch } from './dispatch.ts'
 
 /** The folders a command-line flow test works in: a data folder of its own, and one for the files it writes. */
 export const flow = { dataDir: '', workDir: '' }
 
-/** Gives each test of the file empty folders, and points the command line's data folder at them. */
+/** Points the command line at a database of the test's own. */
+export async function stubTestDatabase(): Promise<TestDatabase> {
+  const test = await createTestDatabase()
+  await test.database.destroy()
+  for (const [name, value] of Object.entries(databaseEnvironment(test.config)))
+    vi.stubEnv(name, value)
+  return test
+}
+
+/** Gives each test of the file empty folders and an empty database, and points the command line at them. */
 export function setUpFlowFolders(): void {
-  beforeEach(() => {
+  let database: TestDatabase | undefined
+  beforeEach(async () => {
     flow.dataDir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-flow-data-'))
     flow.workDir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-flow-work-'))
     vi.stubEnv('LEMONIFY_DATA_DIR', flow.dataDir)
+    database = await stubTestDatabase()
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await database?.close()
+    database = undefined
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
     rmSync(flow.dataDir, { recursive: true, force: true })

@@ -20,7 +20,7 @@ const blankIsUnset = (schema: z.ZodString) =>
     schema.optional(),
   )
 
-/** The variables the app reads; every one is optional. */
+/** The variables the app reads; all but the POSTGRES_ settings are optional. */
 const EnvironmentSchema = z.object({
   /** The port the website listens on; the addresses below follow it unless they are set. */
   PORT: z.preprocess(
@@ -28,7 +28,18 @@ const EnvironmentSchema = z.object({
     positiveInteger(65_535).default(DEFAULT_SITE_PORT),
   ),
   LEMONIFY_DATA_DIR: z.string().min(1).default('.data'),
-  LEMONIFY_DATABASE: z.literal('sqlite').default('sqlite'),
+  POSTGRES_HOST: z.string().min(1),
+  POSTGRES_PORT: positiveInteger(65_535),
+  POSTGRES_USER: z.string().min(1),
+  POSTGRES_PASSWORD: z.string().min(1),
+  POSTGRES_DATABASE: z.string().min(1),
+  POSTGRES_SCHEMA: z
+    .string()
+    .regex(
+      /^[a-z_][a-z0-9_]*$/,
+      'it must be a lower-case name of letters, digits and underscores',
+    ),
+  LEMONIFY_DATABASE_POOL_SIZE: positiveInteger(1000).default(10),
   LEMONIFY_CPU_WORKERS: positiveInteger(64).optional(),
   LEMONIFY_GPU_WORKERS: positiveInteger(16).default(1),
   LEMONIFY_GROUP_SHARE: positiveInteger(100).default(50),
@@ -64,9 +75,21 @@ export type EmailConfig = {
   from: string
 }
 
+export type DatabaseConfig = {
+  host: string
+  port: number
+  user: string
+  password: string
+  database: string
+  /** The schema the tables live in. */
+  schema: string
+  /** The most connections each process keeps open. */
+  poolSize: number
+}
+
 export type Config = {
   dataDir: string
-  database: 'sqlite'
+  database: DatabaseConfig
   cpuWorkers: number
   gpuWorkers: number
   groupSharePercent: number
@@ -186,7 +209,15 @@ export function loadConfig(
   const env = parsed.data
   return {
     dataDir: path.resolve(cwd, env.LEMONIFY_DATA_DIR),
-    database: env.LEMONIFY_DATABASE,
+    database: {
+      host: env.POSTGRES_HOST,
+      port: env.POSTGRES_PORT,
+      user: env.POSTGRES_USER,
+      password: env.POSTGRES_PASSWORD,
+      database: env.POSTGRES_DATABASE,
+      schema: env.POSTGRES_SCHEMA,
+      poolSize: env.LEMONIFY_DATABASE_POOL_SIZE,
+    },
     cpuWorkers: env.LEMONIFY_CPU_WORKERS ?? defaultCpuWorkers(cpuCount),
     gpuWorkers: env.LEMONIFY_GPU_WORKERS,
     groupSharePercent: env.LEMONIFY_GROUP_SHARE,
@@ -204,10 +235,6 @@ export function loadConfig(
     realtime: realtimeConfig(env),
     email: emailConfig(env),
   }
-}
-
-export function databaseFile(config: Pick<Config, 'dataDir'>): string {
-  return path.join(config.dataDir, 'lemonify.sqlite')
 }
 
 export function sourcesDir(config: Pick<Config, 'dataDir'>): string {

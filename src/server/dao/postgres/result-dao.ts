@@ -37,7 +37,7 @@ function toRecord(row: ResultRow): ResultRecord {
   }
 }
 
-export class SqliteResultDao implements ResultDao {
+export class PostgresResultDao implements ResultDao {
   readonly #database: Knex
 
   constructor(database: Knex) {

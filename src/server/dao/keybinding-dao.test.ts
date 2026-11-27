@@ -4,7 +4,7 @@ import { createTestDatabase, insertTestUser } from '../testing/test-database'
 import { DataIntegrityError } from '../errors'
 import { keybindingDaoContract } from './contract/keybinding-dao.contract'
 import { MemoryKeybindingDao } from './memory/keybinding-dao'
-import { SqliteKeybindingDao } from './sqlite/keybinding-dao'
+import { PostgresKeybindingDao } from './postgres/keybinding-dao'
 
 keybindingDaoContract('memory', async () => ({
   dao: new MemoryKeybindingDao(),
@@ -12,25 +12,25 @@ keybindingDaoContract('memory', async () => ({
   close: async () => {},
 }))
 
-keybindingDaoContract('sqlite', async () => {
-  const database = await createTestDatabase()
+keybindingDaoContract('postgres', async () => {
+  const { database, close } = await createTestDatabase()
   const users = new Set<string>()
   return {
-    dao: new SqliteKeybindingDao(database),
+    dao: new PostgresKeybindingDao(database),
     seedUser: async (id) => {
       if (users.has(id)) return
       users.add(id)
       await insertTestUser(database, id)
     },
-    close: () => database.destroy(),
+    close,
   }
 })
 
-describe('the sqlite KeybindingDao', () => {
+describe('the Postgres KeybindingDao', () => {
   it('drops stored entries that are no longer valid instead of failing', async () => {
-    const database = await createTestDatabase()
+    const { database, close } = await createTestDatabase()
     await insertTestUser(database, 'ann')
-    const dao = new SqliteKeybindingDao(database)
+    const dao = new PostgresKeybindingDao(database)
     await database('keybindings').insert({
       owner_id: 'ann',
       bindings:
@@ -40,17 +40,17 @@ describe('the sqlite KeybindingDao', () => {
     expect((await dao.findByOwner('ann'))?.overrides.bindings).toEqual({
       'view.fit': ['alt+z'],
     })
-    await database.destroy()
+    await close()
   })
 
   it('refuses a stored file that is not valid, rather than guessing', async () => {
-    const database = await createTestDatabase()
+    const { database, close } = await createTestDatabase()
     await insertTestUser(database, 'ann')
-    const dao = new SqliteKeybindingDao(database)
+    const dao = new PostgresKeybindingDao(database)
     const now = '2026-01-01T00:00:00.000Z'
     await database('keybindings').insert({
       owner_id: 'ann',
-      bindings: 'nope',
+      bindings: '"nope"',
       updated_at: now,
     })
     await expect(dao.findByOwner('ann')).rejects.toBeInstanceOf(
@@ -62,13 +62,13 @@ describe('the sqlite KeybindingDao', () => {
     await expect(dao.findByOwner('ann')).rejects.toBeInstanceOf(
       DataIntegrityError,
     )
-    await database.destroy()
+    await close()
   })
 
   it('removes a User’s record when the User is deleted', async () => {
-    const database = await createTestDatabase()
+    const { database, close } = await createTestDatabase()
     await insertTestUser(database, 'ann')
-    const dao = new SqliteKeybindingDao(database)
+    const dao = new PostgresKeybindingDao(database)
     await dao.save({
       ownerId: 'ann',
       overrides: { version: 1, bindings: {} },
@@ -76,6 +76,6 @@ describe('the sqlite KeybindingDao', () => {
     })
     await database('user').where({ id: 'ann' }).delete()
     expect(await database('keybindings').count({ n: '*' })).toEqual([{ n: 0 }])
-    await database.destroy()
+    await close()
   })
 })

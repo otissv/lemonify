@@ -5,6 +5,8 @@ import { promisify } from 'node:util'
 
 import { z } from 'zod'
 
+import type { CliStore } from './database.ts'
+
 const run = promisify(execFile)
 
 const ROOT = path.resolve(import.meta.dirname, '..')
@@ -45,11 +47,11 @@ function parsed(stdout: string): unknown {
 
 /**
  * Runs the images command line as its own process, the way a person or a
- * script runs it, on the data folder given, and reads what it printed with
+ * script runs it, on the data folder and database given, and reads what it printed with
  * --json. A failing command resolves too, with its exit code.
  */
 export async function images(
-  dataDir: string,
+  store: CliStore,
   args: ReadonlyArray<string>,
 ): Promise<CliOutcome> {
   try {
@@ -58,7 +60,11 @@ export async function images(
       [...IMAGES.args, ...args, '--json'],
       {
         cwd: ROOT,
-        env: { ...process.env, LEMONIFY_DATA_DIR: dataDir },
+        env: {
+          ...process.env,
+          LEMONIFY_DATA_DIR: store.dataDir,
+          POSTGRES_DATABASE: store.database,
+        },
         timeout: CLI_TIMEOUT,
         maxBuffer: 64 * 1024 * 1024,
       },
@@ -82,11 +88,11 @@ const FailureSchema = z.object({
 
 /** The result of a command that must succeed, checked against its schema. */
 export async function cliResult<T>(
-  dataDir: string,
+  store: CliStore,
   args: ReadonlyArray<string>,
   schema: z.ZodType<T>,
 ): Promise<T> {
-  const outcome = await images(dataDir, args)
+  const outcome = await images(store, args)
   if (outcome.code !== 0) {
     throw new Error(
       `images ${args.join(' ')} failed (${outcome.code}): ${JSON.stringify(outcome.json)} ${outcome.stderr}`,
@@ -105,10 +111,10 @@ function reportedError(stderr: string): unknown {
 
 /** The message of a command that must fail, with its exit code. */
 export async function cliFailure(
-  dataDir: string,
+  store: CliStore,
   args: ReadonlyArray<string>,
 ): Promise<{ code: number; type: string; message: string }> {
-  const outcome = await images(dataDir, args)
+  const outcome = await images(store, args)
   if (outcome.code === 0) {
     throw new Error(
       `images ${args.join(' ')} succeeded, but should have failed.`,

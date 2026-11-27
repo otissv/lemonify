@@ -1,13 +1,8 @@
 // @vitest-environment node
-import { mkdtempSync, rmSync } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { SqliteUserDao } from '../dao/sqlite/user-dao'
-import { openDatabase } from '../database/connection'
-import { migrateToLatest } from '../database/migrate'
+import { PostgresUserDao } from '../dao/postgres/user-dao'
+import { createTestDatabase } from '../testing/test-database'
 import { RecordingEmailSender } from '../email/email-sender'
 import { MemoryLogger } from '../http/logger'
 import { BetterAuthGateway } from './better-auth-gateway'
@@ -19,23 +14,20 @@ const ANN = {
   password: 'correct horse battery',
 }
 
-let dir = ''
 let gateway: BetterAuthGateway
 let emails: RecordingEmailSender
 let logger: MemoryLogger
-let users: SqliteUserDao
+let users: PostgresUserDao
 let close: () => Promise<void>
 
 beforeEach(async () => {
-  dir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-auth-email-'))
-  const file = path.join(dir, 'db.sqlite')
-  const database = openDatabase(file)
-  await migrateToLatest(database)
-  users = new SqliteUserDao(database)
+  const test = await createTestDatabase()
+  const { database } = test
+  users = new PostgresUserDao(database)
   emails = new RecordingEmailSender()
   logger = new MemoryLogger()
   gateway = new BetterAuthGateway({
-    databaseFile: file,
+    database: test.config,
     secret: 's'.repeat(32),
     baseUrl: ORIGIN,
     trustedOrigins: [ORIGIN],
@@ -43,14 +35,13 @@ beforeEach(async () => {
     logger,
   })
   close = async () => {
-    gateway.close()
-    await database.destroy()
+    await gateway.close()
+    await test.close()
   }
 })
 
 afterEach(async () => {
   await close()
-  rmSync(dir, { recursive: true, force: true })
 })
 
 function post(route: string, body: object): Promise<Response> {

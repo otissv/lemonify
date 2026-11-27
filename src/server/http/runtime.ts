@@ -3,6 +3,7 @@ import '@tanstack/react-start/server-only'
 import { createApp } from '../composition.ts'
 import type { App } from '../composition.ts'
 import { loadConfig } from '../config/config.ts'
+import { readEnvironment } from '../config/environment.ts'
 import type { HttpRuntime } from './guard.ts'
 import { consoleLogger } from './logger.ts'
 import { startRealtimeServer } from '../realtime/realtime-server.ts'
@@ -44,7 +45,7 @@ async function listen(
 }
 
 async function build(): Promise<WebRuntime> {
-  const app = await createApp(loadConfig(process.env))
+  const app = await createApp(loadConfig(readEnvironment()))
   await app.startBackground()
   const rateLimiter = new FixedWindowRateLimiter(
     Date.now,

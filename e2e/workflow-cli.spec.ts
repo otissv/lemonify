@@ -11,6 +11,7 @@ import { expect, test } from '@playwright/test'
 import sharp from 'sharp'
 import { z } from 'zod'
 
+import { E2E_DATABASE } from '../playwright.config.ts'
 import { openZip } from '../src/server/bundle/zip.ts'
 import {
   RunResult,
@@ -22,6 +23,8 @@ import {
   cliResult,
   images,
 } from './cli.ts'
+import { removeDatabase, resetDatabase } from './database.ts'
+import type { CliStore } from './database.ts'
 import { RUN_DIR } from './global-setup.ts'
 
 /**
@@ -56,7 +59,7 @@ const ArchiveResult = z.object({
 })
 
 let root = ''
-let data = ''
+let data: CliStore = { dataDir: '', database: '' }
 let large = ''
 let small = ''
 let workflowId = ''
@@ -81,19 +84,21 @@ async function workflow(): Promise<z.infer<typeof WorkflowResult>['workflow']> {
   ).workflow
 }
 
-test.beforeAll(() => {
+test.beforeAll(async () => {
   const testInfo = test.info()
-  root = path.join(
-    RUN_DIR,
-    'workflow-cli',
-    `${testInfo.workerIndex}-${Date.now()}`,
-  )
-  data = path.join(root, 'data')
+  const run = `${testInfo.workerIndex}-${Date.now()}`
+  root = path.join(RUN_DIR, 'workflow-cli', run)
+  data = {
+    dataDir: path.join(root, 'data'),
+    database: `${E2E_DATABASE}_cli_${run.replace('-', '_')}`,
+  }
   mkdirSync(root, { recursive: true })
+  await resetDatabase(data.database)
 })
 
-test.afterAll(() => {
+test.afterAll(async () => {
   rmSync(root, { recursive: true, force: true })
+  await removeDatabase(data.database)
 })
 
 test('adds the images a workflow runs on', async () => {

@@ -1,30 +1,22 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { openDatabase } from '../database/connection'
-import { migrateToLatest } from '../database/migrate'
-import { SqliteUserDao } from '../dao/sqlite/user-dao'
+import { PostgresUserDao } from '../dao/postgres/user-dao'
+import { createTestDatabase } from '../testing/test-database'
 import { ValidationError } from '../errors'
 import { MemoryLogger } from '../http/logger'
 import { BetterAuthGateway } from './better-auth-gateway'
 
 const ORIGIN = 'http://localhost:3000'
-let dir = ''
 let gateway: BetterAuthGateway
-let users: SqliteUserDao
+let users: PostgresUserDao
 let close: () => Promise<void>
 
 beforeEach(async () => {
-  dir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-auth-'))
-  const file = path.join(dir, 'db.sqlite')
-  const database = openDatabase(file)
-  await migrateToLatest(database)
-  users = new SqliteUserDao(database)
+  const test = await createTestDatabase()
+  const { database } = test
+  users = new PostgresUserDao(database)
   gateway = new BetterAuthGateway({
-    databaseFile: file,
+    database: test.config,
     secret: 's'.repeat(32),
     baseUrl: ORIGIN,
     trustedOrigins: [ORIGIN],
@@ -32,14 +24,13 @@ beforeEach(async () => {
     logger: new MemoryLogger(),
   })
   close = async () => {
-    gateway.close()
-    await database.destroy()
+    await gateway.close()
+    await test.close()
   }
 })
 
 afterEach(async () => {
   await close()
-  rmSync(dir, { recursive: true, force: true })
 })
 
 async function signIn(email: string, password: string): Promise<Response> {

@@ -1,15 +1,16 @@
 import { readFileSync } from 'node:fs'
-import path from 'node:path'
 
 import { expect, request as playwrightRequest, test } from '@playwright/test'
 import type { APIRequestContext, APIResponse } from '@playwright/test'
 import sharp from 'sharp'
 import { z } from 'zod'
 
-import { E2E_DATA_DIR, E2E_ORIGIN } from '../playwright.config.ts'
+import { E2E_ORIGIN } from '../playwright.config.ts'
 import { RunsResult, WorkflowResult, cliResult } from './cli.ts'
+import { E2E_STORE } from './database.ts'
 import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 import type { Manifest } from './seed.ts'
+import { uniqueName } from './workflow-page.ts'
 
 /**
  * Every route under /api, called over HTTP as a browser or a script would:
@@ -19,7 +20,7 @@ import type { Manifest } from './seed.ts'
  */
 const OWNER = SCRATCH_ACCOUNTS.api
 const OTHER = SCRATCH_ACCOUNTS.apiOther
-const DATA = path.resolve(E2E_DATA_DIR)
+const DATA = E2E_STORE
 const USER = ['--user', OWNER.user.name]
 const RUN_TIMEOUT = 60_000
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000'
@@ -264,13 +265,14 @@ test('GET /api/documents/<id>/bundle and POST /api/documents/import take a docum
 
 test('GET /api/results/<id> and /api/workflow-runs/<id>/archive give a run’s images', async ({
   browser,
-}) => {
+}, testInfo) => {
+  const name = uniqueName(testInfo, 'Api run')
   const created = await cliResult(
     DATA,
     [
       'workflow',
       'create',
-      'Api run',
+      name,
       '--sources',
       sourceId,
       '--steps',
@@ -307,7 +309,9 @@ test('GET /api/results/<id> and /api/workflow-runs/<id>/archive give a run’s i
   const archive = await owner.get(`/api/workflow-runs/${runId}/archive`)
   expect(archive.status()).toBe(200)
   expect(archive.headers()['content-type']).toBe('application/zip')
-  expect(archive.headers()['content-disposition']).toContain('Api%20run.zip')
+  expect(archive.headers()['content-disposition']).toContain(
+    `${encodeURIComponent(name)}.zip`,
+  )
   expect(
     Buffer.from(await archive.body())
       .subarray(0, 2)

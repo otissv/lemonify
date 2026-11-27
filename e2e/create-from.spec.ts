@@ -1,12 +1,11 @@
 import { readFileSync } from 'node:fs'
-import path from 'node:path'
 
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 import { z } from 'zod'
 
-import { E2E_DATA_DIR } from '../playwright.config.ts'
 import { WorkflowResult, cliResult } from './cli.ts'
+import { E2E_STORE } from './database.ts'
 import { SCRATCH_ACCOUNTS } from './global-setup.ts'
 import type { Manifest } from './seed.ts'
 import { menu, uniqueName } from './workflow-page.ts'
@@ -16,7 +15,7 @@ const manifest: Manifest = JSON.parse(
   readFileSync(ACCOUNT.manifestFile, 'utf8'),
 )
 const SOURCE_NAME = 'blur-default'
-const DATA = path.resolve(E2E_DATA_DIR)
+const DATA = E2E_STORE
 const USER = ['--user', ACCOUNT.user.name]
 const PICTURE = '[data-slot="canvas"] img'
 

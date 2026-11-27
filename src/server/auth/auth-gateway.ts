@@ -18,5 +18,5 @@ export interface AuthGateway {
   signUp(account: NewAccount): Promise<{ userId: string }>
   /** Handles the sign-in routes under `/api/auth`. */
   handle(request: Request): Promise<Response>
-  close(): void
+  close(): Promise<void>
 }

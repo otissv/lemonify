@@ -27,7 +27,7 @@ These terms are used the same way in code and docs; the full list is in [docs/gl
 | Term         | Means                                                                                                                 |
 | ------------ | --------------------------------------------------------------------------------------------------------------------- |
 | **Source**   | An image a user uploaded, stored as a plain file by its content hash and never modified.                              |
-| **Document** | The editable thing: an owner, a Source, a pipeline of steps and an undo history, kept in SQLite.                      |
+| **Document** | The editable thing: an owner, a Source, a pipeline of steps and an undo history, kept in Postgres.                    |
 | **Render**   | A cheap image computed from a Document (a preview or thumbnail). A disposable cache.                                  |
 | **Result**   | An image that cost real work or was asked for (an AI Step, an export, a run). Kept until deleted.                     |
 | **Job**      | One piece of queued server work, with progress, that can be cancelled.                                                |
@@ -40,13 +40,30 @@ These terms are used the same way in code and docs; the full list is in [docs/gl
 | Node.js 22.18 or newer     | Everything      | Developed on Node 24.                                                               |
 | pnpm 10                    | Everything      | Install scripts of dependencies are blocked by default.                             |
 | A GPU with a Vulkan driver | AI upscale only | Every other feature runs on the CPU. See [doc/cli.md](doc/cli.md) for driver setup. |
+| Postgres 18                | Everything      | `compose.yaml` runs one in Docker; see Getting started.                             |
 
 ## Getting started
 
+Lemonify keeps its data in Postgres. The website, the CLI and the tests all read the server's address from the `POSTGRES_` settings in a `.env` file at the root of the project (a variable set in the environment wins over the file):
+
 ```bash
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5433
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=choose-a-password
+POSTGRES_DATABASE=lemonify
+POSTGRES_SCHEMA=public
+```
+
+`compose.yaml` starts a Postgres 18 server with those settings, listening on `POSTGRES_HOST` and `POSTGRES_PORT` only. The app creates its tables when it starts.
+
+```bash
+docker compose up -d
 pnpm install
 pnpm images --help
 ```
+
+The tests use the same server but never the database in `.env`: each test run migrates a template database and gives every test a copy of its own, and the end-to-end run uses `lemonify_e2e`, which it empties when it starts. A command that cannot reach the server stops with exit code 7 and says where it looked.
 
 To run the web editor as well:
 
@@ -89,7 +106,7 @@ A command that waits for its jobs (`export`, `workflow run --follow`) does the w
 
 ## Configuration
 
-Settings are environment variables named `LEMONIFY_*`, all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `PORT` (the website's port, default 5173; the next two follow it unless set), `LEMONIFY_BASE_URL`, `LEMONIFY_REALTIME_PORT`, `LEMONIFY_REALTIME_HOST`, `LEMONIFY_REALTIME_URL` (see [live updates](docs/live-updates.md)), `LEMONIFY_RESEND_API_KEY`, `LEMONIFY_EMAIL_FROM` (see [authentication](docs/authentication.md)) and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
+Settings are environment variables, read from `.env` too. The `POSTGRES_` settings above are required; `LEMONIFY_DATABASE_POOL_SIZE` (default 10) sets how many connections each process keeps open. The `LEMONIFY_*` settings are all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS`, `LEMONIFY_GPU_WORKERS`, `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `PORT` (the website's port, default 5173; the next two follow it unless set), `LEMONIFY_BASE_URL`, `LEMONIFY_REALTIME_PORT`, `LEMONIFY_REALTIME_HOST`, `LEMONIFY_REALTIME_URL` (see [live updates](docs/live-updates.md)), `LEMONIFY_RESEND_API_KEY`, `LEMONIFY_EMAIL_FROM` (see [authentication](docs/authentication.md)) and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
 
 ## Scripts
 
@@ -115,12 +132,12 @@ Linting and formatting use [Biome](https://biomejs.dev/), configured in `biome.j
 | `src/server/`        | The services, DAOs, tools, job scheduler, composition file and HTTP middleware the CLI and the API both use                                          |
 | `src/features/`      | The web editor by feature: documents, pipeline, tools, export, results, AI tools, workflows and more                                                 |
 | `src/routes/`        | TanStack Router file-based routes, including the API routes (`/api/sources`, `/api/results`, renders)                                                |
-| `migrations/`        | Knex migrations for the SQLite database                                                                                                              |
+| `migrations/`        | Knex migrations for the Postgres database                                                                                                            |
 | `src/components/ui/` | Shared UI components ([shadcn/ui](https://ui.shadcn.com/)); add one with `pnpm dlx shadcn@latest add <component>`                                    |
 | `src/store/`         | Client state (Zustand)                                                                                                                               |
 | `skills/images-cli/` | The agent skill for the CLI                                                                                                                          |
 | `doc/`               | CLI documentation, including the generated Sharp job reference                                                                                       |
 | `docs/`              | Project design: the [glossary](docs/glossary.md), the [editor and server plan](docs/editor-pipeline-plan.md) and [key bindings](docs/keybindings.md) |
-| `.data/`             | The SQLite database, uploaded sources, results, the render cache and work folders (not committed)                                                    |
+| `.data/`             | Uploaded sources, results, the render cache and work folders (not committed)                                                                         |
 
 The web editor is built with TanStack Start, React 19 and TypeScript. Its visual design is described in [DESIGN.md](DESIGN.md).

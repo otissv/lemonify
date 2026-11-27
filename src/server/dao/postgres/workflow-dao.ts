@@ -102,6 +102,7 @@ function toEntry(row: EntryRow): WorkflowHistoryEntryRecord {
   }
 }
 
+/** Reads the row and locks it until the transaction ends, so a second change to it waits and then sees this one's revision. */
 async function lockedRow(
   trx: Knex.Transaction,
   id: string,
@@ -109,6 +110,7 @@ async function lockedRow(
 ): Promise<WorkflowRow> {
   const row: WorkflowRow | undefined = await trx('workflows')
     .where({ id })
+    .forUpdate()
     .first()
   if (row === undefined) throw new NotFoundError(MISSING)
   if (row.revision !== expectedRevision) {
@@ -155,7 +157,7 @@ function toRun(row: RunRow): WorkflowRunRecord {
   }
 }
 
-export class SqliteWorkflowDao implements WorkflowDao {
+export class PostgresWorkflowDao implements WorkflowDao {
   readonly #database: Knex
 
   constructor(database: Knex) {

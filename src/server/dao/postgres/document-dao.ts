@@ -76,6 +76,7 @@ function toEntry(row: EntryRow): HistoryEntryRecord {
   }
 }
 
+/** Reads the row and locks it until the transaction ends, so a second change to it waits and then sees this one's revision. */
 async function lockedRow(
   trx: Knex.Transaction,
   id: string,
@@ -83,6 +84,7 @@ async function lockedRow(
 ): Promise<DocumentRow> {
   const row: DocumentRow | undefined = await trx('documents')
     .where({ id })
+    .forUpdate()
     .first()
   if (row === undefined) throw new NotFoundError(MISSING)
   if (row.revision !== expectedRevision)
@@ -128,7 +130,7 @@ async function reload(
   return toRecord(row)
 }
 
-export class SqliteDocumentDao implements DocumentDao {
+export class PostgresDocumentDao implements DocumentDao {
   readonly #database: Knex
 
   constructor(database: Knex) {

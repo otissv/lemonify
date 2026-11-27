@@ -1,6 +1,7 @@
 import { createApp } from '../../src/server/composition.ts'
 import type { App } from '../../src/server/composition.ts'
 import { loadConfig } from '../../src/server/config/config.ts'
+import { readEnvironment } from '../../src/server/config/environment.ts'
 import type { Actor } from '../../src/server/domain/actor.ts'
 
 export const USER_FLAG = '--user'
@@ -12,7 +13,7 @@ export const USER_ENVIRONMENT_VARIABLE = 'LEMONIFY_USER'
  * that holds the data.
  */
 export async function withApp<T>(run: (app: App) => Promise<T>): Promise<T> {
-  const app = await createApp(loadConfig(process.env))
+  const app = await createApp(loadConfig(readEnvironment()))
   try {
     return await run(app)
   } finally {

@@ -31,7 +31,7 @@ type JobRow = {
   result: string | null
   error: string | null
   claimed_by: string | null
-  cancel_requested: number
+  cancel_requested: boolean
   created_at: string
   started_at: string | null
   finished_at: string | null
@@ -76,7 +76,7 @@ function toRecord(row: JobRow): JobRecord {
     result,
     error: row.error,
     claimedBy: row.claimed_by,
-    cancelRequested: row.cancel_requested === 1,
+    cancelRequested: row.cancel_requested,
     createdAt: row.created_at,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
@@ -99,7 +99,7 @@ function toRow(job: JobRecord): JobRow {
     result: job.result === null ? null : JSON.stringify(job.result),
     error: job.error,
     claimed_by: job.claimedBy,
-    cancel_requested: job.cancelRequested ? 1 : 0,
+    cancel_requested: job.cancelRequested,
     created_at: job.createdAt,
     started_at: job.startedAt,
     finished_at: job.finishedAt,
@@ -126,7 +126,7 @@ function outcomeColumns(
   return columns
 }
 
-export class SqliteJobDao implements JobDao {
+export class PostgresJobDao implements JobDao {
   readonly #database: Knex
 
   constructor(database: Knex) {
@@ -213,7 +213,7 @@ export class SqliteJobDao implements JobDao {
 
   async claim(id: string, claimedBy: string, now: string): Promise<boolean> {
     const changed = await this.#database('jobs')
-      .where({ id, state: JobState.Waiting, cancel_requested: 0 })
+      .where({ id, state: JobState.Waiting, cancel_requested: false })
       .update({
         state: JobState.Running,
         claimed_by: claimedBy,
@@ -235,7 +235,7 @@ export class SqliteJobDao implements JobDao {
     if (dropped === 1) return 'cancelled'
     const asked = await this.#database('jobs')
       .where({ id, state: JobState.Running })
-      .update({ cancel_requested: 1 })
+      .update({ cancel_requested: true })
     return asked === 1 ? 'requested' : 'finished'
   }
 
@@ -250,9 +250,10 @@ export class SqliteJobDao implements JobDao {
         'jobs',
       )
         .where({ id, state: JobState.Running })
+        .forUpdate()
         .first('cancel_requested')
       if (current === undefined) return false
-      const stopped = current.cancel_requested === 1
+      const stopped = current.cancel_requested
       await trx('jobs')
         .where({ id })
         .update(outcomeColumns(outcome, now, stopped))

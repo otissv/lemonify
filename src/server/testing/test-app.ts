@@ -12,7 +12,11 @@ import type { SourceRecord } from '../dao/source-dao.ts'
 import type { Actor } from '../domain/actor.ts'
 import type { AuthGateway } from '../auth/auth-gateway.ts'
 import { MemoryLogger } from '../http/logger.ts'
-import { insertTestUser } from './test-database.ts'
+import {
+  createTestDatabase,
+  databaseEnvironment,
+  insertTestUser,
+} from './test-database.ts'
 import { FakeAiEngine, FakeImageEngine, RecordingPublisher } from './fakes.ts'
 
 /** An auth system that is never asked anything; tests act as an Actor directly. */
@@ -22,7 +26,7 @@ const NO_AUTH: AuthGateway = {
     throw new Error('Sign-up is not available in this test.')
   },
   handle: async () => new Response(null, { status: 404 }),
-  close: () => {},
+  close: async () => {},
 }
 
 export type TestApp = {
@@ -53,7 +57,7 @@ async function png(colour: string): Promise<Buffer> {
 }
 
 /**
- * The real composition on an in-memory-sized data folder, with the two
+ * The real composition on a database and data folder of its own, with the two
  * engines replaced by fakes, so the services, DAOs, stores and scheduler all
  * run for real and only the slow image work is stood in for.
  */
@@ -61,8 +65,14 @@ export async function createTestApp(
   settings: Record<string, string> = {},
 ): Promise<TestApp> {
   const directory = await mkdtemp(path.join(tmpdir(), 'lemonify-test-app-'))
+  const test = await createTestDatabase()
+  await test.database.destroy()
   const config: Config = loadConfig(
-    { LEMONIFY_DATA_DIR: directory, ...settings },
+    {
+      ...databaseEnvironment(test.config),
+      LEMONIFY_DATA_DIR: directory,
+      ...settings,
+    },
     2,
     directory,
   )
@@ -102,6 +112,7 @@ export async function createTestApp(
     },
     async close() {
       await app.close()
+      await test.close()
       await rm(directory, { recursive: true, force: true })
     },
   }

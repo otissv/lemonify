@@ -37,4 +37,6 @@ The workflow specs cover every workflow feature on both front doors, since the w
 
 ## A fast, quiet server
 
+`e2e/responsiveness.spec.ts` times the server: while one of its requests waits for a document row that another connection has locked, and while the CPU workers are busy with long renders, the slowest of ten requests for an image must be answered within 100 ms. It runs as its own Playwright project after every other spec, so no other spec's renders share the server while it measures. The render test is marked `test.fail` until the worker pool takes jobs out of the web server (`docs/job-workers-todo.md`, section 5); when that lands it starts passing, Playwright reports "expected to fail, but passed", and the mark comes off.
+
 Global setup opens the home page and a document once before the specs start, so the development server has compiled those pages and the first specs do not wait past their timeouts. `vite.config.ts` does not watch `e2e/.data`, `e2e/.run`, `.data` or `.claude`, which are written to all the time during a run.

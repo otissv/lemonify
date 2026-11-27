@@ -3,9 +3,10 @@ import path from 'node:path'
 
 import { chromium } from '@playwright/test'
 
-import { E2E_DATA_DIR, E2E_ORIGIN } from '../playwright.config.ts'
+import { E2E_DATA_DIR, E2E_DATABASE, E2E_ORIGIN } from '../playwright.config.ts'
 import { createApp } from '../src/server/composition.ts'
 import { loadConfig } from '../src/server/config/config.ts'
+import { readEnvironment } from '../src/server/config/environment.ts'
 import { seedDocuments } from './seed.ts'
 import type { Manifest } from './seed.ts'
 
@@ -58,6 +59,7 @@ export const SCRATCH_ACCOUNTS = {
   workflowParity: scratchAccount('workflow-parity', ['blur-default']),
   api: scratchAccount('api', ['blur-default']),
   apiOther: scratchAccount('api-other', ['blur-default']),
+  responsive: scratchAccount('responsive', ['blur-default']),
 } as const
 
 export const E2E_USER = {
@@ -126,8 +128,8 @@ async function warmUp(documentId: string): Promise<void> {
 
 /**
  * Signs the test account up on the running server and fills its data with one
- * document per case. The server and this process share the data directory, as
- * the server and the command line do.
+ * document per case. The server and this process share the data directory and
+ * the database, as the server and the command line do.
  */
 export default async function globalSetup(): Promise<void> {
   mkdirSync(RUN_DIR, { recursive: true })
@@ -136,7 +138,11 @@ export default async function globalSetup(): Promise<void> {
     writeAuthState(account.authFile, await signUp(account.user))
   }
 
-  const config = loadConfig({ ...process.env, LEMONIFY_DATA_DIR: E2E_DATA_DIR })
+  const config = loadConfig({
+    ...readEnvironment(),
+    LEMONIFY_DATA_DIR: E2E_DATA_DIR,
+    POSTGRES_DATABASE: E2E_DATABASE,
+  })
   const app = await createApp(config)
   let manifest: Manifest
   try {

@@ -2,9 +2,9 @@ import { createTestDatabase, insertTestUser } from '../testing/test-database'
 import { documentRecord, source } from './contract/library-dao.contract'
 import { resultDaoContract } from './contract/result-dao.contract'
 import { MemoryResultDao } from './memory/result-dao'
-import { SqliteDocumentDao } from './sqlite/document-dao'
-import { SqliteResultDao } from './sqlite/result-dao'
-import { SqliteSourceDao } from './sqlite/source-dao'
+import { PostgresDocumentDao } from './postgres/document-dao'
+import { PostgresResultDao } from './postgres/result-dao'
+import { PostgresSourceDao } from './postgres/source-dao'
 
 resultDaoContract('memory', async () => ({
   dao: new MemoryResultDao(),
@@ -13,13 +13,13 @@ resultDaoContract('memory', async () => ({
   close: async () => {},
 }))
 
-resultDaoContract('sqlite', async () => {
-  const database = await createTestDatabase()
+resultDaoContract('postgres', async () => {
+  const { database, close } = await createTestDatabase()
   const users = new Set<string>()
-  const sources = new SqliteSourceDao(database)
-  const documents = new SqliteDocumentDao(database)
+  const sources = new PostgresSourceDao(database)
+  const documents = new PostgresDocumentDao(database)
   return {
-    dao: new SqliteResultDao(database),
+    dao: new PostgresResultDao(database),
     seedUser: async (id) => {
       if (users.has(id)) return
       users.add(id)
@@ -32,6 +32,6 @@ resultDaoContract('sqlite', async () => {
       )
       await documents.insert(documentRecord({ id, ownerId }), [sourceId])
     },
-    close: () => database.destroy(),
+    close,
   }
 })

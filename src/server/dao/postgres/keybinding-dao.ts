@@ -35,7 +35,7 @@ function toRecord(row: KeybindingRow): KeybindingRecord {
   }
 }
 
-export class SqliteKeybindingDao implements KeybindingDao {
+export class PostgresKeybindingDao implements KeybindingDao {
   readonly #database: Knex
 
   constructor(database: Knex) {

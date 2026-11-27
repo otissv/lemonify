@@ -318,6 +318,7 @@ Services throw custom error classes; the Errors middleware and the CLI each turn
 | `LimitError`        | A rate, size, quota or waiting-Jobs limit is reached.           | 429                     | 5             |
 | `UnauthorizedError` | Nobody is signed in (Session middleware only).                  | 401                     | not used      |
 | `JobFailedError`    | A Job the caller waited for ended `failed` or `cancelled`.      | 200 with the failed Job | 6             |
+| `UnavailableError`  | The database cannot be reached when the app starts.             | 503                     | 7             |
 
 A User asking for another User's Document or Source gets `NotFoundError`, the same as for one that does not exist, so ownership never leaks what exists. Every message is plain words and never contains a stack trace, a path or SQL; the detail goes to the log with the actor, the route or command, and the Job id.
 

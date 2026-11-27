@@ -2,9 +2,9 @@ import { createTestDatabase, insertTestUser } from '../testing/test-database'
 import { documentRecord, source } from './contract/library-dao.contract'
 import { jobDaoContract } from './contract/job-dao.contract'
 import { MemoryJobDao } from './memory/job-dao'
-import { SqliteDocumentDao } from './sqlite/document-dao'
-import { SqliteJobDao } from './sqlite/job-dao'
-import { SqliteSourceDao } from './sqlite/source-dao'
+import { PostgresDocumentDao } from './postgres/document-dao'
+import { PostgresJobDao } from './postgres/job-dao'
+import { PostgresSourceDao } from './postgres/source-dao'
 
 jobDaoContract('memory', async () => ({
   dao: new MemoryJobDao(),
@@ -13,13 +13,13 @@ jobDaoContract('memory', async () => ({
   close: async () => {},
 }))
 
-jobDaoContract('sqlite', async () => {
-  const database = await createTestDatabase()
+jobDaoContract('postgres', async () => {
+  const { database, close } = await createTestDatabase()
   const users = new Set<string>()
-  const sources = new SqliteSourceDao(database)
-  const documents = new SqliteDocumentDao(database)
+  const sources = new PostgresSourceDao(database)
+  const documents = new PostgresDocumentDao(database)
   return {
-    dao: new SqliteJobDao(database),
+    dao: new PostgresJobDao(database),
     seedUser: async (id) => {
       if (users.has(id)) return
       users.add(id)
@@ -32,6 +32,6 @@ jobDaoContract('sqlite', async () => {
       )
       await documents.insert(documentRecord({ id, ownerId }), [sourceId])
     },
-    close: () => database.destroy(),
+    close,
   }
 })

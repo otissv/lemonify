@@ -1,5 +1,6 @@
 import type { Knex } from 'knex'
 
+import { DataIntegrityError } from '../../errors.ts'
 import type { SourceDao, SourceRecord } from '../source-dao.ts'
 
 type SourceRow = {
@@ -42,26 +43,32 @@ function toRow(record: SourceRecord): SourceRow {
   }
 }
 
-export class SqliteSourceDao implements SourceDao {
+export class PostgresSourceDao implements SourceDao {
   readonly #database: Knex
 
   constructor(database: Knex) {
     this.#database = database
   }
 
-  insert(
+  /** Two uploads of the same picture at once both end with the one row: the second insert does nothing and reads the first. */
+  async insert(
     source: SourceRecord,
   ): Promise<{ source: SourceRecord; created: boolean }> {
-    return this.#database.transaction(async (trx) => {
-      const existing: SourceRow | undefined = await trx('sources')
-        .where({ owner_id: source.ownerId, content_hash: source.contentHash })
-        .first()
-      if (existing !== undefined) {
-        return { source: toRecord(existing), created: false }
-      }
-      await trx('sources').insert(toRow(source))
-      return { source, created: true }
-    })
+    const inserted: Array<{ id: string }> = await this.#database('sources')
+      .insert(toRow(source))
+      .onConflict(['owner_id', 'content_hash'])
+      .ignore()
+      .returning('id')
+    if (inserted.length === 1) return { source, created: true }
+    const existing: SourceRow | undefined = await this.#database('sources')
+      .where({ owner_id: source.ownerId, content_hash: source.contentHash })
+      .first()
+    if (existing === undefined) {
+      throw new DataIntegrityError(
+        'The picture was neither saved nor found; try the upload again.',
+      )
+    }
+    return { source: toRecord(existing), created: false }
   }
 
   async findById(id: string): Promise<SourceRecord | null> {

@@ -1,42 +1,75 @@
-import { mkdirSync } from 'node:fs'
-import path from 'node:path'
-
 import knex from 'knex'
 import type { Knex } from 'knex'
-import type Database from 'better-sqlite3'
+import pg from 'pg'
 
-export const MEMORY_DATABASE = ':memory:'
-const BUSY_TIMEOUT_MS = 5000
+import type { DatabaseConfig } from '../config/config.ts'
 
-/** Settings every connection to the database file gets, whoever opens it. */
-export function applyPragmas(connection: Database.Database): void {
-  connection.pragma('journal_mode = WAL')
-  connection.pragma('foreign_keys = ON')
-  connection.pragma(`busy_timeout = ${BUSY_TIMEOUT_MS}`)
+/** How long a statement waits for a row or table lock before it fails (decision 5, database waits). */
+export const LOCK_TIMEOUT_MS = 5000
+/** How long any one statement may run before Postgres stops it. */
+export const STATEMENT_TIMEOUT_MS = 30_000
+
+const TIMESTAMPTZ_OID = 1184
+const INT8_OID = 20
+const JSON_OID = 114
+const JSONB_OID = 3802
+
+function toIsoString(value: string): string {
+  return new Date(value).toISOString()
+}
+
+function toSafeNumber(value: string): number {
+  const number = Number(value)
+  if (!Number.isSafeInteger(number)) {
+    throw new RangeError(
+      `The database returned ${value}, which is too large to read as a number.`,
+    )
+  }
+  return number
+}
+
+function keepText(value: string): string {
+  return value
 }
 
 /**
- * Opens the database through Knex on one connection. SQLite writes are
- * serialised anyway, and WAL mode with a busy timeout lets other processes
- * (the CLI beside the server) use the same file.
+ * How this pool reads Postgres values: times as UTC ISO strings, as the DAOs
+ * store them; whole numbers as numbers; JSON as its text, so each DAO parses
+ * and checks it. The parsers are this pool's own, so other pools on the same
+ * server (Better Auth's) keep the driver's defaults.
  */
-export function openDatabase(file: string): Knex {
-  if (file !== MEMORY_DATABASE)
-    mkdirSync(path.dirname(file), { recursive: true })
+const TYPES = {
+  getTypeParser(oid: number, format?: string) {
+    if (oid === TIMESTAMPTZ_OID) return toIsoString
+    if (oid === INT8_OID) return toSafeNumber
+    if (oid === JSON_OID || oid === JSONB_OID) return keepText
+    return pg.types.getTypeParser(oid, format === 'binary' ? 'binary' : 'text')
+  },
+}
+
+/** The settings `pg` needs to reach the database, shared by every pool that opens it. */
+export function connectionSettings(config: DatabaseConfig): pg.ClientConfig {
+  return {
+    host: config.host,
+    port: config.port,
+    user: config.user,
+    password: config.password,
+    database: config.database,
+    options: `-c search_path=${config.schema} -c lock_timeout=${LOCK_TIMEOUT_MS} -c statement_timeout=${STATEMENT_TIMEOUT_MS}`,
+  }
+}
+
+/**
+ * Opens the database through Knex with a pool of `poolSize` connections.
+ * The driver is asynchronous, so a statement waiting for a lock is a pending
+ * promise and never blocks the process; the timeouts end a long wait with an
+ * error instead.
+ */
+export function openDatabase(config: DatabaseConfig): Knex {
   return knex({
-    client: 'better-sqlite3',
-    connection: { filename: file },
-    useNullAsDefault: true,
-    pool: {
-      min: 1,
-      max: 1,
-      afterCreate(
-        connection: Database.Database,
-        done: (error: Error | null, connection: Database.Database) => void,
-      ): void {
-        applyPragmas(connection)
-        done(null, connection)
-      },
-    },
+    client: 'pg',
+    connection: { ...connectionSettings(config), types: TYPES },
+    searchPath: [config.schema],
+    pool: { min: 0, max: config.poolSize },
   })
 }
