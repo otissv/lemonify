@@ -43,9 +43,9 @@ async function targetOf(request: Request): Promise<string | undefined> {
 }
 
 /**
- * The limits in front of Better Auth's routes, which it does not apply
- * everywhere (its own limiter is off outside production and cannot see the
- * address behind a proxy). Returns the 429 to send, or null to carry on. The
+ * The limits in front of Better Auth's routes. Better Auth's own limiter is
+ * turned off (it is off outside production anyway, and cannot see a visitor's
+ * address, so it would put everyone in one bucket); these are the only ones. Returns the 429 to send, or null to carry on. The
  * routes that send email are held to a far lower rate, both per address and
  * per recipient, because each one costs money and can fill a stranger's inbox.
  */

@@ -7,6 +7,7 @@ import {
   choose,
   diagram,
   menu,
+  moveToolsAside,
   newWorkflow,
   node,
   nodeLabels,
@@ -63,6 +64,7 @@ test('adds, sets up, moves, hides and removes steps, and keeps them after a relo
     options(page).getByRole('button', { name: 'Show Rotate' }),
   ).toBeVisible()
 
+  await moveToolsAside(page)
   await diagram(page).getByRole('button', { name: 'Delete Resize' }).click()
   await expect(node(page, 'Resize')).toHaveCount(0)
 

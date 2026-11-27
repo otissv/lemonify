@@ -353,7 +353,7 @@ Read once at startup in `src/server/config/config.ts`, validated by one Zod sche
   - Default: 10
   - Meaning: The most connections the web server and each CLI command keep open; each worker process keeps 2.
 - **`CPU_WORKERS`**
-  - Default: CPU count, at least 1, at most 4
+  - Default: one per core beyond the 4 kept for the web server (`CORES_KEPT_FOR_WEB_SERVER`), at least 1, at most 4
   - Meaning: CPU worker processes the web server starts, each running one Job at a time; a CLI command doing its own Jobs runs this many at once.
 - **`GPU_WORKERS`**
   - Default: 1

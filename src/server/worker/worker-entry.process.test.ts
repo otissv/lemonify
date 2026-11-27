@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { fork } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import os from 'node:os'
 import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 
 import { WorkerPool } from '@/features/ai/ai-tools'
 
@@ -16,6 +16,10 @@ import { workerEnvironment, workerPriority } from './worker-environment'
 
 const ROOT = path.resolve(import.meta.dirname, '../../..')
 const PROCESS_TIMEOUT = 60_000
+const StartedLine = z.object({
+  priority: z.number(),
+  startedAtPriority: z.number(),
+})
 
 let t: TestApp
 const children: ChildProcess[] = []
@@ -132,8 +136,17 @@ describe('the worker process', () => {
       const { child, output } = startWorker('cpu')
       await eventually(() => output().includes('Worker started'))
 
-      // It starts at this process's priority, as the web server's workers start at the server's.
-      expect(os.getPriority(child.pid)).toBe(workerPriority(os.getPriority()))
+      // The operating system may renice processes while they run, so the test reads what the
+      // worker started at and what it set, rather than comparing with this process now.
+      const started = StartedLine.parse(
+        JSON.parse(
+          output()
+            .split('\n')
+            .find((line) => line.includes('Worker started')) ?? '',
+        ),
+      )
+      expect(started.priority).toBe(workerPriority(started.startedAtPriority))
+      expect(started.priority).toBeGreaterThan(started.startedAtPriority)
 
       child.kill('SIGTERM')
       expect(await exited(child, output)).toBe(0)

@@ -1,6 +1,9 @@
 import { WorkerPool } from '@/features/ai/ai-tools'
 
-import { databaseEnvironment } from '../config/config.ts'
+import {
+  CORES_KEPT_FOR_WEB_SERVER,
+  databaseEnvironment,
+} from '../config/config.ts'
 import type { Config } from '../config/config.ts'
 
 /**
@@ -57,13 +60,18 @@ export function workerPriority(serverPriority: number): number {
 }
 
 /**
- * How many threads Sharp may use for one image in a CPU worker: the machine's
- * cores shared between the CPU workers, so together they never ask for more
- * cores than there are.
+ * How many threads Sharp may use for one image in a CPU worker: the cores the
+ * web server does not keep (`CORES_KEPT_FOR_WEB_SERVER`), shared between the
+ * CPU workers, so together they never take the cores its requests need.
  */
 export function imageThreadsPerWorker(
   cpuCount: number,
   cpuWorkers: number,
 ): number {
-  return Math.max(1, Math.floor(cpuCount / Math.max(1, cpuWorkers)))
+  return Math.max(
+    1,
+    Math.floor(
+      (cpuCount - CORES_KEPT_FOR_WEB_SERVER) / Math.max(1, cpuWorkers),
+    ),
+  )
 }

@@ -275,9 +275,11 @@ describe('loadConfig', () => {
     })
   })
 
-  it('sizes the CPU pool from the CPU count, between 1 and 4', () => {
+  it('sizes the CPU pool from the cores the web server does not keep, between 1 and 4', () => {
     expect(defaultCpuWorkers(0)).toBe(1)
-    expect(defaultCpuWorkers(2)).toBe(2)
+    expect(defaultCpuWorkers(2)).toBe(1)
+    expect(defaultCpuWorkers(6)).toBe(2)
+    expect(defaultCpuWorkers(8)).toBe(4)
     expect(defaultCpuWorkers(64)).toBe(4)
   })
 

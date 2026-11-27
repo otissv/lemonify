@@ -53,7 +53,9 @@ async function main(): Promise<void> {
     return
   }
   // Started at the web server's priority; lowered before any image thread is made, as threads take it from this one.
-  os.setPriority(workerPriority(os.getPriority()))
+  const startedAtPriority = os.getPriority()
+  const priority = workerPriority(startedAtPriority)
+  os.setPriority(priority)
   const config = loadConfig(readEnvironment())
   if (pool === WorkerPool.Cpu) {
     sharp.concurrency(
@@ -99,7 +101,12 @@ async function main(): Promise<void> {
   })
   await worker.start()
   if (stopping !== undefined) return
-  consoleLogger.info('Worker started', { pool, pid: process.pid })
+  consoleLogger.info('Worker started', {
+    pool,
+    pid: process.pid,
+    priority,
+    startedAtPriority,
+  })
   tell({ type: 'ready' })
 }
 

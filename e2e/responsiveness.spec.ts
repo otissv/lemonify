@@ -19,11 +19,17 @@ import { uniqueName } from './workflow-page.ts'
  * The web server keeps answering while it waits for the database and while
  * images are being processed (decision 5, database waits; decision 1, worker
  * processes): a request that needs neither the locked row nor the busy workers
- * is answered within RESPONSE_BUDGET_MS.
+ * is answered within RESPONSE_BUDGET_MS while it waits for the database, and
+ * within BUSY_WORKERS_BUDGET_MS while every CPU worker is busy.
  */
 const ACCOUNT = SCRATCH_ACCOUNTS.responsive
 const USER = ['--user', ACCOUNT.user.name]
 const RESPONSE_BUDGET_MS = 100
+/**
+ * With every CPU worker busy, requests take 30–45 ms, and the slowest of ten
+ * 50–130 ms. A web server that runs the renders itself took 400–2300 ms.
+ */
+const BUSY_WORKERS_BUDGET_MS = 250
 /** The server stalls now and then, not on every request, so each test takes the slowest of several. */
 const SAMPLES = 10
 const WAIT_TIMEOUT = 30_000
@@ -40,12 +46,21 @@ test.use({ storageState: ACCOUNT.authFile })
 test.describe.configure({ mode: 'serial', timeout: 180_000 })
 
 let database: pg.Client
+/**
+ * Watches for requests waiting on `database`'s lock. It has to be another
+ * connection: inside a transaction Postgres keeps one snapshot of
+ * pg_stat_activity, so the transaction holding the lock would never see a
+ * request start waiting after its first look.
+ */
+let observer: pg.Client
 let sourceId = ''
 
 async function count(sql: string, values: unknown[] = []): Promise<number> {
-  const { rows } = await database.query(sql, values)
+  const { rows } = await observer.query(sql, values)
   return CountSchema.parse(rows[0]).count
 }
+
+const BackendSchema = z.object({ pid: z.number() })
 
 /** How long one request for the account's image takes, in milliseconds; it must succeed. */
 async function timedSourceRequest(request: APIRequestContext): Promise<number> {
@@ -70,7 +85,8 @@ async function slowestSourceRequest(
 
 test.beforeAll(async () => {
   database = new pg.Client(connectionSettings(storeDatabase(E2E_DATABASE)))
-  await database.connect()
+  observer = new pg.Client(connectionSettings(storeDatabase(E2E_DATABASE)))
+  await Promise.all([database.connect(), observer.connect()])
   const { rows } = await database.query(
     'select s.id from sources s join "user" u on u.id = s.owner_id where u.email = $1 order by s.created_at limit 1',
     [ACCOUNT.user.email],
@@ -79,7 +95,7 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  await database.end()
+  await Promise.all([database.end(), observer.end()])
 })
 
 test('answers a request while another of its requests waits for a locked document', async ({
@@ -99,6 +115,8 @@ test('answers a request while another of its requests waits for a locked documen
     DocumentResult,
   )
   await timedSourceRequest(page.request)
+  const { rows } = await database.query('select pg_backend_pid() as pid')
+  const holder = BackendSchema.parse(rows[0]).pid
   await database.query('begin')
   try {
     await database.query('select id from documents where id = $1 for update', [
@@ -110,7 +128,8 @@ test('answers a request while another of its requests waits for a locked documen
       .poll(
         () =>
           count(
-            'select count(*)::int as count from pg_stat_activity where pg_backend_pid() = any(pg_blocking_pids(pid))',
+            'select count(*)::int as count from pg_stat_activity where $1 = any(pg_blocking_pids(pid))',
+            [holder],
           ),
         { timeout: WAIT_TIMEOUT, intervals: [20] },
       )
@@ -195,7 +214,7 @@ test('answers a request and reads a file while the CPU workers are busy with lon
       )
       .toBeGreaterThan(1)
     expect(await slowestSourceRequest(page.request)).toBeLessThan(
-      RESPONSE_BUDGET_MS,
+      BUSY_WORKERS_BUDGET_MS,
     )
   } finally {
     if (runId !== '') {

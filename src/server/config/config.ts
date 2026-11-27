@@ -8,6 +8,12 @@ import { ValidationError } from '../errors.ts'
 import { DEFAULT_SITE_PORT } from './site-port.ts'
 
 const MAX_DEFAULT_CPU_WORKERS = 4
+/**
+ * Cores left to the web server while every CPU worker is busy: its main thread
+ * and its helper threads, which read files and check sign-ins. Taking them for
+ * images made a request wait 100–230 ms behind a long render.
+ */
+export const CORES_KEPT_FOR_WEB_SERVER = 4
 /** The longest socket path every system Lemonify runs on takes (macOS allows 104 bytes with the terminating null). */
 const MAX_SOCKET_PATH_BYTES = 103
 const MEGABYTE = 1024 * 1024
@@ -133,8 +139,12 @@ export type RealtimeConfig = {
   url: string
 }
 
+/** One CPU worker per core the web server does not keep, at least 1 and at most 4. */
 export function defaultCpuWorkers(cpuCount: number): number {
-  return Math.min(Math.max(cpuCount, 1), MAX_DEFAULT_CPU_WORKERS)
+  return Math.min(
+    Math.max(cpuCount - CORES_KEPT_FOR_WEB_SERVER, 1),
+    MAX_DEFAULT_CPU_WORKERS,
+  )
 }
 
 function parseOrigins(baseUrl: string, list: string): string[] {

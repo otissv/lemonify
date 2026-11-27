@@ -77,9 +77,10 @@ describe('the priority a worker runs at', () => {
 })
 
 describe('the image threads of a CPU worker', () => {
-  it('share the machine’s cores between the CPU workers', () => {
-    expect(imageThreadsPerWorker(16, 4)).toBe(4)
-    expect(imageThreadsPerWorker(8, 3)).toBe(2)
+  it('share the cores the web server does not keep between the CPU workers', () => {
+    expect(imageThreadsPerWorker(24, 4)).toBe(5)
+    expect(imageThreadsPerWorker(16, 4)).toBe(3)
+    expect(imageThreadsPerWorker(12, 2)).toBe(4)
   })
 
   it('are at least one, however many workers there are', () => {

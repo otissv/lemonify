@@ -17,6 +17,11 @@ const run = promisify(execFile)
 const ROOT = path.resolve(import.meta.dirname, '../..')
 /** How long one command started as its own process may take. */
 export const PROCESS_TIMEOUT = 60_000
+/**
+ * One flow test runs a dozen commands against a real database and renders
+ * real images, so on a busy machine it takes seconds, not the default 5 s.
+ */
+const FLOW_TEST_TIMEOUT = 30_000
 
 /** The folders a command-line flow test works in: a data folder of its own, and one for the files it writes. */
 export const flow = { dataDir: '', workDir: '' }
@@ -32,6 +37,7 @@ export async function stubTestDatabase(): Promise<TestDatabase> {
 
 /** Gives each test of the file empty folders and an empty database, and points the command line at them. */
 export function setUpFlowFolders(): void {
+  vi.setConfig({ testTimeout: FLOW_TEST_TIMEOUT })
   let database: TestDatabase | undefined
   beforeEach(async () => {
     flow.dataDir = mkdtempSync(path.join(os.tmpdir(), 'lemonify-flow-data-'))

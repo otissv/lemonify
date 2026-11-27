@@ -106,20 +106,20 @@ A command that waits for its jobs (`export`, `workflow run --follow`) leaves the
 
 ## Configuration
 
-Settings are environment variables, read from `.env` too. The `POSTGRES_` settings above are required; `LEMONIFY_DATABASE_POOL_SIZE` (default 10) sets how many connections each process keeps open. The `LEMONIFY_*` settings are all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS` (how many CPU worker processes the web server starts, each running one job at a time; default the CPU count, at most 4), `LEMONIFY_GPU_WORKERS` (how many GPU worker processes it starts while there is AI work; default 1, one per GPU), `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `PORT` (the website's port, default 5173; the next two follow it unless set), `LEMONIFY_BASE_URL`, `LEMONIFY_REALTIME_PORT`, `LEMONIFY_REALTIME_HOST`, `LEMONIFY_REALTIME_URL` (see [live updates](docs/live-updates.md)), `LEMONIFY_RESEND_API_KEY`, `LEMONIFY_EMAIL_FROM` (see [authentication](docs/authentication.md)) and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
+Settings are environment variables, read from `.env` too. The `POSTGRES_` settings above are required; `LEMONIFY_DATABASE_POOL_SIZE` (default 10) sets how many connections each process keeps open. The `LEMONIFY_*` settings are all optional: `LEMONIFY_DATA_DIR` (default `.data`), `LEMONIFY_CPU_WORKERS` (how many CPU worker processes the web server starts, each running one job at a time; default one per core beyond the 4 kept for the web server, at least 1 and at most 4), `LEMONIFY_GPU_WORKERS` (how many GPU worker processes it starts while there is AI work; default 1, one per GPU), `LEMONIFY_MAX_UPLOAD_BYTES`, `LEMONIFY_MAX_BUNDLE_BYTES`, `LEMONIFY_MAX_RESULT_BYTES_PER_USER`, `PORT` (the website's port, default 5173; the next two follow it unless set), `LEMONIFY_BASE_URL`, `LEMONIFY_REALTIME_PORT`, `LEMONIFY_REALTIME_HOST`, `LEMONIFY_REALTIME_URL` (see [live updates](docs/live-updates.md)), `LEMONIFY_RESEND_API_KEY`, `LEMONIFY_EMAIL_FROM` (see [authentication](docs/authentication.md)) and others, defined in `src/server/config/config.ts`. Users sign up on the website; the CLI never creates one except the single local user on a machine that has none.
 
 ## Scripts
 
-| Script                  | Does                                                                                     |
-| ----------------------- | ---------------------------------------------------------------------------------------- |
-| `pnpm images <command>` | Runs the image CLI, for example `pnpm images --help`                                     |
-| `pnpm dev`              | Starts the web editor's dev server on `PORT` (default 5173)                              |
-| `pnpm build`            | Builds for production                                                                    |
-| `pnpm test`             | Runs the tests once (Vitest)                                                             |
-| `pnpm e2e`              | Runs the browser tests against the snapshots in `e2e/` (Playwright; see `e2e/README.md`) |
-| `pnpm typecheck`        | Runs `tsc --noEmit`                                                                      |
-| `pnpm check`            | Lints and checks formatting with Biome                                                   |
-| `pnpm format`           | Fixes lint and formatting with Biome                                                     |
+| Script                  | Does                                                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm images <command>` | Runs the image CLI, for example `pnpm images --help`                                                                             |
+| `pnpm dev`              | Starts the web editor's dev server on `PORT` (default 5173)                                                                      |
+| `pnpm build`            | Builds for production                                                                                                            |
+| `pnpm test`             | Runs the tests once (Vitest)                                                                                                     |
+| `pnpm e2e`              | Builds the app and runs the browser tests against the built server and the snapshots in `e2e/` (Playwright; see `e2e/README.md`) |
+| `pnpm typecheck`        | Runs `tsc --noEmit`                                                                                                              |
+| `pnpm check`            | Lints and checks formatting with Biome                                                                                           |
+| `pnpm format`           | Fixes lint and formatting with Biome                                                                                             |
 
 Linting and formatting use [Biome](https://biomejs.dev/), configured in `biome.json`. Biome has no type-aware rules, so `pnpm typecheck` is the type check.
 

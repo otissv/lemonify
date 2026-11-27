@@ -166,6 +166,10 @@ function createAuthInstance(pool: pg.Pool, options: BetterAuthOptions) {
               )
             },
           },
+    // Its own limiter turns on in production but cannot see a visitor's address, so it would put
+    // every visitor in one bucket and lock them all out together. The app's guard in front of these
+    // routes limits them by each visitor's real address instead (src/server/http/auth-guard.ts).
+    rateLimit: { enabled: false },
     advanced: { cookiePrefix: COOKIE_PREFIX },
   })
 }

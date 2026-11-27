@@ -13,9 +13,9 @@ const RESPONSIVENESS_SPEC = /responsiveness\.spec\.ts/
 const RESET_DATABASE = `node --disable-warning=ExperimentalWarning --experimental-transform-types --import ./scripts/images/register-alias.ts e2e/reset-database.ts`
 
 /**
- * End-to-end tests run against a development server of their own with an empty
- * data directory and database, so they never touch the data of the person
- * running them.
+ * End-to-end tests run against the production build, served by a server of
+ * their own with an empty data directory and database, so they check the app
+ * as it ships and never touch the data of the person running them.
  * Global setup signs an account up and fills the server with one document per
  * test case; the specs then open those documents and compare what the editor
  * shows with the snapshots in `e2e/snapshots`.
@@ -58,9 +58,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `sh -c "rm -rf ${E2E_DATA_DIR} && ${RESET_DATABASE} && exec pnpm exec vite dev --port ${PORT} --strictPort"`,
+    command: `sh -c "rm -rf ${E2E_DATA_DIR} && ${RESET_DATABASE} && pnpm build && exec pnpm exec vite preview --port ${PORT} --strictPort"`,
     url: `${ORIGIN}/sign-in`,
-    timeout: 120_000,
+    /** Building takes about half a minute before the server starts. */
+    timeout: 240_000,
     reuseExistingServer: false,
     env: {
       LEMONIFY_DATA_DIR: E2E_DATA_DIR,

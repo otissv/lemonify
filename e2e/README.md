@@ -1,6 +1,6 @@
 # End-to-end tests
 
-These tests open the real editor in a browser and compare what it shows with snapshots that were checked by eye. They run against a development server of their own on port 3200 with an empty data directory (`e2e/.data`), so they never touch your data.
+These tests open the real editor in a browser and compare what it shows with snapshots that were checked by eye. They build the app and run against a built server of their own (`vite preview`, port 3200), so they test what ships. That server has an empty data directory (`e2e/.data`), so they never touch your data.
 
 ```bash
 pnpm e2e            # run everything and compare with the snapshots

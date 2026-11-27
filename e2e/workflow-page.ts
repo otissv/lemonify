@@ -23,6 +23,25 @@ export function sidePanel(page: Page): Locator {
   return page.getByRole('region', { name: 'Side panel' })
 }
 
+/** Enough large arrow-key moves to carry the panel across any window; it stops at the edges. */
+const PANEL_MOVES = 40
+
+/**
+ * Collapses the Tools panel and moves it to the bottom-left corner with its
+ * keyboard handle, as a person does to reach a node the panel covers. The
+ * diagram is fitted once when the page opens, so a step added later can lie
+ * under the panel.
+ */
+export async function moveToolsAside(page: Page): Promise<void> {
+  const panel = floatingPanel(page)
+  await panel.getByRole('button', { name: 'Collapse panel' }).click()
+  await panel.getByRole('button', { name: 'Move panel' }).focus()
+  for (let move = 0; move < PANEL_MOVES; move += 1) {
+    await page.keyboard.press('Shift+ArrowLeft')
+    await page.keyboard.press('Shift+ArrowDown')
+  }
+}
+
 /** One node of the diagram: a step, or Canvas, Input images or Output. */
 export function node(page: Page, label: string): Locator {
   return diagram(page)

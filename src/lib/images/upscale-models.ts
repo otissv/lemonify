@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
+
+// Imported, not read from beside this file at run time, so the production build carries it.
+import manifestJson from './upscale-models.json' with { type: 'json' }
 
 /**
  * The upscale model catalogue. Every model `upscayl-bin` can run is listed
@@ -31,8 +33,6 @@ export const UPSCAYL_MODELS_URL =
 export const MODELS_ROOT = '.tools/upscayl-models'
 
 export const DEFAULT_UPSCALE_MODEL = '4x_NMKD-Siax_200k'
-
-const MANIFEST_FILE = new URL('./upscale-models.json', import.meta.url)
 
 export const pinnedFileSchema = z.strictObject({
   name: z.string().min(1),
@@ -65,9 +65,7 @@ let manifest: ModelManifest | undefined
 
 /** The pinned catalogue, read and validated once. */
 export function modelManifest(): ModelManifest {
-  manifest ??= modelManifestSchema.parse(
-    JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')),
-  )
+  manifest ??= modelManifestSchema.parse(manifestJson)
   return manifest
 }
 
