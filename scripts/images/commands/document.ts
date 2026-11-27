@@ -11,7 +11,7 @@ import {
   FROM_WORKFLOW_SHAPE,
   documentFromWorkflowCommand,
 } from './create-from.ts'
-import { withWorkers } from '../in-process-workers.ts'
+import { withWorkers } from '../job-workers.ts'
 import { writePreview } from '../preview-document.ts'
 import { parseRegion } from '../region.ts'
 import {

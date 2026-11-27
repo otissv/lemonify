@@ -258,6 +258,7 @@ describe('what a worker changes', () => {
       socketPath: channelSocketPath(t.app.config),
       logger,
       onChange: (userId, event) => hub.publish(userId, event),
+      onQueued: () => {},
     })
     cleanup.push(() => channel.close())
     const tab = new OpenTab()

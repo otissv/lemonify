@@ -2,7 +2,7 @@ import type { Knex } from 'knex'
 
 import { WorkerPool } from '@/features/ai/ai-tools'
 
-import { SocketChangePublisher } from '../channel/socket-change-publisher.ts'
+import { ChannelClient } from '../channel/channel-client.ts'
 import { connectDatabase, prepareDataDirectories } from '../compose/database.ts'
 import { buildJobCore } from '../compose/job-core.ts'
 import type { JobCoreDeps } from '../compose/job-core.ts'
@@ -54,7 +54,7 @@ function changesOf(
 ): Outbox {
   if (replaced !== undefined)
     return { changes: replaced, close: async () => {} }
-  const socket = new SocketChangePublisher(channelSocketPath(config), logger)
+  const socket = new ChannelClient(channelSocketPath(config), logger)
   return { changes: socket, close: () => socket.close() }
 }
 

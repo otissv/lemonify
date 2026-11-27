@@ -10,7 +10,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { RealtimeEvent } from '@/features/realtime/realtime-events'
 import { MemoryLogger } from '../http/logger'
-import { encodeChannelMessage, MAX_CHANNEL_LINE_BYTES } from './channel-message'
+import { WorkerPool } from '@/features/ai/ai-tools'
+
+import {
+  encodeChannelChange,
+  encodeChannelQueued,
+  MAX_CHANNEL_LINE_BYTES,
+} from './channel-message'
 import { ChannelInUseError, startChannelServer } from './channel-server'
 import type { ChannelServer } from './channel-server'
 
@@ -24,6 +30,7 @@ let dir = ''
 let socketPath = ''
 let logger: MemoryLogger
 let received: Array<{ userId: string; event: RealtimeEvent }>
+let queued: WorkerPool[][]
 const cleanup: Array<() => Promise<void> | void> = []
 
 beforeEach(() => {
@@ -31,6 +38,7 @@ beforeEach(() => {
   socketPath = path.join(dir, 'run', 'lemonify.sock')
   logger = new MemoryLogger()
   received = []
+  queued = []
 })
 
 afterEach(async () => {
@@ -43,6 +51,7 @@ async function start(): Promise<ChannelServer> {
     socketPath,
     logger,
     onChange: (userId, event) => received.push({ userId, event }),
+    onQueued: (pools) => queued.push([...pools]),
   })
   cleanup.push(() => server.close())
   return server
@@ -95,8 +104,8 @@ describe('the channel server', () => {
   it('passes on each change a process sends, in order, with the person it is for', async () => {
     await start()
     const client = await connect()
-    client.write(encodeChannelMessage('ann', UPDATED))
-    client.write(encodeChannelMessage('bob', OTHER))
+    client.write(encodeChannelChange('ann', UPDATED))
+    client.write(encodeChannelChange('bob', OTHER))
     await eventually(() => received.length === 2)
     expect(received).toEqual([
       { userId: 'ann', event: UPDATED },
@@ -104,13 +113,22 @@ describe('the channel server', () => {
     ])
   })
 
+  it('passes on the pools another process queued jobs for', async () => {
+    await start()
+    const client = await connect()
+    client.write(encodeChannelQueued([WorkerPool.Gpu]))
+    client.write(encodeChannelChange('ann', UPDATED))
+    await eventually(() => queued.length === 1 && received.length === 1)
+    expect(queued).toEqual([[WorkerPool.Gpu]])
+  })
+
   it('reads a message that arrives in pieces, and several in one piece', async () => {
     await start()
     const client = await connect()
-    const one = encodeChannelMessage('ann', UPDATED)
+    const one = encodeChannelChange('ann', UPDATED)
     client.write(one.slice(0, 10))
     await new Promise((resolve) => setTimeout(resolve, 20))
-    client.write(one.slice(10) + encodeChannelMessage('ann', OTHER))
+    client.write(one.slice(10) + encodeChannelChange('ann', OTHER))
     await eventually(() => received.length === 2)
     expect(received.map(({ event }) => event)).toEqual([UPDATED, OTHER])
   })
@@ -119,7 +137,7 @@ describe('the channel server', () => {
     await start()
     const clients = await Promise.all([connect(), connect(), connect()])
     for (const [index, client] of clients.entries()) {
-      client.write(encodeChannelMessage(`user-${index}`, OTHER))
+      client.write(encodeChannelChange(`user-${index}`, OTHER))
     }
     await eventually(() => received.length === 3)
     expect(received.map(({ userId }) => userId).sort()).toEqual([
@@ -136,7 +154,7 @@ describe('the channel server', () => {
     client.write(
       `${JSON.stringify({ v: 1, userId: 'ann', event: { type: 'nope' } })}\n`,
     )
-    client.write(encodeChannelMessage('ann', UPDATED))
+    client.write(encodeChannelChange('ann', UPDATED))
     await eventually(() => received.length === 1)
     expect(received).toEqual([{ userId: 'ann', event: UPDATED }])
     expect(
@@ -144,8 +162,8 @@ describe('the channel server', () => {
         .filter((line) => line.level === 'warn')
         .map((line) => line.message),
     ).toEqual([
-      'A process sent a change the web server does not take; it was dropped',
-      'A process sent a change the web server does not take; it was dropped',
+      'A process sent a message the web server does not take; it was dropped',
+      'A process sent a message the web server does not take; it was dropped',
     ])
   })
 
@@ -155,7 +173,7 @@ describe('the channel server', () => {
     const other = await connect()
     flooding.write('x'.repeat(MAX_CHANNEL_LINE_BYTES + 1))
     await closed(flooding)
-    other.write(encodeChannelMessage('ann', UPDATED))
+    other.write(encodeChannelChange('ann', UPDATED))
     await eventually(() => received.length === 1)
     expect(logger.lines.map((line) => line.message)).toContain(
       'A process sent a line longer than any change; its connection was closed',
@@ -183,17 +201,22 @@ describe('the channel server', () => {
     expect(statSync(socketPath).isSocket()).toBe(true)
     await start()
     const client = await connect()
-    client.write(encodeChannelMessage('ann', UPDATED))
+    client.write(encodeChannelChange('ann', UPDATED))
     await eventually(() => received.length === 1)
   })
 
   it('refuses to start when another web server is already listening on the socket', async () => {
     await start()
     await expect(
-      startChannelServer({ socketPath, logger, onChange: () => {} }),
+      startChannelServer({
+        socketPath,
+        logger,
+        onChange: () => {},
+        onQueued: () => {},
+      }),
     ).rejects.toBeInstanceOf(ChannelInUseError)
     const client = await connect()
-    client.write(encodeChannelMessage('ann', UPDATED))
+    client.write(encodeChannelChange('ann', UPDATED))
     await eventually(() => received.length === 1)
   })
 

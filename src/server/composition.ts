@@ -18,7 +18,7 @@ import type { Clock, IdGenerator } from './domain/clock.ts'
 import { ResendEmailSender } from './email/email-sender.ts'
 import type { EmailSender } from './email/email-sender.ts'
 import { consoleLogger } from './http/logger.ts'
-import { SocketChangePublisher } from './channel/socket-change-publisher.ts'
+import { ChannelClient } from './channel/channel-client.ts'
 import type { ChangePublisher } from './realtime/change-publisher.ts'
 import { RealtimeHub } from './realtime/hub.ts'
 import type { HubLimits } from './realtime/hub.ts'
@@ -85,6 +85,8 @@ export type App = {
    * worker. The web server's has no slots: it only fails the Jobs of
    * processes that are gone, and its worker processes run the Jobs.
    */
+  /** The web server's worker processes (decision 1, worker processes); undefined in every other process. */
+  workers: WorkerSupervisor | undefined
   scheduler: Scheduler
   /**
    * Runs the cleanup once and then daily, and starts what runs Jobs: the
@@ -173,13 +175,12 @@ export async function createApp(
   const auth = overrides.auth ?? buildAuth(config, email, logger)
   const users = new UserService({ users: new PostgresUserDao(database), auth })
   const realtime = new RealtimeHub(REALTIME_LIMITS, logger)
-  const sentChanges =
-    overrides.changes === undefined &&
-    (overrides.role ?? AppRole.Process) === AppRole.Process
-      ? new SocketChangePublisher(channelSocketPath(config), logger)
-      : undefined
-  const changes = overrides.changes ?? sentChanges ?? realtime
   const isWebServer = overrides.role === AppRole.WebServer
+  // Every other process tells the web server what it changed and queued, through its socket.
+  const channel = isWebServer
+    ? undefined
+    : new ChannelClient(channelSocketPath(config), logger)
+  const changes = overrides.changes ?? channel ?? realtime
   let workers: WorkerSupervisor | undefined
 
   const core = buildJobCore({
@@ -197,7 +198,11 @@ export async function createApp(
           [WorkerPool.Cpu]: config.cpuWorkers,
           [WorkerPool.Gpu]: config.gpuWorkers,
         },
-    onQueued: (queued) => workers?.wake(poolsOf(queued)),
+    onQueued: (queued) => {
+      const pools = poolsOf(queued)
+      workers?.wake(pools)
+      channel?.queued(pools)
+    },
   })
   const { daos, stores, results, usedItems, jobs, workflows, aiTools } = core
   const inspector = new SharpImageInspector()
@@ -293,6 +298,7 @@ export async function createApp(
     keybindings,
     aiTools,
     realtime,
+    workers,
     scheduler: running,
     runMaintenance,
     async startBackground() {
@@ -313,7 +319,7 @@ export async function createApp(
         if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer)
         await workers?.stop()
         await running.stop({ abort: true })
-        await sentChanges?.close()
+        await channel?.close()
         await auth.close()
         await database.destroy()
       })()

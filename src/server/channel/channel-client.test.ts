@@ -6,11 +6,12 @@ import { performance } from 'node:perf_hooks'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { WorkerPool } from '@/features/ai/ai-tools'
 import type { RealtimeEvent } from '@/features/realtime/realtime-events'
 import { MemoryLogger } from '../http/logger'
 import { startChannelServer } from './channel-server'
 import type { ChannelServer } from './channel-server'
-import { SocketChangePublisher } from './socket-change-publisher'
+import { ChannelClient } from './channel-client'
 
 const EVENT: RealtimeEvent = { type: 'results.changed' }
 /** A command that changes something publishes a handful of events; this many is far more. */
@@ -22,6 +23,7 @@ let dir = ''
 let socketPath = ''
 let logger: MemoryLogger
 let received: Array<{ userId: string; event: RealtimeEvent }>
+let queued: WorkerPool[][]
 const cleanup: Array<() => Promise<void>> = []
 
 beforeEach(() => {
@@ -29,6 +31,7 @@ beforeEach(() => {
   socketPath = path.join(dir, 'run', 'lemonify.sock')
   logger = new MemoryLogger()
   received = []
+  queued = []
 })
 
 afterEach(async () => {
@@ -41,13 +44,14 @@ async function server(): Promise<ChannelServer> {
     socketPath,
     logger,
     onChange: (userId, event) => received.push({ userId, event }),
+    onQueued: (pools) => queued.push([...pools]),
   })
   cleanup.push(() => started.close())
   return started
 }
 
-function publisher(): SocketChangePublisher {
-  const made = new SocketChangePublisher(socketPath, logger)
+function publisher(): ChannelClient {
+  const made = new ChannelClient(socketPath, logger)
   cleanup.push(() => made.close())
   return made
 }
@@ -76,18 +80,38 @@ describe('a process that is not the web server', () => {
     ])
   })
 
+  it('tells the web server which pools it queued jobs for, so their workers start on them', async () => {
+    await server()
+    const client = publisher()
+    client.queued(new Set([WorkerPool.Cpu, WorkerPool.Gpu]))
+    await eventually(() => queued.length === 1)
+    expect(queued[0]?.sort()).toEqual([WorkerPool.Cpu, WorkerPool.Gpu])
+  })
+
+  it('says nothing about jobs queued for no pool', async () => {
+    await server()
+    const client = publisher()
+    client.queued(new Set())
+    client.publish('ann', EVENT)
+    await eventually(() => received.length === 1)
+    expect(queued).toEqual([])
+  })
+
   it('delivers what it published before it closes, as a command that ends straight after its change', async () => {
     await server()
-    const changes = new SocketChangePublisher(socketPath, logger)
+    const changes = new ChannelClient(socketPath, logger)
     for (let index = 0; index < 50; index += 1) changes.publish('ann', EVENT)
     await changes.close()
     await eventually(() => received.length === 50)
   })
 
   it('does nothing, quickly and quietly, when no web server is running', async () => {
-    const changes = new SocketChangePublisher(socketPath, logger)
+    const changes = new ChannelClient(socketPath, logger)
     const started = performance.now()
-    for (let index = 0; index < MANY; index += 1) changes.publish('ann', EVENT)
+    for (let index = 0; index < MANY; index += 1) {
+      changes.publish('ann', EVENT)
+      changes.queued(new Set([WorkerPool.Cpu]))
+    }
     await changes.close()
     expect(performance.now() - started).toBeLessThan(NO_SERVER_BUDGET_MS)
     expect(logger.lines).toEqual([])
@@ -121,7 +145,7 @@ describe('a process that is not the web server', () => {
 
   it('keeps at most maxPendingBytes waiting to be sent, and warns once when it drops changes', async () => {
     await server()
-    const bounded = new SocketChangePublisher(socketPath, logger, {
+    const bounded = new ChannelClient(socketPath, logger, {
       maxPendingBytes: 1024,
     })
     for (let index = 0; index < MANY; index += 1) bounded.publish('ann', EVENT)

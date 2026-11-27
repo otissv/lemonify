@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
 
 import sharp from 'sharp'
 import { afterEach, beforeEach, vi } from 'vitest'
@@ -10,6 +12,11 @@ import { createTestDatabase } from '../../src/server/testing/test-database.ts'
 import type { TestDatabase } from '../../src/server/testing/test-database.ts'
 import { COMMANDS } from './commands/index.ts'
 import { dispatch } from './dispatch.ts'
+
+const run = promisify(execFile)
+const ROOT = path.resolve(import.meta.dirname, '../..')
+/** How long one command started as its own process may take. */
+export const PROCESS_TIMEOUT = 60_000
 
 /** The folders a command-line flow test works in: a data folder of its own, and one for the files it writes. */
 export const flow = { dataDir: '', workDir: '' }
@@ -69,4 +76,25 @@ export async function makeImage(
     .png()
     .toFile(file)
   return file
+}
+
+/** Runs `pnpm images` as its own process with --json, as a person or an agent would, and gives back its result. */
+export async function images<T = Record<string, unknown>>(
+  ...args: string[]
+): Promise<T> {
+  const { stdout } = await run(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--import',
+      path.join(ROOT, 'scripts/images/register-alias.ts'),
+      path.join(ROOT, 'scripts/images/index.ts'),
+      ...args,
+      '--json',
+    ],
+    { cwd: ROOT, env: process.env, timeout: PROCESS_TIMEOUT },
+  )
+  const parsed: { result: T } = JSON.parse(stdout)
+  return parsed.result
 }

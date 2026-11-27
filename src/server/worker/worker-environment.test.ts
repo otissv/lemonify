@@ -4,9 +4,11 @@ import { WorkerPool } from '@/features/ai/ai-tools'
 
 import { loadConfig } from '../config/config'
 import {
+  LOWEST_PRIORITY,
   WORKER_THREADPOOL_SIZE,
   imageThreadsPerWorker,
   workerEnvironment,
+  workerPriority,
 } from './worker-environment'
 
 const CONFIG = loadConfig(
@@ -59,6 +61,18 @@ describe('the environment a worker process starts with', () => {
       LEMONIFY_CPU_WORKERS: '3',
       LEMONIFY_GPU_WORKERS: '1',
     })
+  })
+})
+
+describe('the priority a worker runs at', () => {
+  it('is lower than the web server’s, so the server answers first while every worker is busy', () => {
+    expect(workerPriority(0)).toBeGreaterThan(0)
+    expect(workerPriority(5)).toBeGreaterThan(5)
+  })
+
+  it('is at most the lowest there is', () => {
+    expect(workerPriority(16)).toBe(LOWEST_PRIORITY)
+    expect(workerPriority(LOWEST_PRIORITY)).toBe(LOWEST_PRIORITY)
   })
 })
 

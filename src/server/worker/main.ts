@@ -17,7 +17,7 @@ import { WorkerPool } from '@/features/ai/ai-tools'
 import { loadConfig } from '../config/config.ts'
 import { readEnvironment } from '../config/environment.ts'
 import { consoleLogger } from '../http/logger.ts'
-import { imageThreadsPerWorker } from './worker-environment.ts'
+import { imageThreadsPerWorker, workerPriority } from './worker-environment.ts'
 import { readSupervisorMessage } from './worker-messages.ts'
 import type { WorkerMessage } from './worker-messages.ts'
 import { createWorker } from './worker.ts'
@@ -52,6 +52,8 @@ async function main(): Promise<void> {
     process.exitCode = USAGE_EXIT_CODE
     return
   }
+  // Started at the web server's priority; lowered before any image thread is made, as threads take it from this one.
+  os.setPriority(workerPriority(os.getPriority()))
   const config = loadConfig(readEnvironment())
   if (pool === WorkerPool.Cpu) {
     sharp.concurrency(
@@ -62,6 +64,7 @@ async function main(): Promise<void> {
   let stopping: Promise<void> | undefined
   const stop = (): void => {
     if (stopping !== undefined) return
+    consoleLogger.info('Worker stopping', { pool, pid: process.pid })
     tell({ type: 'stopping' })
     stopping = worker
       .close()
@@ -72,9 +75,13 @@ async function main(): Promise<void> {
         })
         process.exitCode = FAILURE_EXIT_CODE
       })
-      // The channel to the process that started this one keeps it alive; let go of it last.
+      // Its job is finished and its database and socket are closed: nothing is left to do. End
+      // the process rather than wait for every handle (the channel to the process that started
+      // it, a driver's socket) to let go, which under load was seen to keep a stopped worker alive.
       .finally(() => {
+        consoleLogger.info('Worker stopped', { pool, pid: process.pid })
         if (process.connected) process.disconnect()
+        process.exit()
       })
   }
   process.once('SIGTERM', stop)

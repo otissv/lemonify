@@ -31,7 +31,7 @@ import {
   FROM_DOCUMENT_SHAPE,
   workflowFromDocumentCommand,
 } from './create-from.ts'
-import { withWorkers } from '../in-process-workers.ts'
+import { withWorkers } from '../job-workers.ts'
 import { writeWorkflowPreview } from '../preview-workflow.ts'
 import { parseRegion } from '../region.ts'
 import { EXISTING_FILES, writeRunOutputs } from '../write-outputs.ts'

@@ -1,14 +1,16 @@
 import { chmod, lstat, mkdir, rm, stat } from 'node:fs/promises'
-import { createConnection, createServer } from 'node:net'
+import { createServer } from 'node:net'
 import type { Server, Socket } from 'node:net'
 import path from 'node:path'
 
+import type { WorkerPool } from '@/features/ai/ai-tools'
 import type { RealtimeEvent } from '@/features/realtime/realtime-events'
 import type { Logger } from '../http/logger.ts'
 import {
   decodeChannelMessage,
   MAX_CHANNEL_LINE_BYTES,
 } from './channel-message.ts'
+import { webServerAnswers } from './channel-probe.ts'
 
 /** Only the user who runs Lemonify may open the socket, or the folder it is in. */
 const SOCKET_MODE = 0o600
@@ -16,13 +18,14 @@ const DIRECTORY_MODE = 0o700
 /** Enough for every worker and many CLI commands at once. */
 const MAX_CONNECTIONS = 512
 const NEWLINE = '\n'
-const NOT_LISTENING = new Set(['ECONNREFUSED', 'ENOENT'])
 
 export type ChannelServerDeps = {
   socketPath: string
   logger: Logger
   /** Called for every change another process sends; the web server passes it to the open tabs. */
   onChange(userId: string, event: RealtimeEvent): void
+  /** Called when another process queued jobs of these pools; the web server wakes their workers. */
+  onQueued(pools: ReadonlyArray<WorkerPool>): void
 }
 
 export type ChannelServer = {
@@ -58,20 +61,6 @@ async function prepareDirectory(directory: string): Promise<void> {
   await chmod(directory, DIRECTORY_MODE)
 }
 
-function answers(socketPath: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const probe = createConnection({ path: socketPath })
-    probe.once('connect', () => {
-      probe.destroy()
-      resolve(true)
-    })
-    probe.once('error', (error) => {
-      if (NOT_LISTENING.has(errorCode(error) ?? '')) resolve(false)
-      else reject(error)
-    })
-  })
-}
-
 /** Removes a socket that nothing listens on any more, as a killed web server leaves. */
 async function clearStaleSocket(socketPath: string): Promise<void> {
   let found: Awaited<ReturnType<typeof lstat>>
@@ -86,7 +75,9 @@ async function clearStaleSocket(socketPath: string): Promise<void> {
       `${socketPath} is not a socket, so the web server will not replace it. Move it away and start again.`,
     )
   }
-  if (await answers(socketPath)) throw new ChannelInUseError(socketPath)
+  if (await webServerAnswers(socketPath)) {
+    throw new ChannelInUseError(socketPath)
+  }
   await rm(socketPath, { force: true })
 }
 
@@ -103,8 +94,8 @@ function listen(server: Server, socketPath: string): Promise<void> {
   })
 }
 
-/** Reads one connection's lines and passes on each change in them. */
-function readChanges(socket: Socket, deps: ChannelServerDeps): void {
+/** Reads one connection's lines and passes on each message in them. */
+function readMessages(socket: Socket, deps: ChannelServerDeps): void {
   let pending = ''
   socket.setEncoding('utf8')
   socket.on('data', (chunk: string) => {
@@ -128,20 +119,21 @@ function readChanges(socket: Socket, deps: ChannelServerDeps): void {
 
 function deliver(line: string, deps: ChannelServerDeps): void {
   if (line === '') return
-  const change =
+  const message =
     Buffer.byteLength(line) > MAX_CHANNEL_LINE_BYTES
       ? undefined
       : decodeChannelMessage(line)
-  if (change === undefined) {
+  if (message === undefined) {
     deps.logger.warn(
-      'A process sent a change the web server does not take; it was dropped',
+      'A process sent a message the web server does not take; it was dropped',
     )
     return
   }
   try {
-    deps.onChange(change.userId, change.event)
+    if (message.type === 'change') deps.onChange(message.userId, message.event)
+    else deps.onQueued(message.pools)
   } catch (error) {
-    deps.logger.error('A change from another process could not be passed on', {
+    deps.logger.error('A message from another process could not be passed on', {
       detail: error instanceof Error ? error.message : String(error),
     })
   }
@@ -149,9 +141,10 @@ function deliver(line: string, deps: ChannelServerDeps): void {
 
 /**
  * Listens on the local socket that every other process (workers, CLI
- * commands) sends its changes to (decision 4, live updates). Each line is one
- * change for one person's tabs, checked by the channel message schema; what
- * fails it is logged and dropped. Only the user who runs Lemonify can reach
+ * commands) sends its changes to (decision 4, live updates), and the pools
+ * it queued jobs for (decision 6, CLI). Each line is one message, checked by
+ * the channel message schema; what fails it is logged and dropped. That the
+ * socket answers is how a CLI command knows a web server is running. Only the user who runs Lemonify can reach
  * the socket, as its folder is theirs alone.
  */
 export async function startChannelServer(
@@ -164,7 +157,7 @@ export async function startChannelServer(
   const server = createServer((socket) => {
     connections.add(socket)
     socket.once('close', () => connections.delete(socket))
-    readChanges(socket, deps)
+    readMessages(socket, deps)
   })
   server.maxConnections = MAX_CONNECTIONS
   await listen(server, socketPath)

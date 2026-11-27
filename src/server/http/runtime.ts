@@ -67,6 +67,7 @@ async function build(): Promise<WebRuntime> {
       socketPath: channelSocketPath(app.config),
       logger: consoleLogger,
       onChange: (userId, event) => app.realtime.publish(userId, event),
+      onQueued: (pools) => app.workers?.wake(pools),
     }),
   }
 }

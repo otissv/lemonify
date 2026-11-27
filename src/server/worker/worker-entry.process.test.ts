@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { fork } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
+import os from 'node:os'
 import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,7 +12,7 @@ import { JobState } from '../jobs/job-types'
 import { createTestApp } from '../testing/test-app'
 import type { TestApp } from '../testing/test-app'
 import { WORKER_ENTRY, WORKER_EXEC_ARGV } from './fork-worker'
-import { workerEnvironment } from './worker-environment'
+import { workerEnvironment, workerPriority } from './worker-environment'
 
 const ROOT = path.resolve(import.meta.dirname, '../../..')
 const PROCESS_TIMEOUT = 60_000
@@ -54,10 +55,23 @@ function startWorker(pool: string): {
   return { child, output: () => output }
 }
 
-function exited(child: ChildProcess): Promise<number | null> {
-  return new Promise((resolve) => {
-    if (child.exitCode !== null) resolve(child.exitCode)
-    else child.once('exit', (code) => resolve(code))
+/** Its exit code once it has exited; fails with what it printed if it has not exited in time. */
+function exited(
+  child: ChildProcess,
+  output: () => string,
+): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve(child.exitCode)
+      return
+    }
+    const timer = setTimeout(() => {
+      reject(new Error(`The worker did not exit. It printed:\n${output()}`))
+    }, PROCESS_TIMEOUT / 2)
+    child.once('exit', (code) => {
+      clearTimeout(timer)
+      resolve(code)
+    })
   })
 }
 
@@ -89,7 +103,7 @@ describe('the worker process', () => {
       )
       child.kill('SIGTERM')
 
-      expect(await exited(child)).toBe(0)
+      expect(await exited(child, output)).toBe(0)
       expect(output()).toContain('"message":"Worker started"')
     },
     PROCESS_TIMEOUT,
@@ -98,7 +112,7 @@ describe('the worker process', () => {
   it(
     'tells the process that started it when it is ready, and when it is stopping',
     async () => {
-      const { child } = startWorker('cpu')
+      const { child, output } = startWorker('cpu')
       const messages: unknown[] = []
       child.on('message', (message) => messages.push(message))
       await eventually(() => messages.length === 1)
@@ -106,8 +120,23 @@ describe('the worker process', () => {
 
       child.kill('SIGTERM')
 
-      expect(await exited(child)).toBe(0)
+      expect(await exited(child, output)).toBe(0)
       expect(messages).toEqual([{ type: 'ready' }, { type: 'stopping' }])
+    },
+    PROCESS_TIMEOUT,
+  )
+
+  it(
+    'runs at a lower priority than the web server, so the server answers first while images are processed',
+    async () => {
+      const { child, output } = startWorker('cpu')
+      await eventually(() => output().includes('Worker started'))
+
+      // It starts at this process's priority, as the web server's workers start at the server's.
+      expect(os.getPriority(child.pid)).toBe(workerPriority(os.getPriority()))
+
+      child.kill('SIGTERM')
+      expect(await exited(child, output)).toBe(0)
     },
     PROCESS_TIMEOUT,
   )
@@ -120,7 +149,7 @@ describe('the worker process', () => {
 
       child.disconnect()
 
-      expect(await exited(child)).toBe(0)
+      expect(await exited(child, output)).toBe(0)
     },
     PROCESS_TIMEOUT,
   )
@@ -130,7 +159,7 @@ describe('the worker process', () => {
     async () => {
       const { child, output } = startWorker('quantum')
 
-      expect(await exited(child)).not.toBe(0)
+      expect(await exited(child, output)).not.toBe(0)
       expect(output()).toMatch(/cpu.*gpu/)
     },
     PROCESS_TIMEOUT,

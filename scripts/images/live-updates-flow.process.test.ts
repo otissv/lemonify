@@ -1,8 +1,4 @@
 // @vitest-environment node
-import { execFile } from 'node:child_process'
-import path from 'node:path'
-import { promisify } from 'node:util'
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { RealtimeEvent } from '../../src/features/realtime/realtime-events.ts'
@@ -13,12 +9,16 @@ import { channelSocketPath } from '../../src/server/config/config.ts'
 import { MemoryLogger } from '../../src/server/http/logger.ts'
 import { RealtimeHub } from '../../src/server/realtime/hub.ts'
 import type { RealtimeSocket } from '../../src/server/realtime/hub.ts'
-import { cli, flow, makeImage, setUpFlowFolders } from './flow-test-kit.ts'
+import {
+  PROCESS_TIMEOUT,
+  cli,
+  flow,
+  images,
+  makeImage,
+  setUpFlowFolders,
+} from './flow-test-kit.ts'
 
-const run = promisify(execFile)
-const ROOT = path.resolve(import.meta.dirname, '../..')
 const CLI_PROCESSES = 3
-const PROCESS_TIMEOUT = 60_000
 
 setUpFlowFolders()
 
@@ -52,6 +52,7 @@ beforeEach(async () => {
     socketPath: channelSocketPath({ dataDir: flow.dataDir }),
     logger,
     onChange: (userId, event) => hub.publish(userId, event),
+    onQueued: () => {},
   })
 })
 
@@ -86,23 +87,6 @@ async function eventually(check: () => boolean): Promise<void> {
     if (Date.now() > deadline) throw new Error('timed out waiting')
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
-}
-
-/** Runs `pnpm images` as its own process, as a person or an agent would. */
-function images(...args: string[]): Promise<unknown> {
-  return run(
-    process.execPath,
-    [
-      '--disable-warning=ExperimentalWarning',
-      '--experimental-transform-types',
-      '--import',
-      path.join(ROOT, 'scripts/images/register-alias.ts'),
-      path.join(ROOT, 'scripts/images/index.ts'),
-      ...args,
-      '--json',
-    ],
-    { cwd: ROOT, env: process.env, timeout: PROCESS_TIMEOUT },
-  )
 }
 
 describe('changes made with the command line reach the open tabs', () => {

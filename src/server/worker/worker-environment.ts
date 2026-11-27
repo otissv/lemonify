@@ -39,6 +39,23 @@ export function workerEnvironment(
   }
 }
 
+/** The lowest scheduling priority (the highest niceness) a process can have. */
+export const LOWEST_PRIORITY = 19
+
+/** How much lower than the web server a worker runs. */
+const WORKER_PRIORITY_STEP = 10
+
+/**
+ * The priority (niceness) a worker runs at, given the web server's. The
+ * workers share every core between them, so at the server's own priority a
+ * long render leaves its requests waiting for the CPU; ten steps lower, the
+ * operating system runs the server first whenever it has work, and the
+ * workers have the cores the rest of the time (decision 1, worker processes).
+ */
+export function workerPriority(serverPriority: number): number {
+  return Math.min(serverPriority + WORKER_PRIORITY_STEP, LOWEST_PRIORITY)
+}
+
 /**
  * How many threads Sharp may use for one image in a CPU worker: the machine's
  * cores shared between the CPU workers, so together they never ask for more

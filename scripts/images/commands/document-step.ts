@@ -30,7 +30,7 @@ import type {
 import type { DocumentView } from '../../../src/features/documents/document.ts'
 import { ValidationError } from '../../../src/server/errors.ts'
 import { defineAppCommand } from '../app-command.ts'
-import { withWorkers } from '../in-process-workers.ts'
+import { withWorkers } from '../job-workers.ts'
 import {
   PREVIEW_FLAGS,
   PREVIEW_HELP,

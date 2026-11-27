@@ -7,7 +7,7 @@ import {
 } from '../../../src/features/export/export-settings.ts'
 import { JobKind } from '../../../src/server/jobs/job-types.ts'
 import { defineAppCommand } from '../app-command.ts'
-import { withWorkers } from '../in-process-workers.ts'
+import { withWorkers } from '../job-workers.ts'
 import { saveResult } from '../save-result.ts'
 
 const OPTION_VALUES = z.record(

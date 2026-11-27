@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import type { App } from '../../src/server/composition.ts'
 import type { Actor } from '../../src/server/domain/actor.ts'
-import { withWorkers } from './in-process-workers.ts'
+import { withWorkers } from './job-workers.ts'
 import { writePreview } from './preview-document.ts'
 import type { PreviewPicture } from './preview-document.ts'
 

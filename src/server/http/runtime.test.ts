@@ -6,6 +6,7 @@ const startRealtimeServer = vi.fn()
 const startChannelServer = vi.fn()
 const createApp = vi.fn()
 const hub = { name: 'hub', publish: vi.fn() }
+const workers = { wake: vi.fn() }
 
 vi.mock('@tanstack/react-start/server-only', () => ({}))
 vi.mock('../config/config.ts', () => ({
@@ -25,6 +26,7 @@ vi.mock('../composition.ts', () => ({
         realtime: { host: '127.0.0.1', port: 3101 },
       },
       realtime: hub,
+      workers,
       startBackground,
     })
   },
@@ -45,6 +47,7 @@ afterEach(() => {
   startChannelServer.mockReset()
   createApp.mockClear()
   hub.publish.mockClear()
+  workers.wake.mockClear()
 })
 
 describe('getRuntime', () => {
@@ -96,6 +99,16 @@ describe('getRuntime', () => {
     expect(deps).toMatchObject({ socketPath: '/data/run/lemonify.sock' })
     deps.onChange('ann', { type: 'results.changed' })
     expect(hub.publish).toHaveBeenCalledWith('ann', { type: 'results.changed' })
+  })
+
+  it('wakes its workers when another process says it queued jobs for them', async () => {
+    const { getRuntime } = await import('./runtime.ts')
+
+    await getRuntime()
+
+    const [deps] = startChannelServer.mock.calls[0] ?? []
+    deps.onQueued(['gpu'])
+    expect(workers.wake).toHaveBeenCalledWith(['gpu'])
   })
 
   it('stops with a message that names the variable when the port is taken', async () => {
