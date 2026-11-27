@@ -6,17 +6,13 @@ import sharp from 'sharp'
 
 import type { App } from '../composition.ts'
 import { createApp } from '../composition.ts'
-import { loadConfig } from '../config/config.ts'
+import { databaseEnvironment, loadConfig } from '../config/config.ts'
 import type { Config } from '../config/config.ts'
 import type { SourceRecord } from '../dao/source-dao.ts'
 import type { Actor } from '../domain/actor.ts'
 import type { AuthGateway } from '../auth/auth-gateway.ts'
 import { MemoryLogger } from '../http/logger.ts'
-import {
-  createTestDatabase,
-  databaseEnvironment,
-  insertTestUser,
-} from './test-database.ts'
+import { createTestDatabase, insertTestUser } from './test-database.ts'
 import { FakeAiEngine, FakeImageEngine, RecordingPublisher } from './fakes.ts'
 
 /** An auth system that is never asked anything; tests act as an Actor directly. */

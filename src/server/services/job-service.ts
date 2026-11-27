@@ -48,8 +48,8 @@ export type JobServiceDependencies = {
   clock: Clock
   ids: IdGenerator
   maxWaitingPerUser: number
-  /** Told after Jobs are queued, so a scheduler in this process can start on them at once. */
-  onQueued(): void
+  /** Told after Jobs are queued, so whatever runs them (a scheduler here, the web server's workers) can start on them at once. */
+  onQueued(jobs: ReadonlyArray<JobRecord>): void
   followIntervalMs?: number
 }
 
@@ -104,7 +104,7 @@ export class JobService {
     }
     const records = this.build(actor, specs)
     await jobs.enqueue(records)
-    this.#deps.onQueued()
+    this.#deps.onQueued(records)
     return records
   }
 

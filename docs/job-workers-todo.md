@@ -72,12 +72,12 @@ Written before the sections that make them pass. The row-lock test passes alread
 
 ## 5. The pool in the web server (decisions 1, worker processes; 2, pool shape)
 
-- [ ] A supervisor that starts the CPU workers, starts the GPU worker when an AI job is queued and stops it after it has been idle (decision 8, GPU worker start), restarts a worker that stops with a growing delay, and stops them all, letting running jobs finish, when the server stops.
-- [ ] The web server no longer starts its own scheduler; a job queued on the website wakes a free worker.
-- [ ] A job left running by a worker that stopped is failed with the existing orphan message (`reapOrphans`), and the owner's tabs are told.
-- [ ] `LEMONIFY_CPU_WORKERS` and `LEMONIFY_GPU_WORKERS` now count processes; config tests and messages say so.
-- [ ] Tests: the pool starts the right number of workers, restarts one that is killed, and stops cleanly; a killed worker's job is failed and the next job runs.
-- [ ] The render test in `e2e/responsiveness.spec.ts` passes; its `test.fail` mark is removed.
+- [x] A supervisor that starts the CPU workers, starts the GPU worker when an AI job is queued and stops it after it has been idle (decision 8, GPU worker start), restarts a worker that stops with a growing delay, and stops them all, letting running jobs finish, when the server stops. (`src/server/worker/supervisor.ts`, forking with `src/server/worker/fork-worker.ts`: restarts wait 1 s, doubling to 30 s, and back to 1 s once a worker has stayed up a minute; the queue is checked for AI jobs every 2 s, which also catches ones other processes queue, and the GPU worker stops after 5 minutes with none; a worker still busy 2 minutes after the server asked it to stop is ended and its job failed. Workers say `ready` and `stopping` over `fork`'s channel and take `wake` from it (`src/server/worker/worker-messages.ts`). However the server process ends, its workers see the channel close, finish their job and exit.)
+- [x] The web server no longer starts its own scheduler; a job queued on the website wakes a free worker. (`AppRole.WebServer` gives the scheduler no slots and starts the pool; `JobService` passes the queued jobs to `onQueued`, and the pool wakes the ready workers of their pools.)
+- [x] A job left running by a worker that stopped is failed with the existing orphan message (`reapOrphans`), and the owner's tabs are told. (At once when the worker exits, and at the pool's start; a workflow run's job closes the run, which sends `workflows.changed`; a document's job is read as failed by the tab following it.)
+- [x] `LEMONIFY_CPU_WORKERS` and `LEMONIFY_GPU_WORKERS` now count processes; config tests and messages say so. (A bad value says "it is how many worker processes the web server starts". A worker is started with the web server's database, data folder and worker counts, whatever its environment says.)
+- [x] Tests: the pool starts the right number of workers, restarts one that is killed, and stops cleanly; a killed worker's job is failed and the next job runs. (`supervisor.test.ts` with stand-in processes and fake timers; `worker-pool.test.ts` with real forked workers; `composition.test.ts` for the web server's app; `worker-process.test.ts` for the messages.)
+- [x] The render test in `e2e/responsiveness.spec.ts` passes; its `test.fail` mark is removed.
 
 ## 6. The CLI (decisions 6, CLI; 7, CLI and website)
 

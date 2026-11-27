@@ -48,7 +48,7 @@ afterEach(() => {
 })
 
 describe('getRuntime', () => {
-  it('starts the job scheduler once, so queued jobs are worked on', async () => {
+  it('starts the background work (the worker pool and the cleanup) once', async () => {
     const { getRuntime } = await import('./runtime.ts')
 
     await getRuntime()

@@ -3,7 +3,9 @@
  * server's pool with `child_process.fork` and the pool it serves as its one
  * argument (`cpu` or `gpu`). It runs that pool's jobs until it is told to
  * stop (SIGTERM or SIGINT) or the process that started it goes away, then
- * lets the job it is running finish and exits.
+ * lets the job it is running finish and exits. Over `fork`'s channel it says
+ * when it is ready and when it is stopping, and it looks for a job at once
+ * when the pool says one was queued.
  */
 import os from 'node:os'
 
@@ -16,6 +18,8 @@ import { loadConfig } from '../config/config.ts'
 import { readEnvironment } from '../config/environment.ts'
 import { consoleLogger } from '../http/logger.ts'
 import { imageThreadsPerWorker } from './worker-environment.ts'
+import { readSupervisorMessage } from './worker-messages.ts'
+import type { WorkerMessage } from './worker-messages.ts'
 import { createWorker } from './worker.ts'
 
 const USAGE_EXIT_CODE = 2
@@ -31,6 +35,11 @@ function poolArgument(): WorkerPool | undefined {
     takes: PoolSchema.options.join(', '),
   })
   return undefined
+}
+
+/** Tells the pool that started this process, when one did. */
+function tell(message: WorkerMessage): void {
+  if (process.connected) process.send?.(message)
 }
 
 function reason(error: unknown): string {
@@ -52,7 +61,9 @@ async function main(): Promise<void> {
   const worker = await createWorker(config, pool)
   let stopping: Promise<void> | undefined
   const stop = (): void => {
-    stopping ??= worker
+    if (stopping !== undefined) return
+    tell({ type: 'stopping' })
+    stopping = worker
       .close()
       .catch((error: unknown) => {
         consoleLogger.error('The worker did not stop cleanly', {
@@ -69,8 +80,20 @@ async function main(): Promise<void> {
   process.once('SIGTERM', stop)
   process.once('SIGINT', stop)
   process.once('disconnect', stop)
+  process.on('message', (value) => {
+    const message = readSupervisorMessage(value)
+    if (message === undefined) {
+      consoleLogger.warn('The pool sent a message a worker does not take', {
+        pool,
+      })
+      return
+    }
+    worker.scheduler.wake()
+  })
   await worker.start()
+  if (stopping !== undefined) return
   consoleLogger.info('Worker started', { pool, pid: process.pid })
+  tell({ type: 'ready' })
 }
 
 main().catch((error: unknown) => {

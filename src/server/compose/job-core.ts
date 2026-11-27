@@ -55,6 +55,8 @@ export type JobCoreDeps = {
   aiEngine?: AiEngine
   /** How many Jobs of each pool this process runs at once; a pool with none is never run here. */
   slots: Readonly<Record<WorkerPool, number>>
+  /** Told after Jobs are queued here, for processes that run them elsewhere (the web server's workers). */
+  onQueued?: (jobs: ReadonlyArray<JobRecord>) => void
 }
 
 /** What runs Jobs, and what queuing and finishing them needs: shared by the web server, the CLI and the workers. */
@@ -214,7 +216,10 @@ export function buildJobCore(deps: JobCoreDeps): JobCore {
     clock,
     ids,
     maxWaitingPerUser: config.maxWaitingJobsPerUser,
-    onQueued: () => scheduler?.wake(),
+    onQueued: (queued) => {
+      scheduler?.wake()
+      deps.onQueued?.(queued)
+    },
   })
   const workflows = new WorkflowService({
     workflows: daos.workflows,

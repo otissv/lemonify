@@ -15,6 +15,16 @@ const GIGABYTE = 1024 * MEGABYTE
 
 const positiveInteger = (max: number) => z.coerce.number().int().min(1).max(max)
 
+/** How many worker processes of a pool the web server starts (decision 2, pool shape). */
+const workerProcesses = (max: number) => {
+  const error = `it is how many worker processes the web server starts: a whole number from 1 to ${max}`
+  return z.coerce
+    .number({ error })
+    .int({ error })
+    .min(1, { error })
+    .max(max, { error })
+}
+
 /** A setting that is left blank in an env file counts as not set. */
 const blankIsUnset = (schema: z.ZodString) =>
   z.preprocess(
@@ -42,8 +52,8 @@ const EnvironmentSchema = z.object({
       'it must be a lower-case name of letters, digits and underscores',
     ),
   LEMONIFY_DATABASE_POOL_SIZE: positiveInteger(1000).default(10),
-  LEMONIFY_CPU_WORKERS: positiveInteger(64).optional(),
-  LEMONIFY_GPU_WORKERS: positiveInteger(16).default(1),
+  LEMONIFY_CPU_WORKERS: workerProcesses(64).optional(),
+  LEMONIFY_GPU_WORKERS: workerProcesses(16).default(1),
   LEMONIFY_GROUP_SHARE: positiveInteger(100).default(50),
   LEMONIFY_MAX_WAITING_JOBS_PER_USER: positiveInteger(100_000).default(200),
   LEMONIFY_MAX_UPLOAD_BYTES: positiveInteger(Number.MAX_SAFE_INTEGER).default(
@@ -92,7 +102,9 @@ export type DatabaseConfig = {
 export type Config = {
   dataDir: string
   database: DatabaseConfig
+  /** How many CPU worker processes the web server starts, each running one job at a time; a CLI command runs this many jobs at once. */
   cpuWorkers: number
+  /** How many GPU worker processes the web server starts while there is AI work. */
   gpuWorkers: number
   groupSharePercent: number
   maxWaitingJobsPerUser: number
@@ -238,6 +250,21 @@ export function loadConfig(
     trustedOrigins: parseOrigins(siteUrl(env), env.LEMONIFY_TRUSTED_ORIGINS),
     realtime: realtimeConfig(env),
     email: emailConfig(env),
+  }
+}
+
+/** The settings that point another process (a worker, a CLI command, a test) at the database in `config`. */
+export function databaseEnvironment(
+  config: DatabaseConfig,
+): Record<string, string> {
+  return {
+    POSTGRES_HOST: config.host,
+    POSTGRES_PORT: String(config.port),
+    POSTGRES_USER: config.user,
+    POSTGRES_PASSWORD: config.password,
+    POSTGRES_DATABASE: config.database,
+    POSTGRES_SCHEMA: config.schema,
+    LEMONIFY_DATABASE_POOL_SIZE: String(config.poolSize),
   }
 }
 

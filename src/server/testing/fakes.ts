@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 
-import type { AiCatalogue, AiToolId } from '@/features/ai/ai-tools'
+import type { AiCatalogue, AiToolId, WorkerPool } from '@/features/ai/ai-tools'
 import type { RealtimeEvent } from '@/features/realtime/realtime-events'
 
 import { AiCancelledError, AiEngineError } from '../ai/ai-engine.ts'
@@ -24,6 +24,11 @@ import type { ImageInfo, ImageInspector } from '../tools/image-inspector.ts'
 import { LimitError } from '../errors.ts'
 import type { ResultStore } from '../tools/result-store.ts'
 import type { SourceStore, StagedUpload } from '../tools/source-store.ts'
+import type { WorkerExit, WorkerProcess } from '../worker/fork-worker.ts'
+import type {
+  SupervisorMessage,
+  WorkerMessage,
+} from '../worker/worker-messages.ts'
 
 /** Remembers what a service announced, so a test can say what a person's tabs would have been told. */
 export class RecordingPublisher implements ChangePublisher {
@@ -275,5 +280,62 @@ export class FakeAiEngine implements AiEngine {
 
   async catalogue(_tool: AiToolId): Promise<AiCatalogue> {
     return this.catalogueOf
+  }
+}
+
+let nextFakePid = 1_000_000
+
+/** A worker process as the supervisor sees it, driven by the test: it is ready, stopping or gone when the test says. */
+export class FakeWorkerProcess implements WorkerProcess {
+  readonly pid = nextFakePid++
+  readonly sent: SupervisorMessage[] = []
+  stopRequested = false
+  killed = false
+  exited = false
+  #onMessage: (message: WorkerMessage) => void = () => {}
+  #onExit: (exit: WorkerExit) => void = () => {}
+
+  /** `exitsWhenStopped`: ends as soon as it is asked to stop, like a worker with no job running. */
+  constructor(
+    readonly pool: WorkerPool,
+    readonly exitsWhenStopped = false,
+  ) {}
+
+  send(message: SupervisorMessage): void {
+    this.sent.push(message)
+  }
+
+  stop(): void {
+    this.stopRequested = true
+    if (this.exitsWhenStopped) {
+      queueMicrotask(() => this.exit({ code: 0, signal: null }))
+    }
+  }
+
+  kill(): void {
+    this.killed = true
+    this.exit({ code: null, signal: 'SIGKILL' })
+  }
+
+  onMessage(listener: (message: WorkerMessage) => void): void {
+    this.#onMessage = listener
+  }
+
+  onExit(listener: (exit: WorkerExit) => void): void {
+    this.#onExit = listener
+  }
+
+  ready(): void {
+    this.#onMessage({ type: 'ready' })
+  }
+
+  stopping(): void {
+    this.#onMessage({ type: 'stopping' })
+  }
+
+  exit(exit: WorkerExit = { code: 1, signal: null }): void {
+    if (this.exited) return
+    this.exited = true
+    this.#onExit(exit)
   }
 }

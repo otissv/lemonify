@@ -308,6 +308,18 @@ describe('loadConfig', () => {
     expect(config.authSecret).toHaveLength(32)
   })
 
+  it('counts CPU and GPU workers as processes, and says so when a count is not one', () => {
+    for (const [name, value] of [
+      ['LEMONIFY_CPU_WORKERS', '0'],
+      ['LEMONIFY_CPU_WORKERS', '65'],
+      ['LEMONIFY_GPU_WORKERS', 'many'],
+    ] as const) {
+      expect(() => loadConfig({ ...POSTGRES, [name]: value })).toThrow(
+        new RegExp(`${name}: .*worker processes the web server starts`),
+      )
+    }
+  })
+
   it('rejects bad values with a message that names the variable', () => {
     expect(() =>
       loadConfig({ ...POSTGRES, LEMONIFY_GROUP_SHARE: '0' }),

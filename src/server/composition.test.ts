@@ -6,13 +6,16 @@ import { promisify } from 'node:util'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { loadConfig } from './config/config'
-import { createApp } from './composition'
+import { databaseEnvironment, loadConfig } from './config/config'
+import { WorkerPool } from '@/features/ai/ai-tools'
+
+import { AppRole, createApp } from './composition'
+import type { App } from './composition'
 import { UnavailableError } from './errors'
-import {
-  createTestDatabase,
-  databaseEnvironment,
-} from './testing/test-database'
+import { MemoryLogger } from './http/logger'
+import { JobKind, JobState } from './jobs/job-types'
+import { FakeImageEngine, FakeWorkerProcess } from './testing/fakes'
+import { createTestDatabase, insertTestUser } from './testing/test-database'
 
 const run = promisify(execFile)
 const cleanup: Array<() => Promise<void>> = []
@@ -81,5 +84,88 @@ describe('createApp', () => {
       },
     )
     expect(JSON.parse(stdout).tables).toBeGreaterThanOrEqual(14)
+  })
+})
+
+describe('the app of the web server', () => {
+  const ANN = { userId: 'ann', name: 'Ann' }
+  const QUIET_MS = 1500
+
+  async function webServerApp(): Promise<{
+    app: App
+    workers: FakeWorkerProcess[]
+  }> {
+    const workers: FakeWorkerProcess[] = []
+    const app = await createApp(
+      loadConfig({
+        ...(await testEnvironment()),
+        LEMONIFY_DATA_DIR: path.join(tempDir(), 'data'),
+        LEMONIFY_CPU_WORKERS: '2',
+        LEMONIFY_GPU_WORKERS: '1',
+      }),
+      {
+        role: AppRole.WebServer,
+        imageEngine: new FakeImageEngine(),
+        logger: new MemoryLogger(),
+        startWorker: (pool) => {
+          const worker = new FakeWorkerProcess(pool, true)
+          workers.push(worker)
+          return worker
+        },
+      },
+    )
+    cleanup.unshift(() => app.close())
+    await insertTestUser(app.database, ANN.userId, ANN.name)
+    return { app, workers }
+  }
+
+  function preview(pool: WorkerPool) {
+    return {
+      kind: JobKind.Preview,
+      payload: { kind: JobKind.Preview, documentId: 'doc', revision: 0 },
+      pool,
+      groupKey: 'doc',
+    } as const
+  }
+
+  it('runs no job itself: it starts the CPU worker processes, and a job queued on the website wakes them', async () => {
+    const { app, workers } = await webServerApp()
+    await app.startBackground()
+    expect(workers.map((worker) => worker.pool)).toEqual([
+      WorkerPool.Cpu,
+      WorkerPool.Cpu,
+    ])
+    for (const worker of workers) worker.ready()
+
+    const [queued] = await app.jobs.enqueue(ANN, [preview(WorkerPool.Cpu)])
+    await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
+
+    for (const worker of workers)
+      expect(worker.sent).toEqual([{ type: 'wake' }])
+    expect((await app.jobs.get(ANN, queued?.id ?? '')).state).toBe(
+      JobState.Waiting,
+    )
+  })
+
+  it('starts the GPU worker when an AI job is queued on the website', async () => {
+    const { app, workers } = await webServerApp()
+    await app.startBackground()
+
+    await app.jobs.enqueue(ANN, [preview(WorkerPool.Gpu)])
+
+    expect(
+      workers.filter((worker) => worker.pool === WorkerPool.Gpu),
+    ).toHaveLength(1)
+  })
+
+  it('stops the worker processes when it closes', async () => {
+    const { app, workers } = await webServerApp()
+    await app.startBackground()
+
+    await app.close()
+
+    expect(
+      workers.every((worker) => worker.stopRequested && worker.exited),
+    ).toBe(true)
   })
 })

@@ -93,21 +93,6 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   }
 }
 
-/** The POSTGRES_ settings that point an app at `config`, for a whole app or a CLI process on a test database. */
-export function databaseEnvironment(
-  config: DatabaseConfig,
-): Record<string, string> {
-  return {
-    POSTGRES_HOST: config.host,
-    POSTGRES_PORT: String(config.port),
-    POSTGRES_USER: config.user,
-    POSTGRES_PASSWORD: config.password,
-    POSTGRES_DATABASE: config.database,
-    POSTGRES_SCHEMA: config.schema,
-    LEMONIFY_DATABASE_POOL_SIZE: String(config.poolSize),
-  }
-}
-
 /** Inserts a user row the way Better Auth stores one, for tests that need an owner. */
 export async function insertTestUser(
   database: Knex,

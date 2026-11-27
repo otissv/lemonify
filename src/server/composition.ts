@@ -23,6 +23,7 @@ import type { ChangePublisher } from './realtime/change-publisher.ts'
 import { RealtimeHub } from './realtime/hub.ts'
 import type { HubLimits } from './realtime/hub.ts'
 import type { Logger } from './http/logger.ts'
+import type { JobRecord } from './jobs/job-types.ts'
 import type { Scheduler } from './jobs/scheduler.ts'
 import { CreateFromService } from './services/create-from-service.ts'
 import { DocumentService } from './services/document-service.ts'
@@ -37,6 +38,9 @@ import type { WorkflowService } from './services/workflow-service.ts'
 import type { ImageEngine } from './tools/image-engine.ts'
 import { SharpImageInspector } from './tools/image-inspector.ts'
 import { removeOlderThan } from './tools/work-directory.ts'
+import { forkWorker } from './worker/fork-worker.ts'
+import type { StartWorker } from './worker/fork-worker.ts'
+import { WorkerSupervisor } from './worker/supervisor.ts'
 
 const MILLISECONDS_PER_DAY = 86_400_000
 /** How long a file with no row is left alone, so an upload that is still being recorded is never swept. */
@@ -76,9 +80,16 @@ export type App = {
   aiTools: AiToolRegistry
   /** The open tabs, which the realtime server connects and the services tell about changes. */
   realtime: RealtimeHub
-  /** Takes Jobs from the shared queue. Not running until `startBackground` is called. */
+  /**
+   * Takes Jobs from the shared queue in this process, for a CLI command or
+   * worker. The web server's has no slots: it only fails the Jobs of
+   * processes that are gone, and its worker processes run the Jobs.
+   */
   scheduler: Scheduler
-  /** Starts the scheduler and the daily cleanup, after running the cleanup once. */
+  /**
+   * Runs the cleanup once and then daily, and starts what runs Jobs: the
+   * worker pool in the web server, this process's scheduler otherwise.
+   */
   startBackground(): Promise<void>
   /** Removes files and Jobs nothing refers to any more. */
   runMaintenance(): Promise<void>
@@ -107,6 +118,20 @@ export type AppOverrides = {
   email?: EmailSender | null
   /** Where the services say what changed; the realtime hub unless a test listens instead. */
   changes?: ChangePublisher
+  /** Starts the web server's worker processes; forked from `src/server/worker/main.ts` unless a test stands in. */
+  startWorker?: StartWorker
+}
+
+/** The web server runs no Job itself (decision 1, worker processes). */
+const NO_SLOTS: Readonly<Record<WorkerPool, number>> = {
+  [WorkerPool.Cpu]: 0,
+  [WorkerPool.Gpu]: 0,
+}
+
+function poolsOf(jobs: ReadonlyArray<JobRecord>): Set<WorkerPool> {
+  const pools = new Set<WorkerPool>()
+  for (const job of jobs) pools.add(job.pool)
+  return pools
 }
 
 function buildAuth(
@@ -154,6 +179,8 @@ export async function createApp(
       ? new SocketChangePublisher(channelSocketPath(config), logger)
       : undefined
   const changes = overrides.changes ?? sentChanges ?? realtime
+  const isWebServer = overrides.role === AppRole.WebServer
+  let workers: WorkerSupervisor | undefined
 
   const core = buildJobCore({
     config,
@@ -164,10 +191,13 @@ export async function createApp(
     changes,
     imageEngine: overrides.imageEngine,
     aiEngine: overrides.aiEngine,
-    slots: {
-      [WorkerPool.Cpu]: config.cpuWorkers,
-      [WorkerPool.Gpu]: config.gpuWorkers,
-    },
+    slots: isWebServer
+      ? NO_SLOTS
+      : {
+          [WorkerPool.Cpu]: config.cpuWorkers,
+          [WorkerPool.Gpu]: config.gpuWorkers,
+        },
+    onQueued: (queued) => workers?.wake(poolsOf(queued)),
   })
   const { daos, stores, results, usedItems, jobs, workflows, aiTools } = core
   const inspector = new SharpImageInspector()
@@ -223,6 +253,18 @@ export async function createApp(
     clock,
   })
   const running = core.scheduler
+  if (isWebServer) {
+    workers = new WorkerSupervisor({
+      counts: {
+        [WorkerPool.Cpu]: config.cpuWorkers,
+        [WorkerPool.Gpu]: config.gpuWorkers,
+      },
+      startWorker: overrides.startWorker ?? forkWorker(config, { logger }),
+      queue: daos.jobs,
+      reapOrphans: () => running.reapOrphans(),
+      logger,
+    })
+  }
 
   async function runMaintenance(): Promise<void> {
     await sources.sweepOrphans(ORPHAN_GRACE_MS)
@@ -232,6 +274,7 @@ export async function createApp(
   }
 
   let maintenanceTimer: ReturnType<typeof setInterval> | undefined
+  let closing: Promise<void> | undefined
 
   return {
     config,
@@ -254,7 +297,8 @@ export async function createApp(
     runMaintenance,
     async startBackground() {
       await runMaintenance()
-      await running.start()
+      if (workers === undefined) await running.start()
+      else await workers.start()
       maintenanceTimer = setInterval(() => {
         runMaintenance().catch((error: unknown) => {
           logger.error('Cleanup failed', {
@@ -264,12 +308,16 @@ export async function createApp(
       }, MILLISECONDS_PER_DAY)
       maintenanceTimer.unref()
     },
-    async close() {
-      if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer)
-      await running.stop({ abort: true })
-      await sentChanges?.close()
-      await auth.close()
-      await database.destroy()
+    close() {
+      closing ??= (async () => {
+        if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer)
+        await workers?.stop()
+        await running.stop({ abort: true })
+        await sentChanges?.close()
+        await auth.close()
+        await database.destroy()
+      })()
+      return closing
     },
   }
 }

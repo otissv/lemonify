@@ -74,9 +74,11 @@ async function build(): Promise<WebRuntime> {
 /**
  * The one composed app of this web server process. It is kept on
  * `globalThis` so a dev-server reload does not open a second database
- * handle, a second rate limiter or a second scheduler. The scheduler starts
- * here because the web server is what queues most Jobs; without it previews,
- * thumbnails, exports and AI steps would wait for a separate `worker`.
+ * handle, a second rate limiter or a second worker pool. The pool starts
+ * here: the web server runs no Job itself, and its worker processes take the
+ * previews, thumbnails, exports and AI steps it queues. However this process
+ * ends, its workers see `fork`'s channel close, finish the job they run and
+ * exit.
  */
 export function getRuntime(): Promise<WebRuntime> {
   const holder = globalThis as Holder

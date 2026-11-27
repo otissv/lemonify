@@ -153,10 +153,6 @@ async function largeImages(folder: string): Promise<string[]> {
 test('answers a request and reads a file while the CPU workers are busy with long renders', async ({
   page,
 }, testInfo) => {
-  test.fail(
-    true,
-    'The web server runs the jobs itself until the worker pool takes them over (docs/job-workers-todo.md, section 5).',
-  )
   const folder = path.join(
     RUN_DIR,
     'responsiveness',

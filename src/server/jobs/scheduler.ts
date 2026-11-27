@@ -87,6 +87,8 @@ export class Scheduler {
     if (this.#started) return
     this.#started = true
     await this.reapOrphans()
+    // Stopped while the orphans were failed: start no timers.
+    if (!this.#started) return
     const { pollMs = DEFAULT_POLL_MS, reapMs = DEFAULT_REAP_MS } = this.#options
     this.#timers = [
       setInterval(() => this.wake(), pollMs),

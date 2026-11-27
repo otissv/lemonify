@@ -10,17 +10,10 @@ import { WorkerPool } from '@/features/ai/ai-tools'
 import { JobState } from '../jobs/job-types'
 import { createTestApp } from '../testing/test-app'
 import type { TestApp } from '../testing/test-app'
-import { databaseEnvironment } from '../testing/test-database'
+import { WORKER_ENTRY, WORKER_EXEC_ARGV } from './fork-worker'
 import { workerEnvironment } from './worker-environment'
 
 const ROOT = path.resolve(import.meta.dirname, '../../..')
-const ENTRY = path.join(ROOT, 'src/server/worker/main.ts')
-const LOADER = [
-  '--disable-warning=ExperimentalWarning',
-  '--experimental-transform-types',
-  '--import',
-  path.join(ROOT, 'scripts/images/register-alias.ts'),
-]
 const PROCESS_TIMEOUT = 60_000
 
 let t: TestApp
@@ -38,20 +31,16 @@ afterEach(async () => {
   await t.close()
 })
 
-/** Starts `main.ts` the way the pool will: forked, with the worker's environment. */
+/** Starts `main.ts` the way the pool does, but with the test watching its output and messages. */
 function startWorker(pool: string): {
   child: ChildProcess
   output: () => string
 } {
-  const env = workerEnvironment(WorkerPool.Cpu, {
-    ...process.env,
-    ...databaseEnvironment(t.app.config.database),
-    LEMONIFY_DATA_DIR: t.directory,
-  })
-  const child = fork(ENTRY, [pool], {
+  const env = workerEnvironment(WorkerPool.Cpu, t.app.config, process.env)
+  const child = fork(WORKER_ENTRY, [pool], {
     cwd: ROOT,
     env,
-    execArgv: LOADER,
+    execArgv: [...WORKER_EXEC_ARGV],
     silent: true,
   })
   children.push(child)
@@ -102,6 +91,23 @@ describe('the worker process', () => {
 
       expect(await exited(child)).toBe(0)
       expect(output()).toContain('"message":"Worker started"')
+    },
+    PROCESS_TIMEOUT,
+  )
+
+  it(
+    'tells the process that started it when it is ready, and when it is stopping',
+    async () => {
+      const { child } = startWorker('cpu')
+      const messages: unknown[] = []
+      child.on('message', (message) => messages.push(message))
+      await eventually(() => messages.length === 1)
+      expect(messages).toEqual([{ type: 'ready' }])
+
+      child.kill('SIGTERM')
+
+      expect(await exited(child)).toBe(0)
+      expect(messages).toEqual([{ type: 'ready' }, { type: 'stopping' }])
     },
     PROCESS_TIMEOUT,
   )

@@ -5,10 +5,8 @@ import path from 'node:path'
 import sharp from 'sharp'
 import { afterEach, beforeEach, vi } from 'vitest'
 
-import {
-  createTestDatabase,
-  databaseEnvironment,
-} from '../../src/server/testing/test-database.ts'
+import { databaseEnvironment } from '../../src/server/config/config.ts'
+import { createTestDatabase } from '../../src/server/testing/test-database.ts'
 import type { TestDatabase } from '../../src/server/testing/test-database.ts'
 import { COMMANDS } from './commands/index.ts'
 import { dispatch } from './dispatch.ts'
